@@ -1,0 +1,28 @@
+specVersion: 0.0.5
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum/contract
+    name: GolfcraftMaterials
+    network: matic
+    source:
+      address: "0xb50E29A3ccF7c0AB133ea7de46B09D0D8fEAfdF0"
+      abi: GolfcraftMaterials
+      startBlock: 28240300
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Account
+        - Material
+        - MaterialBalance
+      abis:
+        - name: GolfcraftMaterials
+          file: ./abis/GolfcraftMaterials.json
+      eventHandlers:
+        - event: TransferBatch(indexed address,indexed address,indexed address,uint256[],uint256[])
+          handler: handleTransferBatch
+        - event: TransferSingle(indexed address,indexed address,indexed address,uint256,uint256)
+          handler: handleTransferSingle
+      file: ./src/mappingMaterials.ts

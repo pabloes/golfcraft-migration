@@ -1,0 +1,49 @@
+{
+  "ecs7": true,
+  "runtimeVersion": "7",
+  "display": {
+    "title": "GolfCraft minigolf",
+    "description": "Golfcraft is a minigolf game where players can gather materials to craft items and earn resources passively.",
+    "navmapThumbnail": "images/scene-thumbnail.png",
+    "favicon": "favicon_asset"
+  },
+  "owner": "",
+  "contact": {
+    "name": "OhMyVerse",
+    "email": "info@ohmyverse.io"
+  },
+  "main": "bin/index.js",
+  "tags": ["game", "social", "sports"],
+  "scene": {
+    "parcels": [
+      "49,-46",
+      "47,-45", "48,-45", "49,-45",
+      "47,-44", "48,-44", "49,-44",
+      "47,-43", "48,-43", "49,-43"
+    ],
+    "base": "47,-45"
+  },
+  "requiredPermissions": [
+    "ALLOW_TO_MOVE_PLAYER_INSIDE_SCENE"
+  ],
+  "spawnPoints": [
+    {
+      "name": "spawn1",
+      "default": true,
+      "position": {
+        "x": [39, 42],
+        "y": [0.90, 0.90],
+        "z": [30, 38]
+      },
+      "cameraTarget": {
+        "x": 25,
+        "y": 3.4,
+        "z": 32
+      }
+    }
+  ],
+  "featureToggles": {
+    "voiceChat": "enabled",
+    "portableExperiences": "enabled"
+  }
+}

@@ -1,0 +1,15 @@
+type Material @entity(immutable: false) {
+  id: ID!
+}
+
+type MaterialBalance @entity(immutable: false) {
+  id: ID!
+  owner: Account!
+  material: Material!
+  balance: Int!
+}
+
+type Account @entity(immutable: false) {
+  id: Bytes!
+  materials: [MaterialBalance!] @derivedFrom(field: "owner")
+}

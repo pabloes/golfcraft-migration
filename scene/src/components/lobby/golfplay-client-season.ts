@@ -1,0 +1,657 @@
+// SDK7 port of SDK6 scene/src/components/lobby/golfplay-client-season.ts
+//
+// The per-round gameplay client for a Season run. SDK6 kept this as a hard FORK
+// of golfplay-client.ts rather than a parameterisation, and this port keeps the
+// fork (project rule #4: mirror file paths, don't reorganise) so the working
+// storymode client is not destabilised. What season adds on top of it:
+//
+//   - GHOST PLAYBACK: 3 extra visual balls replaying recorded frame arrays
+//     (IDLE/SHOOT/MOVE/HOLE) on a 30fps interval, so you race pre-recorded
+//     opponents instead of live players.
+//   - A 4-ROUND LIFECYCLE: the room drives rounds 0..3 over one connection, so
+//     `ready()` is called per round and stale handlers from round N must not
+//     fire in round N+1 (`cancellableCallback` + the `disposed` flag).
+//   - HOLE COUNTDOWNS: MESSAGE.COUNTDOWN / END_COUNTDOWN drive the on-screen
+//     "Ending in... N" once an opponent holes out.
+//   - A LIVE SCOREBOARD fed by onChange listeners on the Colyseus results schema.
+//   - The ball spawns from the course definition's `initial_position` part,
+//     NOT from room.state.ball as storymode does.
+import { engine, Entity, Transform } from '@dcl/sdk/ecs'
+import { Vector3, Quaternion } from '@dcl/sdk/math'
+import { movePlayerTo } from '~system/RestrictedActions'
+
+import { createVisualCourse } from '../../../golfplay/src/components/course/course-visual-loader'
+import { VisualBallFactory } from '../../../golfplay/src/components/ball'
+import { createPhysicsWorld, initializeMaterials } from '../../../golfplay/physics/world'
+import { createPhysicBall } from '../../../golfplay/physics/ball'
+import { loadCoursePhysics } from '../../../golfplay/physics/course-element-loader'
+import { createShootControl } from '../../../golfplay/src/components/shoot-control'
+import { createGameHandler } from '../../../golfplay/src/gameplay-handlers/gameplay-handler'
+import { EVENT } from '../../../golfplay/src/gameplay-handlers/handler-def'
+import { getCourseDefinition } from '../../../../common/course-definitions/course-definition-repository'
+import { showAvatars, hideAvatars } from '../../services/hide-avatars'
+import { registerSound } from '../../../golfplay/mana-fever-utils/lib/sound/avatar-sound'
+import { fadeInOverlay } from '../ui/overlay'
+import { globalStore } from '../../services/globalStore/globalStore'
+// @ts-ignore - course-animations-migration has @ts-nocheck
+import { migrateCourseDefinitionAnimations } from '../../../../common/course-animations-migration'
+import { MovingPartComponent } from '../../../golfplay/src/components/course/visual-part'
+import { createEventManager } from '../../../golfplay/src/services/EventManagerFactory'
+// @ts-ignore
+import { createFrameReproduction } from '../../../../common/frame-reproductor'
+import MESSAGE from '../../../../server/rooms/mesages'
+// @ts-ignore - common/utils has @ts-nocheck
+import { sleep } from '../../../../common/utils'
+import { createVisualChest } from './visualChest'
+import { showMessage } from './server-notification'
+import { hideWaitPlayers } from './season-game-countdown'
+import { createInGameResultsUi, createInGameTime } from './ingame-ui'
+import { seasonCountdownState, hideSeasonHud } from '../../ui/season-hud-state'
+
+const REWARD_NAMES: any = {
+  WD: 'wood',
+  ST: 'stone',
+  IR: 'iron',
+  GD: 'gold',
+  DM: 'diamond',
+  FT: 'fashion ticket',
+  wearable: 'wearable'
+}
+
+const onlyServerPhysics = false
+
+// Map MovingPartComponent entities to their partId (SDK6 used new Entity(id)).
+const movingPartIds = new Map<Entity, string>()
+
+// Ghost frame types, as recorded by the server's frame recorder.
+const GHOST_FRAME = { IDLE: 0, SHOOT: 1, MOVE: 2, HOLE: 3 }
+
+// SDK6 kept these as module-level singletons created at import time. Keep them
+// module-level (one clock / one scoreboard across rounds) but build them lazily
+// so importing this file has no side effects.
+let timeUI: ReturnType<typeof createInGameTime> | null = null
+let inGameResults: ReturnType<typeof createInGameResultsUi> | null = null
+
+// registerSound throws on re-registration and this factory can run once per
+// round; same guard as golfplay-client.ts (see CLAUDE.md §6 #23).
+let soundsRegistered = false
+
+const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: string }) => {
+  const { createVisualBall } = VisualBallFactory({ baseResourceUrl: golfplayBaseUrl })
+
+  if (!soundsRegistered) {
+    registerSound('checkpoint', golfplayBaseUrl)
+    registerSound('voxter', golfplayBaseUrl)
+    registerSound('hole', golfplayBaseUrl)
+    soundsRegistered = true
+  }
+  initializeMaterials()
+
+  const createClientGolfPlay = async (
+    parent: Entity,
+    { gameDefinition, room, golfclub, wip, colyseus, expressionState = {}, currentGame, ghostsData }: any
+  ) => {
+    const state = { reconnecting: false }
+    console.log('[season] createClientGolfPlay round', currentGame)
+
+    const frameEventHandler = createEventManager()
+    hideAvatars()
+    const courseDefinition: any = migrateCourseDefinitionAnimations(
+      await getCourseDefinition(gameDefinition, fetch, wip)
+    )
+
+    if (globalStore?.game) {
+      const gs = globalStore.game.getState()
+      gs.courseAuthor = courseDefinition.authorName || null
+      gs.courseName = courseDefinition.displayName || courseDefinition.alias
+      gs.courseIsSeason = !!courseDefinition.isSeason
+      gs.playing = true
+    }
+
+    const callbacks: { [key: string]: null | Function } = { onFinish: null, onComplete: null }
+
+    // Season spawns the ball from the course definition, NOT room.state.ball.
+    const initialPosDef = courseDefinition.parts.find((p: any) => p.type === 'initial_position')
+    const ballSpawnDefinition = {
+      position: [...initialPosDef.position],
+      rotation: [...initialPosDef.rotation]
+    }
+
+    const spawnPart = courseDefinition.parts.find((part: any) => part.type === 'spawn')
+    const initialPlayerPosition = Vector3.create(spawnPart.position[0], spawnPart.position[1], spawnPart.position[2])
+
+    const { world } = createPhysicsWorld()
+    const ball = createVisualBall(parent, {
+      position: Vector3.create(
+        ballSpawnDefinition.position[0],
+        ballSpawnDefinition.position[1],
+        ballSpawnDefinition.position[2]
+      ),
+      collectionId: courseDefinition.collectionId
+    })
+    const physicBall = createPhysicBall(world, { position: ballSpawnDefinition.position, onlyKinematic: false })
+    physicBall.body.sleep()
+    const physicParts = loadCoursePhysics(world, { courseDefinition })
+    const movingPhysicParts: { [id: string]: any } = Object.values(physicParts as any)
+      .filter((pp: any) => pp.definition.animation)
+      .reduce<{ [id: string]: any }>((acc, current: any) => {
+        acc[current.definition.id] = current
+        current.animationState = { currentFrame: 0, count: 0 }
+        return acc
+      }, {})
+
+    let cancelEnding = false
+
+    physicBall.onCollide((e: any) => {
+      if (e.body.material.name === 'woodMaterial') {
+        ball.reproduceSound('wood', Math.min(1, physicBall.body.velocity.length() / 10))
+      } else if (e.body.material.name === 'dumperMaterial') {
+        ball.reproduceSound('bumper', Math.min(1, physicBall.body.velocity.length() / 25))
+      }
+    })
+
+    const control = createShootControl(parent, {
+      position: Vector3.create(
+        ballSpawnDefinition.position[0],
+        ballSpawnDefinition.position[1],
+        ballSpawnDefinition.position[2]
+      ),
+      rotation: Quaternion.create(
+        ballSpawnDefinition.rotation[0],
+        ballSpawnDefinition.rotation[1],
+        ballSpawnDefinition.rotation[2],
+        ballSpawnDefinition.rotation[3]
+      ),
+      golfclub
+    })
+    control.hide()
+    const gamePlayState = { idle: true, started: false, finished: false }
+
+    const visualCourse = createVisualCourse(parent, { courseDefinition })
+
+    const gameHandler = createGameHandler({
+      gameType: gameDefinition.type,
+      world,
+      ballBody: physicBall.body,
+      state: gamePlayState,
+      courseDefinition,
+      movingPhysicParts,
+      parts: physicParts,
+      excludeHandlers: ['animation'],
+      onExpressionEvent: ({ data }: any) => {
+        const { targetControlIds, newValues, isDelayed } = data
+        if (isDelayed) {
+          Object.assign(expressionState, newValues)
+          targetControlIds.forEach((partId: string) => visualCourse.applyReactiveValue(partId, expressionState))
+        }
+      },
+      applySmartParts: true
+    })
+
+    visualCourse.applyAllValues(expressionState)
+    let positionBeforeShoot: any
+
+    await movePlayerTo({
+      newRelativePosition: Vector3.create(
+        initialPlayerPosition.x + 24,
+        initialPlayerPosition.y,
+        initialPlayerPosition.z + 24
+      ),
+      cameraTarget: Vector3.create(8 + 24, 1, 8 + 24)
+    })
+
+    handleFrameEvents()
+
+    let shootFramesInfo: any = null
+    control.onShoot(({ impulse, delayMs }) => {
+      if (state.reconnecting) return
+      control.hide()
+      gamePlayState.idle = false
+      room.send(MESSAGE.SHOOT, { impulse, timeStep, delayMs })
+    })
+
+    let frameReproductor: any = null
+
+    let lastPingTime = Date.now()
+    let pingDisposed = false
+    let pingInterval: any = null
+
+    const visualChests: any[] = []
+    setTimeout(() => {
+      if (room.state.chests) {
+        room.state.chests.forEach((chest: any, index: number) => {
+          const [chestRewardKey, chestRewardAmount] = chest.reward.split(':')
+          visualChests.push(
+            createVisualChest(parent, {
+              chest,
+              onClick: async () => {
+                if (state.reconnecting) return
+                room.send(MESSAGE.CHEST, { index })
+                showMessage({
+                  timeout: 5000,
+                  message: `HI! Found ${chestRewardAmount} ${REWARD_NAMES[chestRewardKey]} !!`
+                })
+                await sleep(1000)
+                visualChests[index].dispose()
+              },
+              model: room.state.chestModel
+            })
+          )
+        })
+      }
+    }, 1000)
+
+    engine.addSystem(update)
+
+    const STEPS_FPS = 60 * 4
+    const timeStep = 1 / STEPS_FPS
+    const ghostBalls: any[] = []
+    const GHOST_FPS = 30
+    const GHOST_FMS = 1000 / GHOST_FPS
+    let ghostInterval: any = null
+    let timeInterval: any = null
+    let startCountdownInterval: any = null
+    let holeCountdownInterval: any = null
+    let disposed = false
+
+    listenPing()
+    listenRoom()
+
+    return {
+      ready: () => room.send(MESSAGE.READY),
+      setExpressionState: (data: any) => Object.assign(expressionState, data),
+      id: Date.now(),
+      dispose,
+      onFinish,
+      start,
+      onComplete,
+      setAnimationGlobalDt: gameHandler.setAnimationGlobalDt
+    }
+
+    function listenPing() {
+      lastPingTime = Date.now()
+      room.send(MESSAGE.PING)
+      // Self-terminating, same trap as storymode: the sandbox's setInterval and
+      // clearInterval don't reliably pair, so the timer can outlive dispose()
+      // and spam "readyState not OPEN" (CLAUDE.md §6 #23b).
+      pingInterval = setInterval(() => {
+        if (pingDisposed || disposed || state.reconnecting) return
+        lastPingTime = Date.now()
+        try {
+          room.send(MESSAGE.PING)
+        } catch (_) {
+          pingDisposed = true
+        }
+      }, 5000)
+    }
+
+    function onMessagePong() {
+      if (state.reconnecting) return
+      room.send(MESSAGE.PING2)
+    }
+
+    // A season run reuses ONE room across 4 rounds, and colyseus.js gives us no
+    // way to remove listeners, so round N's client is still subscribed when
+    // round N+1 starts. Every handler goes through this guard so a disposed
+    // round stops reacting.
+    function cancellableCallback(fn: Function) {
+      return (...args: any[]) => {
+        if (!disposed) fn(...args)
+      }
+    }
+
+    function onClientLog(data: any) {
+      console.log('[season] CLIENT_LOG', data)
+    }
+
+    function listenRoom() {
+      room.onLeave(cancellableCallback(onLeave))
+      room.onMessage(MESSAGE.CLIENT_LOG, cancellableCallback(onClientLog))
+      room.onMessage(MESSAGE.PONG, cancellableCallback(onMessagePong))
+      room.onMessage(MESSAGE.SHOOT_FRAMES, cancellableCallback(onMessageShootFrames))
+      room.onMessage(MESSAGE.START_SHOOT_FRAMES, cancellableCallback(onMessageStartShootFrame))
+      room.onMessage(MESSAGE.COMPLETED, cancellableCallback(onMessageCompleted))
+      room.onMessage(MESSAGE.START, cancellableCallback(onMessageStart))
+      room.onMessage(MESSAGE.COUNTDOWN, cancellableCallback(onMessageHoleCountdown))
+      room.onMessage(MESSAGE.END_COUNTDOWN, cancellableCallback(onMessageHoleEndCountdown))
+    }
+
+    function onLeave(code: number) {
+      console.log('[season] onLeave', code)
+      if (code < 4000 && code !== 1000) {
+        const roomId = room.id
+        const sessionId = room.sessionId
+        state.reconnecting = true
+        colyseus.reconnect(roomId, sessionId).then((_room: any) => {
+          state.reconnecting = false
+          room = _room
+          listenRoom()
+        })
+      } else {
+        showAvatars()
+        callbacks.onFinish && callbacks.onFinish(code)
+      }
+    }
+
+    async function onMessageStart({ startTime, serverTime }: any) {
+      const currentGameGhostsData = ghostsData?.[currentGame] || []
+      const localStartTime = startTime - (serverTime - Date.now())
+      const timeToStart = localStartTime - Date.now()
+
+      hideWaitPlayers()
+
+      // "Starting in... N"
+      seasonCountdownState.visible = true
+      startCountdownInterval = setInterval(() => {
+        const remaining = localStartTime - Date.now()
+        seasonCountdownState.text = 'Starting in...\n' + Math.floor(remaining / 1000).toString()
+        if (remaining <= 0) {
+          seasonCountdownState.visible = false
+          clearInterval(startCountdownInterval)
+          startCountdownInterval = null
+        }
+      }, 100)
+
+      if (currentGame === 0) {
+        inGameResults = inGameResults || createInGameResultsUi(room.state.results)
+        // Colyseus schema listeners: any change to a player's row refreshes the
+        // scoreboard. SDK6 wired onChange on the row, its time and its shots.
+        room.state.results.forEach((playerResult: any) => {
+          const refresh = () => inGameResults?.updateView(room.state.results, room.state.currentGame)
+          playerResult.onChange = refresh
+          if (playerResult.time) playerResult.time.onChange = refresh
+          if (playerResult.shots) playerResult.shots.onChange = refresh
+        })
+      }
+
+      if (!inGameResults) inGameResults = createInGameResultsUi(room.state.results)
+      inGameResults.resetView()
+      inGameResults.show()
+
+      // Ghosts: one extra visual ball per recorded opponent, parked at the tee.
+      currentGameGhostsData.forEach((g: any, index: number) => {
+        const [x, y, z] = initialPosDef.position
+        ghostBalls.push({
+          visualBall: createVisualBall(parent, {
+            position: Vector3.create(x, y, z),
+            displayName: g.displayName,
+            id: 10 + index,
+            collectionId: courseDefinition.collectionId
+          }),
+          currentFrame: 0,
+          finished: false,
+          shooting: false,
+          ...g
+        })
+      })
+
+      setTimeout(() => {
+        const idleStartTime: number[] = [0, 0, 0]
+        ghostInterval = setInterval(() => {
+          ghostBalls.forEach((ghost: any, index: number) => {
+            if (ghost.finished) return
+            const { visualBall, frames } = ghost
+            if (!frames || !frames.length) return
+            const frame = frames[ghost.currentFrame]
+            if (!frame) {
+              ghost.finished = true
+              return
+            }
+            const [type] = frame
+
+            if (type === GHOST_FRAME.IDLE) {
+              idleStartTime[index] = idleStartTime[index] || Date.now()
+              visualBall.changeColor && visualBall.changeColor('GREEN')
+              const framesToPass = frame[4]
+              const timeDiffInFrames = Math.floor((Date.now() - idleStartTime[index]) / GHOST_FMS)
+              if (timeDiffInFrames > framesToPass) {
+                idleStartTime[index] = 0
+                ghost.currentFrame++
+              }
+            } else if (type === GHOST_FRAME.SHOOT) {
+              visualBall.changeColor && visualBall.changeColor('RED')
+              if (!ghost.shooting) {
+                setTimeout(() => {
+                  ghost.currentFrame++
+                  ghost.shooting = false
+                }, 400)
+              }
+              ghost.shooting = true
+            } else if (type === GHOST_FRAME.MOVE) {
+              visualBall.changeColor && visualBall.changeColor('BLUE')
+              const [, gx, gy, gz] = frame
+              visualBall.setPosition(Vector3.create(gx, gy, gz))
+              ghost.currentFrame++
+            } else if (type === GHOST_FRAME.HOLE) {
+              visualBall.changeColor && visualBall.changeColor('YELLOW')
+              ghost.finished = true
+            }
+          })
+        }, GHOST_FMS)
+
+        timeUI = timeUI || createInGameTime()
+        timeUI.show()
+        timeInterval = setInterval(() => {
+          if (room.state.finished) {
+            clearInterval(timeInterval)
+            timeInterval = null
+          } else {
+            timeUI && timeUI.updateMs(Date.now() - localStartTime)
+          }
+        }, 1000)
+        start()
+      }, timeToStart)
+    }
+
+    async function onMessageCompleted({
+      xp,
+      GC,
+      time,
+      shoots,
+      PT,
+      materialDrops,
+      rewards,
+      tierSub,
+      newTierSub,
+      rewardsBonus
+    }: any) {
+      console.log('[season] COMPLETED round', currentGame, 'tierSub', tierSub, '->', newTierSub)
+      clearGhostTimers()
+      timeUI && timeUI.hide()
+      await sleep(3000)
+      callbacks.onComplete &&
+        callbacks.onComplete({ xp, GC, PT, time, shoots, materialDrops, rewards, tierSub, newTierSub, rewardsBonus })
+      inGameResults && inGameResults.hide()
+    }
+
+    function onMessageShootFrames({ impulse, frames }: any) {
+      shootFramesInfo = { frames, impulse, timeStep }
+      positionBeforeShoot = physicBall.body.position.clone()
+    }
+
+    function onMessageStartShootFrame() {
+      ball.reproduceSound('shoot1')
+      physicBall.wakeUp()
+      frameReproductor = createFrameReproduction({
+        timeStep,
+        frames: shootFramesInfo.frames,
+        onEvent: (event: any) => frameEventHandler.trigger(event),
+        onUpdateBall: ({ position, velocity }: any) => {
+          Object.assign(physicBall.body.position, position)
+          Object.assign(physicBall.body.velocity, velocity)
+        },
+        onFinish: () => (frameReproductor = null)
+      })
+    }
+
+    // Fired when an opponent holes out: the round ends in N seconds.
+    async function onMessageHoleCountdown(ms: number) {
+      seasonCountdownState.visible = true
+      seasonCountdownState.text = ''
+      let counter = Math.floor(ms / 1000)
+      holeCountdownInterval = setInterval(() => {
+        seasonCountdownState.text = 'Ending in...\n' + --counter
+        if (counter <= 0 || room.state.finished || cancelEnding) {
+          cancelEnding = false
+          clearInterval(holeCountdownInterval)
+          holeCountdownInterval = null
+          seasonCountdownState.visible = false
+        }
+      }, 1000)
+    }
+
+    async function onMessageHoleEndCountdown() {
+      cancelEnding = true
+      await fadeInOverlay(3)
+    }
+
+    function handleFrameEvents() {
+      frameEventHandler.onEvent(EVENT.EVENT_VARIABLE_CHANGE, ({ data }: any) => {
+        Object.assign(expressionState, data.newValues)
+        data.targetControlIds.forEach((partId: string) => visualCourse.applyReactiveValue(partId, expressionState))
+      })
+
+      frameEventHandler.onEvent(EVENT.SLEEP, () => {
+        physicBall.body.sleep()
+        setIdle()
+      })
+
+      frameEventHandler.onEvent(EVENT.HOLE, () => {
+        gamePlayState.finished = true
+        control.hide()
+        ball.reproduceSound('hole')
+        ball.hide && ball.hide()
+        visualCourse.reproduceHoleAction()
+      })
+
+      frameEventHandler.onEvent(EVENT.WIND, () => ball.reproduceSound('wind'))
+      frameEventHandler.onEvent(EVENT.SAND, () => ball.reproduceSound('sand'))
+
+      frameEventHandler.onEvent(EVENT.OUT, async () => {
+        physicBall.body.sleep()
+        await sleep(100)
+        physicBall.body.position.set(positionBeforeShoot.x, positionBeforeShoot.y, positionBeforeShoot.z)
+        await sleep(100)
+        setIdle()
+      })
+
+      frameEventHandler.onEvent(EVENT.EXPLOSIVE, ({ data }: any) => {
+        visualCourse.getParts()[data.id]?.reproduceAction()
+      })
+    }
+
+    function update(dt: number) {
+      if (!gamePlayState.started) return
+      if (frameReproductor) frameReproductor.update(dt)
+      if (!onlyServerPhysics) world.step(timeStep, dt)
+
+      ball.setPosition(physicBall.body.position, physicBall.body.quaternion)
+
+      movingPhysicParts &&
+        Object.values(movingPhysicParts).forEach((physicPart: any) => {
+          physicPart.bodies.forEach((body: any) => {
+            const partId = physicPart.definition.id
+            const movingParts = room.state.movingParts?.toJSON?.() || []
+            const serverPart = movingParts.find((m: any) => m.partId === partId)
+            if (!serverPart) return
+            const { x, y, z } = serverPart.velocity
+            body.velocity.set(x, y, z)
+          })
+        })
+
+      for (const [entity] of engine.getEntitiesWith(MovingPartComponent)) {
+        const partId = movingPartIds.get(entity)
+        if (!partId) continue
+        const movingParts = room.state.movingParts?.toJSON?.() || []
+        const serverPart = movingParts.find((m: any) => m.partId === partId)
+        if (!serverPart) continue
+        const t = Transform.getMutableOrNull(entity)
+        if (!t) continue
+        t.position = Vector3.create(serverPart.position.x, serverPart.position.y, serverPart.position.z)
+        t.rotation = Quaternion.create(
+          serverPart.quaternion.x,
+          serverPart.quaternion.y,
+          serverPart.quaternion.z,
+          serverPart.quaternion.w
+        )
+      }
+
+      gameHandler.update(dt, true)
+    }
+
+    function start() {
+      gamePlayState.started = true
+      setIdle()
+      setTimeout(() => control.show(), 1)
+    }
+
+    function setIdle() {
+      if (gamePlayState.finished) return
+      gamePlayState.idle = true
+      control.show()
+      control.setPosition(physicBall.body.position)
+    }
+
+    function clearGhostTimers() {
+      if (ghostInterval) {
+        clearInterval(ghostInterval)
+        ghostInterval = null
+      }
+      if (timeInterval) {
+        clearInterval(timeInterval)
+        timeInterval = null
+      }
+      if (startCountdownInterval) {
+        clearInterval(startCountdownInterval)
+        startCountdownInterval = null
+      }
+      if (holeCountdownInterval) {
+        clearInterval(holeCountdownInterval)
+        holeCountdownInterval = null
+      }
+    }
+
+    function dispose() {
+      disposed = true
+      pingDisposed = true
+      clearInterval(pingInterval)
+      clearGhostTimers()
+      seasonCountdownState.visible = false
+      visualChests.forEach((v: any) => v.dispose())
+      frameEventHandler.dispose()
+      gameHandler.dispose()
+      visualCourse.dispose()
+      control.dispose()
+      ball.dispose()
+      // Each round creates its own ghost balls; they must all go or they pile up
+      // across the 4 rounds (SDK7 removeEntity does not cascade, CLAUDE.md §6 #11).
+      ghostBalls.forEach((gb: any) => gb.visualBall.dispose())
+      ghostBalls.length = 0
+      engine.removeSystem(update)
+      callbacks.onFinish = null
+      callbacks.onComplete = null
+      showAvatars()
+    }
+
+    function onComplete(fn: Function) {
+      callbacks.onComplete = fn
+    }
+
+    function onFinish(fn: Function) {
+      callbacks.onFinish = fn
+    }
+  }
+
+  return { createClientGolfPlay }
+}
+
+// SDK6 had a "fix bug" sprite button to reset a stuck course. Kept as the same
+// no-op stub the storymode client already imports from here.
+export const createFixBugButton = async (_visualCourse?: any, _onClick?: () => void) => ({
+  hide: () => {}
+})
+
+// Hides every season in-game overlay at once (used when a run is cancelled).
+export const hideSeasonInGameUi = () => hideSeasonHud()
+
+export { GolfplayClientSeasonFactory }

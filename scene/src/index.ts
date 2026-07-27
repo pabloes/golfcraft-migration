@@ -1,0 +1,98 @@
+// Must run before colyseus.js is used (matchmaking needs XMLHttpRequest).
+import './meta/xhr-polyfill'
+
+import { engine, Entity, Transform } from '@dcl/sdk/ecs'
+import { Vector3 } from '@dcl/sdk/math'
+
+import { createNpcTest, hideNpc, CreateNpcOptions } from './components/lobby/npc-storymode/npc-storymode'
+import { createBuilding, destroyBuilding } from './components/lobby/building'
+import { createLobbyTraining, destroyLobbyTraining, destroyGolfclubBoard } from './components/lobby/lobby-training'
+import { bootstrap } from './meta/bootstrap'
+import { setupUI } from './ui'
+
+// Mission-1 production flow:
+//   1. bootstrap() -> PlayFab LoginWithCustomID, get user, realm, Colyseus client
+//   2. spawnLobby() -> building + NPC scientist (re-called on mission end)
+//   3. Player clicks NPC -> dialog "Welcome new intern" -> requestStartMission
+//   4. onStart -> destroyLobby() (building + NPC + containers)
+//   5. colyseus.joinOrCreate('mission-room', { PlayFabId, gameDefinition: { courseId: 'mission-1' } })
+//   6. Server fetches mission-1 from web API (localhost:2569) backed by MySQL
+//   7. clientGolfPlay renders course + ball + control. Player plays.
+//   8. onFinish -> spawnLobby() restores building+NPC
+
+console.log('[main] golfcraft-sdk7 scene module loaded')
+
+export async function main() {
+  console.log('[main] main() entered')
+  setupUI()
+
+  const sceneRoot: Entity = engine.addEntity()
+  Transform.create(sceneRoot, { position: Vector3.create(24, 0, 24) })
+
+  try {
+    const { colyseus, PlayFabId, user, realm } = await bootstrap()
+    console.log('[main] bootstrap done')
+
+    const spawnLobby = () => {
+      console.log('[main] spawnLobby (building + golfclub board + NPC)')
+      createBuilding(sceneRoot)
+      // SDK6 createLobby() also called createLobbyTraining(), which builds the
+      // golfclub board the mission-7 dialog points the player at. Guarded: the
+      // NPC is created after it, and an exception here would abort spawnLobby
+      // and leave the player with no NPC to talk to at all.
+      try {
+        createLobbyTraining(sceneRoot, {
+          root: sceneRoot,
+          colyseus,
+          // SDK6 lobby.hide()/show() around a season run: the lobby disappears
+          // while playing and comes back when the run ends.
+          onStarting: () => {
+            destroyBuilding()
+            destroyGolfclubBoard()
+            hideNpc()
+          },
+          onFinish: () => {
+            spawnLobby()
+          }
+        })
+      } catch (err) {
+        console.log('[main] golfclub board failed to spawn:', err)
+      }
+      const npcOpts: CreateNpcOptions = {
+        // SDK6 npc-storymode hardcoded NPC at (2, 1.1, 8) parented to root
+        // (24, 0, 24) -> world (26, 1.1, 32), next to container1 at (24.5, 1.1, 32).
+        position: Vector3.create(2, 1.1, 8),
+        parent: sceneRoot,
+        root: sceneRoot,
+        colyseus,
+        PlayFabId,
+        user,
+        realm,
+        clientInfo: { sessionTicket: '' },
+        // SDK6 lobby.hide(): destroyBuilding() + npc.hide(). Mirror that here so
+        // the lobby disappears when the player accepts the mission and the
+        // course renders cleanly.
+        onStart: () => {
+          console.log('[main] onStart -> destroy lobby')
+          destroyBuilding()
+          destroyLobbyTraining()
+          hideNpc()
+        },
+        onFinish: async (leaveCode) => {
+          console.log('[main] mission finished, leaveCode:', leaveCode, '- restoring lobby')
+          // SDK6 lobby.show(): re-attach lobby entity + scenario.show() + npc.show().
+          // We can't re-attach (entity was destroyed) so we re-spawn the whole
+          // lobby. Module-level state in npc-storymode (first_time,
+          // completed_mission) persists, so the next dialog reflects progress.
+          spawnLobby()
+        }
+      }
+      createNpcTest(sceneRoot, npcOpts)
+    }
+
+    spawnLobby()
+    console.log('[main] lobby spawned, ready')
+  } catch (err) {
+    console.log('[main] bootstrap failed:', err)
+  }
+}

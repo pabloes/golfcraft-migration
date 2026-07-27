@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "decentraland-sdk-skills": {
+      "source": "decentraland/sdk-skills",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "8e21c17c70b50b8f80180776a68f02943186e8f4764ce695d2d3b06b0e17e06a"
+    }
+  }
+}

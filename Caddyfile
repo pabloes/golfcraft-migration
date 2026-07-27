@@ -1,0 +1,26 @@
+# Local TLS proxy for the SDK7 bevy-web runtime: terminates wss/https on 2570
+# and forwards to the Colyseus server on 2567.
+#
+# `protocols h1` forces HTTP/1.1 (disables HTTP/2). The bevy/Deno WebSocket
+# client fails the WS upgrade over HTTP/2 (works fine over h1.1, like Node's ws),
+# so without this the mission room join throws ServerError even though
+# matchmaking (plain HTTPS fetch over h2) succeeds.
+#
+# debug + file logs: lets us see TLS handshake failures (e.g. the embedded
+# deno_websocket rejecting caddy's local CA) vs successful 101 upgrades.
+{
+	debug
+	servers {
+		protocols h1
+	}
+	log {
+		output file /tmp/caddy-debug.log
+	}
+}
+
+https://localhost:2570 {
+	log {
+		output file /tmp/caddy-access.log
+	}
+	reverse_proxy localhost:2567
+}

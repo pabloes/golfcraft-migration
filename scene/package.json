@@ -1,0 +1,33 @@
+{
+  "name": "golfcraft-scene",
+  "version": "1.0.0",
+  "description": "GolfCraft minigolf - SDK7",
+  "scripts": {
+    "start": "sdk-commands start",
+    "deploy": "sdk-commands deploy",
+    "build": "sdk-commands build",
+    "upgrade-sdk": "npm install --save-dev @dcl/sdk@latest",
+    "upgrade-sdk:next": "npm install --save-dev @dcl/sdk@next"
+  },
+  "dependencies": {
+    "@dcl-sdk/utils": "^1.2.10",
+    "cannon": "^0.6.2",
+    "colyseus.js": "^0.14.13",
+    "dcl-npc-toolkit": "^1.4.13",
+    "jsep": "^1.4.0"
+  },
+  "devDependencies": {
+    "@dcl/js-runtime": "7.23.3",
+    "@dcl/sdk": "latest"
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=6.0.0"
+  },
+  "prettier": {
+    "semi": false,
+    "singleQuote": true,
+    "printWidth": 120,
+    "trailingComma": "none"
+  }
+}

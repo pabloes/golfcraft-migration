@@ -1,0 +1,61 @@
+{
+  "_comment": "Manifest of the GolfCraft local dev backend. `bash scripts/dev-up.sh` brings up everything that's down (idempotent) and handles the cloudflared tunnel URL -> common/constants.ts SERVER_URL -> scene rebuild automatically. `bash scripts/dev-down.sh` stops it (MySQL/podman is left running).",
+  "repoRoot": "~/dev/ZeroxWork/golfcraft-migration",
+  "realm": "http://127.0.0.1:8001",
+  "openUrl": "https://decentraland.zone/bevy-web/?preview=true&realm=http%3A%2F%2F127.0.0.1%3A8001&position=47%2C-45",
+  "commands": {
+    "up": "bash scripts/dev-up.sh",
+    "down": "bash scripts/dev-down.sh",
+    "status": "bash scripts/dev-up.sh --status"
+  },
+  "services": [
+    {
+      "name": "mysql",
+      "port": 3306,
+      "start": "podman start golfcraft-mysql",
+      "needed": true,
+      "managed": "podman (persists on its own; NOT a background task that dies)",
+      "note": "DB: 837 courses + 307 parts + admin tables"
+    },
+    {
+      "name": "web",
+      "port": 2569,
+      "cwd": "web",
+      "start": "npm run api",
+      "needed": true,
+      "note": "REST: /api/get-course, /api/parts, /api/get-login-id. If DOWN, login silently falls back to the junk PlayFab account (GC=1000)."
+    },
+    {
+      "name": "colyseus",
+      "port": 2567,
+      "cwd": "server",
+      "start": "npm run dev",
+      "needed": true,
+      "note": "Defines mission-room. onAuth gates joins by the player's PlayFab current_mission. Plain ts-node, no auto-reload."
+    },
+    {
+      "name": "tunnel",
+      "port": null,
+      "cwd": ".",
+      "start": "cloudflared tunnel --url http://localhost:2567",
+      "needed": true,
+      "note": "wss for the game WebSocket (bevy deno_websocket only trusts public CAs). URL changes EVERY run -> dev-up.sh writes it into common/constants.ts SERVER_URL and rebuilds the scene."
+    },
+    {
+      "name": "preview",
+      "port": 8001,
+      "cwd": "scene",
+      "start": "npm run start -- --no-client --port 8001",
+      "needed": true,
+      "note": "SDK7 scene preview server. Realm = http://127.0.0.1:8001 (8000 left free on purpose)."
+    },
+    {
+      "name": "chain-playfab",
+      "port": 2568,
+      "cwd": "chain-playfab",
+      "start": "npm run dev",
+      "needed": false,
+      "note": "Golfclub NFT minter + ERC721 metadata. NOT needed for missions (the /groups ECONNREFUSED at Colyseus boot is harmless), but dev-up.sh now starts it too."
+    }
+  ]
+}
