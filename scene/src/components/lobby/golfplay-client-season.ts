@@ -89,7 +89,21 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
 
   const createClientGolfPlay = async (
     parent: Entity,
-    { gameDefinition, room, golfclub, wip, colyseus, expressionState = {}, currentGame, ghostsData }: any
+    {
+      gameDefinition,
+      room,
+      golfclub,
+      wip,
+      colyseus,
+      expressionState = {},
+      currentGame,
+      ghostsData,
+      // "Play ranked with friends" only: room.state.players (the live balls of
+      // the other party members) and this client's own index in it. Absent in a
+      // solo run, where the only other balls are the ghosts.
+      partyPlayers = null,
+      partyPlayerIndex = -1
+    }: any
   ) => {
     const state = { reconnecting: false }
     console.log('[season] createClientGolfPlay round', currentGame)
@@ -246,6 +260,8 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
     const STEPS_FPS = 60 * 4
     const timeStep = 1 / STEPS_FPS
     const ghostBalls: any[] = []
+    // One visual ball per OTHER party member (index-aligned with partyPlayers).
+    const partyBalls: any[] = []
     const GHOST_FPS = 30
     const GHOST_FMS = 1000 / GHOST_FPS
     let ghostInterval: any = null
@@ -368,6 +384,26 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
       inGameResults.resetView()
       inGameResults.show()
 
+      // Party: one extra visual ball per friend, driven by the server state
+      // (each of them simulates their own physics, exactly like the live
+      // tournament does).
+      if (partyPlayers) {
+        partyPlayers.forEach((p: any, index: number) => {
+          if (index === partyPlayerIndex) return
+          const [x, y, z] = initialPosDef.position
+          partyBalls.push({
+            index,
+            visualBall: createVisualBall(parent, {
+              position: Vector3.create(x, y, z),
+              displayName: p.displayName,
+              id: 20 + index,
+              collectionId: courseDefinition.collectionId
+            }),
+            hidden: false
+          })
+        })
+      }
+
       // Ghosts: one extra visual ball per recorded opponent, parked at the tee.
       currentGameGhostsData.forEach((g: any, index: number) => {
         const [x, y, z] = initialPosDef.position
@@ -453,14 +489,17 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
       rewards,
       tierSub,
       newTierSub,
-      rewardsBonus
+      rewardsBonus,
+      // party runs only: false when the player was above the room's level and
+      // therefore earned no season points
+      eligible
     }: any) {
       console.log('[season] COMPLETED round', currentGame, 'tierSub', tierSub, '->', newTierSub)
       clearGhostTimers()
       timeUI && timeUI.hide()
       await sleep(3000)
       callbacks.onComplete &&
-        callbacks.onComplete({ xp, GC, PT, time, shoots, materialDrops, rewards, tierSub, newTierSub, rewardsBonus })
+        callbacks.onComplete({ xp, GC, PT, time, shoots, materialDrops, rewards, tierSub, newTierSub, rewardsBonus, eligible })
       inGameResults && inGameResults.hide()
     }
 
@@ -547,6 +586,21 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
 
       ball.setPosition(physicBall.body.position, physicBall.body.quaternion)
 
+      // Friends' balls follow the server state; once they hole (or leave) their
+      // ball goes away, same as the local one does on EVENT.HOLE.
+      for (const partyBall of partyBalls) {
+        const player = partyPlayers?.[partyBall.index]
+        if (!player) continue
+        if (player.holed || player.left) {
+          if (!partyBall.hidden) {
+            partyBall.hidden = true
+            partyBall.visualBall.hide && partyBall.visualBall.hide()
+          }
+          continue
+        }
+        partyBall.visualBall.setPosition(Vector3.create(player.position.x, player.position.y, player.position.z))
+      }
+
       movingPhysicParts &&
         Object.values(movingPhysicParts).forEach((physicPart: any) => {
           physicPart.bodies.forEach((body: any) => {
@@ -627,6 +681,8 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
       // across the 4 rounds (SDK7 removeEntity does not cascade, CLAUDE.md §6 #11).
       ghostBalls.forEach((gb: any) => gb.visualBall.dispose())
       ghostBalls.length = 0
+      partyBalls.forEach((pb: any) => pb.visualBall.dispose())
+      partyBalls.length = 0
       engine.removeSystem(update)
       callbacks.onFinish = null
       callbacks.onComplete = null

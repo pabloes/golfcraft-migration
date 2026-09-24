@@ -122,4 +122,6 @@ export async function hideWaitPlayers() {
   seasonWaitState.onCancel = null
   seasonWaitState.players = []
   seasonWaitState.sub = ''
+  seasonWaitState.info = ''
+  seasonWaitState.onStart = null
 }

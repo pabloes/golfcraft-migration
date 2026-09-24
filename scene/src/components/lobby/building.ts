@@ -1,14 +1,17 @@
 import { engine, Entity, Transform, GltfContainer, AudioSource } from '@dcl/sdk/ecs'
 import { Vector3, Quaternion } from '@dcl/sdk/math'
+import { movePlayerTo } from '~system/RestrictedActions'
 import buildingPositions from './building-positions'
+import { createButtonList } from '../button-list'
 
 // SDK6 building.ts had panel/elevator buttons + collectables + analytics.
-// This SDK7 version just spawns the visual building: main shell + every sub
-// model defined in building-positions.ts (fountains, vegetation, billboards,
-// flag, etc.). Panels/elevator/analytics are not migrated yet.
+// This SDK7 version spawns the visual building (main shell + every sub model
+// defined in building-positions.ts) plus the elevator panels that teleport
+// between floors. Collectables and analytics are not migrated.
 
 let building_entity: Entity | null = null
 const childEntities: Entity[] = []
+const buttonLists: { dispose: () => void }[] = []
 
 const transformFromDict = (parent: Entity, dict: { position: number[]; rotation: number[]; scale: number[] }) => {
   const e = engine.addEntity()
@@ -92,7 +95,57 @@ export const createBuilding = (parent: Entity) => {
     childEntities.push(e)
   })
 
+  createElevatorPanels(building_entity)
+
   return building_entity
+}
+
+// SDK6 building.ts:204-277. One elevator panel per floor, in the middle of the
+// building, each listing all five floors. Destinations and the panel
+// positions/rotations are verbatim from SDK6 (the latter come from the
+// EmptyButtons* entries in building-positions).
+const FLOOR_BUTTONS: { label: string; target: Vector3.MutableVector3; camera: Vector3.MutableVector3 }[] = [
+  { label: 'Crafting', target: Vector3.create(17, 37, 20), camera: Vector3.create(15, 37, 16) },
+  { label: 'Misc', target: Vector3.create(31, 30, 30), camera: Vector3.create(31, 30, 22) },
+  { label: 'Fashion', target: Vector3.create(30, 18, 18), camera: Vector3.create(34, 18, 15) },
+  { label: 'Tournaments', target: Vector3.create(31, 11, 34), camera: Vector3.create(12, 11, 28) },
+  { label: 'Lobby / season', target: Vector3.create(18, 4, 34), camera: Vector3.create(14, 4, 43) }
+]
+
+// activeIndex marks the floor the panel itself is on, so that button is shown
+// disabled/highlighted. SDK6 order: Lobby=4, Floor1=3, Floor2=2, Floor3=1, Floor4=0.
+const PANELS: { key: string; activeIndex: number }[] = [
+  { key: 'EmptyButtonsLobby', activeIndex: 4 },
+  { key: 'EmptyButtonsFloor1', activeIndex: 3 },
+  { key: 'EmptyButtonsFloor2', activeIndex: 2 },
+  { key: 'EmptyButtonsFloor3', activeIndex: 1 },
+  { key: 'EmptyButtonsFloor4', activeIndex: 0 }
+]
+
+function createElevatorPanels(parent: Entity) {
+  const bp = buildingPositions as { [k: string]: any }
+  const buttonDefinitions = FLOOR_BUTTONS.map((floor) => ({
+    label: floor.label,
+    action: () => {
+      movePlayerTo({ newRelativePosition: floor.target, cameraTarget: floor.camera })
+    }
+  }))
+
+  PANELS.forEach(({ key, activeIndex }) => {
+    const def = bp[key]
+    if (!def) {
+      console.log('[building] missing elevator panel position:', key)
+      return
+    }
+    const list = createButtonList(parent, {
+      activeIndex,
+      buttonDefinitions,
+      buttonModel: 'models/building/button_elevator.gltf',
+      position: Vector3.create(def.position[0], def.position[1], def.position[2]),
+      rotation: Quaternion.create(def.rotation[0], def.rotation[1], def.rotation[2], def.rotation[3])
+    })
+    buttonLists.push(list)
+  })
 }
 
 export const destroyBuilding = () => {
@@ -100,6 +153,8 @@ export const destroyBuilding = () => {
     engine.removeEntity(building_entity)
     building_entity = null
   }
+  buttonLists.forEach((l) => l.dispose())
+  buttonLists.length = 0
   childEntities.forEach((e) => engine.removeEntity(e))
   childEntities.length = 0
 }

@@ -19,6 +19,9 @@
 import { USE_REMOTE_SERVER } from '../../../../../common/constants'
 
 const BRIDGE_BASE = 'https://golfcraftgame.com/bridge'
+// The same onchain-queue service, run locally (see CLAUDE.md §10). Only used for
+// the read-only stock query.
+const LOCAL_BRIDGE_BASE = 'http://localhost:8111/bridge'
 
 // One obvious switch. Local dev => no reward traffic whatsoever.
 export const SEASON_REWARDS_ENABLED: boolean = !!USE_REMOTE_SERVER
@@ -64,14 +67,20 @@ export async function getSeasonActionStatus(actionId: string): Promise<any | nul
   }
 }
 
-// Feeds SDK6's 20 "N left" stock labels on the season info screen. Not needed
-// for the storymode arc; returns null locally so the labels just stay blank.
+// Feeds the 20 "N left" stock labels on the season prizes screen.
+//
+// Unlike the two calls above this one is READ-ONLY — it just reports stock — so
+// it is safe to serve locally, and the local onchain-queue exposes the very same
+// route. Pointing it there gives real numbers in dev without weakening anything:
+// claiming stays disabled, so no wearable can be minted.
 export async function getSeasonRewardsStock(): Promise<any | null> {
-  if (!SEASON_REWARDS_ENABLED) return null
+  const base = SEASON_REWARDS_ENABLED ? BRIDGE_BASE : LOCAL_BRIDGE_BASE
   try {
-    return await fetch(`${BRIDGE_BASE}/season-rewards`).then((r) => r.json())
+    return await fetch(`${base}/season-rewards`).then((r) => r.json())
   } catch (err) {
-    console.log('[season] season-rewards stock failed', err)
+    // The local queue is optional (dev-up doesn't start it), so a failure here
+    // just leaves the labels blank.
+    console.log('[season] season-rewards stock unavailable', err)
     return null
   }
 }

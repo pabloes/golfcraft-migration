@@ -13,6 +13,10 @@ export type SeasonWaitState = {
   // "Anonymous confession: ..." ticker along the bottom.
   sub: string
   onCancel: (() => void) | null
+  // The two below only exist for "play ranked with friends" (season-party.ts):
+  // a line under the title ("Starts in 42s") and the host's START button.
+  info: string
+  onStart: (() => void) | null
 }
 
 export const seasonWaitState: SeasonWaitState = {
@@ -20,5 +24,7 @@ export const seasonWaitState: SeasonWaitState = {
   title: '',
   players: [],
   sub: '',
-  onCancel: null
+  onCancel: null,
+  info: '',
+  onStart: null
 }

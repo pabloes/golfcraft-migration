@@ -56,6 +56,8 @@ import {SeasonRoom} from "./rooms/Season-Room";
 import {DclAwardsRoom} from "./rooms/DclAwardsRoom";
 import {LiveTournamentLobbyRoom} from "./rooms/live-tournament-lobby";
 import {LiveTournamentRoom} from "./rooms/live-tournament-room";
+import {SeasonPartyLobbyRoom} from "./rooms/season-party-lobby";
+import {SeasonPartyRoom} from "./rooms/season-party-room";
 
 require('dotenv').config();
 const port = Number(process.env.PORT || 2567) + Number(process.env.NODE_APP_INSTANCE || 0);
@@ -134,6 +136,11 @@ gameServer.define('demo-room', MultiplayerDemoRoom)
 gameServer.define('season-room', SeasonRoom)
     .filterBy(['roomInstanceId'])
     .enableRealtimeListing();
+
+//"Play ranked with friends": one shared waiting room, and the game rooms it
+//creates (joined by id only, see season-party-registry)
+gameServer.define('season-party-lobby', SeasonPartyLobbyRoom);
+gameServer.define('season-party-room', SeasonPartyRoom);
 
 gameServer.define('dcl-awards-room', DclAwardsRoom)
     .enableRealtimeListing();

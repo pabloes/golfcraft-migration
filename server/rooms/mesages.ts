@@ -38,6 +38,16 @@ enum MESSAGE {
     START_LIVE_ROOM,
     PLAYER_HOLE,
     LIVE_TOURNAMENT_END,
-    HOST_ACTIVITY_PROBE
+    HOST_ACTIVITY_PROBE,
+    // "Play ranked with friends" (season-party-lobby / season-party-room).
+    // Appended so the existing numeric values stay the same.
+    PARTY_CREATE,
+    PARTY_JOIN,
+    PARTY_LEAVE,
+    PARTY_CANCEL,
+    PARTY_START,
+    PARTY_STARTED,
+    PARTY_CANCELLED,
+    PARTY_ERROR
 }
 export default MESSAGE

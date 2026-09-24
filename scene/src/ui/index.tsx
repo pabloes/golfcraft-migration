@@ -27,11 +27,18 @@ const ui = () => (
     <GameFooter />
     <SeasonClock />
     <SeasonResults />
-    <SeasonWait />
-    <SeasonNextGame />
     <IntroScreen />
     <NpcUtilsUi />
     <Overlay />
+    {/* These three sit AFTER <Overlay /> on purpose: later siblings paint on
+        top, and all of them are meant to be read WHILE the screen is faded to
+        black. season-demo fades in before joining the room and only fades out
+        once the course is ready, so a wait screen rendered before the overlay
+        is invisible — the player just sees ~10s of black while the server picks
+        the 4 courses and queries the ghosts. Same for the between-round
+        scoreboard, which is shown before the fade-out. */}
+    <SeasonWait />
+    <SeasonNextGame />
     <CenterPopup />
     <SeasonCountdown />
   </UiEntity>
@@ -51,11 +58,17 @@ const SeasonClock = () => {
   )
 }
 
+// A party run shows up to 4 players + 3 ghosts, so the panel grows with the rows.
 const SeasonResults = () => {
   if (!seasonResultsState.visible || !seasonResultsState.rows.length) return null
   return (
     <UiEntity
-      uiTransform={{ positionType: 'absolute', position: { top: 0, right: 0 }, width: 260, height: 70 }}
+      uiTransform={{
+        positionType: 'absolute',
+        position: { top: 0, right: 0 },
+        width: 260,
+        height: 10 + seasonResultsState.rows.length * 15
+      }}
       uiBackground={{ color: Color4.create(0, 0, 0, 0.2) }}
     >
       <UiEntity uiTransform={{ flexDirection: 'column', width: '100%', height: '100%' }}>
@@ -94,6 +107,24 @@ const SeasonWait = () => {
         }}
       >
         <Label value={seasonWaitState.title} fontSize={16} textAlign="middle-center" color={Color4.White()} />
+        {seasonWaitState.info ? (
+          <Label
+            value={seasonWaitState.info}
+            fontSize={13}
+            textAlign="middle-center"
+            color={Color4.White()}
+            uiTransform={{ width: '100%', height: 20 }}
+          />
+        ) : null}
+        {seasonWaitState.onStart ? (
+          <UiEntity
+            uiTransform={{ width: 100, height: 26, alignSelf: 'center', margin: { bottom: 4 } }}
+            uiBackground={{ color: Color4.create(0.1, 0.5, 0.1, 0.8) }}
+            onMouseDown={() => seasonWaitState.onStart && seasonWaitState.onStart()}
+          >
+            <Label value="START" fontSize={12} textAlign="middle-center" color={Color4.White()} />
+          </UiEntity>
+        ) : null}
         <UiEntity
           uiTransform={{ width: 100, height: 26, alignSelf: 'center', margin: { bottom: 8 } }}
           uiBackground={{ color: Color4.create(0, 0, 0, 0.5) }}

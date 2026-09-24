@@ -26,7 +26,9 @@ export const createOrShowNextGameUi = async (
   _callback: () => void = () => {},
   timeout = 5000,
   rewards: any = null,
-  rewardsBonus?: any
+  rewardsBonus?: any,
+  // Only used by a party run, to explain a 0-point result (season-party-demo).
+  note?: string
 ) => {
   seasonNextGameState.visible = true
   seasonNextGameState.title = currentGame === 4 ? 'End results' : `Round ${currentGame + 1}/4`
@@ -95,6 +97,8 @@ export const createOrShowNextGameUi = async (
       }
     })
   }
+
+  if (note) extra.push(note)
 
   seasonNextGameState.extra = extra.join('\n')
 

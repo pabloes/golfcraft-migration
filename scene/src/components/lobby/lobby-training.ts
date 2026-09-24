@@ -1,7 +1,8 @@
 // Partial SDK7 port of SDK6 scene/src/components/lobby/lobby-training.ts.
-// SDK6's file drove several lobby panels; this port covers only the golfclub
-// board slice (the screen storymode mission 7 sends the player to). The other
-// panels — competition/tournament/season boards — are not migrated yet.
+// SDK6's file drove several lobby panels; this port covers the golfclub board
+// (the screen storymode mission 7 sends the player to), the season play panel
+// and the season prizes board. Still missing from the original: the season
+// ranking leaderboard, the days-connected panel and the creator-code button.
 import { Entity } from '@dcl/sdk/ecs'
 import { Quaternion, Vector3 } from '@dcl/sdk/math'
 
@@ -11,6 +12,7 @@ import { executeCloudScript } from '../../meta/playfab-rest'
 import { showMessage } from './server-notification'
 import { BoardGolfclub, createGolfclubBoard } from './golfclub-screen/golfclub-screen-ui'
 import { createSeasonMenu } from './seasons/season-menu'
+import { createSeasonPrizesScreen } from './seasons/season-prizes-screen'
 // @ts-ignore - common/utils has @ts-nocheck
 import { sleep } from '../../../../common/utils'
 
@@ -30,6 +32,7 @@ const PANEL_SEASON = {
 
 let golfclubBoard: ReturnType<typeof createGolfclubBoard> | null = null
 let seasonMenu: any = null
+let seasonPrizes: any = null
 
 // SDK6 lobby-training.ts:deserializeGolfclubs — maps PlayFab inventory items
 // into the board's shape, then appends the hardcoded CocoBay promo club.
@@ -76,13 +79,24 @@ export type LobbyTrainingOptions = {
 }
 
 export const createLobbyTraining = (parent: Entity, opts?: LobbyTrainingOptions) => {
+  // The "PRIZES BY RANK" board, to the left of the season panel. Needs no
+  // colyseus, but shares the same singleton lifetime so a lobby respawn does not
+  // duplicate it.
+  if (!seasonPrizes) {
+    try {
+      seasonPrizes = createSeasonPrizesScreen(parent)
+    } catch (err) {
+      console.log('[season] prizes screen failed to spawn', err)
+    }
+  }
+
   // SDK6 createLobbyTraining also built the Season wall. It needs the colyseus
   // client, so it only goes up once the lobby is given one. createSeasonMenu is
   // async (it builds the season demo up front); kick it off without blocking the
-  // rest of the lobby, and never let a failure take the lobby down with it.
-  // The season panel owns a long-lived season demo (its own colyseus room and
-  // the 4-round state machine), so it must NOT be duplicated when the lobby is
-  // respawned at the end of a run — it hides and shows itself instead. Only
+  // rest of the lobby, and never let a failure take the lobby down with it. The
+  // panel owns a long-lived season demo (its own colyseus room and the 4-round
+  // state machine), so it must NOT be duplicated when the lobby is respawned at
+  // the end of a run — it hides and shows itself instead. Only
   // destroyLobbyTraining() (a storymode mission start) actually tears it down.
   if (opts?.colyseus && !seasonMenu) {
     createSeasonMenu(parent, {
@@ -181,6 +195,10 @@ export const destroyLobbyTraining = () => {
   if (seasonMenu) {
     seasonMenu.dispose()
     seasonMenu = null
+  }
+  if (seasonPrizes) {
+    seasonPrizes.dispose()
+    seasonPrizes = null
   }
   if (!golfclubBoard) return
   golfclubBoard.dispose()

@@ -21,6 +21,7 @@ import {
 // @ts-ignore - season-tier-definitions has @ts-nocheck
 import { seasonTierDefinitions } from '../../../../../common/season-tier-definitions'
 import { createSeasonDemo } from '../../../../golfplay/src/season-demo'
+import { createSeasonParty } from './season-party'
 import { getGLTFShape } from '../../../../golfplay/services/resource-repo'
 import { seasonCatalog } from './season-catalog'
 import { claimSeasonReward, getSeasonActionStatus } from './season-rewards-bridge'
@@ -39,6 +40,12 @@ export const createSeasonMenu = async (
   { root, position, rotation, colyseus, wip, onStarting, onFinish }: any
 ) => {
   const gameState = globalStore.game.getState()
+  // Declared up here on purpose: transactionStatusSystem is a hoisted function
+  // but this `let` is not, and engine.addSystem() below starts calling it on the
+  // very next frame. Declaring it further down threw "Cannot access
+  // 'statusPollElapsed' before initialization" every frame until the sandbox
+  // killed the whole scene (CLAUDE.md §6 #7).
+  let statusPollElapsed = 0
 
   const entity = engine.addEntity()
   Transform.create(entity, { parent, position, rotation })
@@ -65,7 +72,9 @@ export const createSeasonMenu = async (
   })
 
   const textWrapper = engine.addEntity()
-  Transform.create(textWrapper, { parent: entity, position: Vector3.create(0, 3.6, -0.05) })
+  // SDK6 had this at y 3.6; nudged up so the last line ("Energy: ...") clears
+  // the buttons.
+  Transform.create(textWrapper, { parent: entity, position: Vector3.create(0, 3.69, -0.05) })
   TextShape.create(textWrapper, { text: '', fontSize: 2, textAlign: TextAlignMode.TAM_TOP_CENTER })
 
   const playButton = createImageButton(entity, {
@@ -80,12 +89,51 @@ export const createSeasonMenu = async (
   // migrated, so it would drop the player into an area that doesn't exist —
   // left out on purpose. Restore it together with the tournament lobby.
 
+  // NOT in SDK6: "play ranked with friends" (CLAUDE.md §12). It reuses the Play
+  // artwork — there is no sprite for it — with a caption underneath that doubles
+  // as the party status ("JOIN PARTY (2/4)", "WAITING FRIENDS"...).
+  const friendsButton = createImageButton(entity, {
+    position: Vector3.create(-0.8, 1.3, -0.1),
+    scale: Vector3.create(1, 0.4, 1),
+    rotation: Quaternion.Identity(),
+    imageSrc: 'images/button-play.png',
+    hoverText: 'Play ranked with friends'
+  })
+  const friendsLabel = engine.addEntity()
+  Transform.create(friendsLabel, { parent: entity, position: Vector3.create(-0.8, 1.04, -0.11) })
+  TextShape.create(friendsLabel, {
+    text: 'PLAY WITH FRIENDS',
+    fontSize: 0.7,
+    textAlign: TextAlignMode.TAM_TOP_CENTER
+  })
+
+  // While the player waits for friends, Play has nothing to do, so its slot
+  // becomes the way out of the party (cancel it if you are the host, leave it
+  // otherwise) without having to reach for the waiting screen. The artwork is
+  // SDK6's images/cancel.png, which was an opaque black-on-white 2D UI image:
+  // its luminance is baked into an alpha channel so it reads as white glyphs on
+  // the board, like button-play.png (CLAUDE.md §11 #2).
+  const cancelButton = createImageButton(entity, {
+    position: Vector3.create(0.8, 1.3, -0.1),
+    scale: Vector3.create(1, 0.4, 1),
+    rotation: Quaternion.Identity(),
+    imageSrc: 'images/button-cancel.png',
+    hoverText: 'Leave the party'
+  })
+  cancelButton.hide()
+  const cancelLabel = engine.addEntity()
+  Transform.create(cancelLabel, { parent: entity, position: Vector3.create(0.8, 1.04, -0.11) })
+  TextShape.create(cancelLabel, { text: '', fontSize: 0.7, textAlign: TextAlignMode.TAM_TOP_CENTER })
+
   const seasonGame = await createSeasonDemo(root, {
     colyseus,
     wip,
-    onFinish: () => {
-      onFinish && onFinish()
+    onFinish: async () => {
       show()
+      // Awaited: the lobby's onFinish fades, respawns, refreshes user data and
+      // teleports. refresh() below must run AFTER that or it repaints the panel
+      // with the pre-run tier and stale energy.
+      if (onFinish) await onFinish()
       claimRewards()
       refresh()
     },
@@ -101,6 +149,36 @@ export const createSeasonMenu = async (
   playButton.onClick(() => {
     seasonGame.startGame()
   })
+
+  // The party lobby is a shared room on the server; if it can't be reached the
+  // panel must still work for solo play, so the button simply stays hidden.
+  let seasonParty: any = null
+  try {
+    seasonParty = await createSeasonParty(root, {
+      colyseus,
+      wip,
+      userDataState: globalStore.userData.getState(),
+      onStarting: () => {
+        gameState.playing = true
+        onStarting && onStarting()
+        hide()
+      },
+      onFinish: async () => {
+        show()
+        if (onFinish) await onFinish()
+        claimRewards()
+        refresh()
+      },
+      onStarted: () => {},
+      // Fires on every party state patch (once a second while a party waits),
+      // so it only repaints the button, not the whole panel.
+      onChange: () => refreshFriendsButton()
+    })
+    friendsButton.onClick(() => seasonParty.click())
+    cancelButton.onClick(() => seasonParty.cancel())
+  } catch (err) {
+    console.log('[season] party lobby unavailable', err)
+  }
 
   refresh()
   engine.addSystem(transactionStatusSystem)
@@ -123,7 +201,6 @@ export const createSeasonMenu = async (
   }
 
   // SDK6 TransactionStatusSystem: poll the queued mint every 15s.
-  let statusPollElapsed = 0
   function transactionStatusSystem(dt: number) {
     statusPollElapsed += dt
     if (statusPollElapsed < 15) return
@@ -155,6 +232,8 @@ export const createSeasonMenu = async (
     if (t) t.parent = engine.RootEntity
     emblem.hide()
     playButton.hide()
+    friendsButton.hide()
+    cancelButton.hide()
   }
 
   // Never let a failure here leave the panel half-built (no text, both buttons
@@ -176,11 +255,6 @@ export const createSeasonMenu = async (
 
   function refreshInner() {
     const userData = globalStore.userData.getState()
-    console.log(
-      '[season] refresh: current_mission=', userData['statistic_current_mission'],
-      'tier-sub=', userData['statistic_tier-sub'],
-      'hasTextShape=', !!TextShape.getMutableOrNull(textWrapper)
-    )
     const currentMission = userData['statistic_current_mission'] || 0
     const userTierSub = userData['statistic_tier-sub'] || 0
     const tier = getTierFromSub(userTierSub)
@@ -190,6 +264,8 @@ export const createSeasonMenu = async (
     if (!currentMission || currentMission < 6) {
       emblem.hide()
       playButton.hide()
+      friendsButton.hide()
+      setFriendsLabel('')
       if (text) {
         text.text =
           'MOUNTAIN SEASON\n\n\n\nYou need to complete\nDr. Par initial missions\nbefore participating on\nSeason competition'
@@ -215,16 +291,63 @@ export const createSeasonMenu = async (
       text.text = value
     }
 
-    // SDK6 swapped Play for the teleport button at zero energy; with no
-    // tournaments to send the player to, we just hide Play.
-    if (!energy) playButton.hide()
-    else playButton.show()
+    refreshFriendsButton()
+  }
+
+  // SDK6 swapped Play for the teleport button at zero energy; with no
+  // tournaments to send the player to, we just hide Play. The party button
+  // follows the same energy rule (a run costs 1 EN per player) and takes Play's
+  // place while the player is committed to a party.
+  function refreshFriendsButton() {
+    const userData = globalStore.userData.getState()
+    const currentMission = userData['statistic_current_mission'] || 0
+    const energy = lobbyHudState.resources.EN || 0
+
+    if (!currentMission || currentMission < 6 || !energy || !seasonParty) {
+      friendsButton.hide()
+      setFriendsLabel('')
+      hideCancelButton()
+      if (!energy) playButton.hide()
+      return
+    }
+
+    friendsButton.show()
+    setFriendsLabel(seasonParty.getLabel())
+
+    if (seasonParty.isBusy()) {
+      playButton.hide()
+      cancelButton.show()
+      setCancelLabel(seasonParty.getCancelLabel())
+    } else {
+      playButton.show()
+      hideCancelButton()
+    }
+  }
+
+  function hideCancelButton() {
+    cancelButton.hide()
+    setCancelLabel('')
+  }
+
+  function setFriendsLabel(value: string) {
+    const label = TextShape.getMutableOrNull(friendsLabel)
+    if (label) label.text = value
+  }
+
+  function setCancelLabel(value: string) {
+    const label = TextShape.getMutableOrNull(cancelLabel)
+    if (label) label.text = value
   }
 
   function dispose() {
     engine.removeSystem(transactionStatusSystem)
+    seasonParty?.dispose()
     emblem.dispose()
     playButton.dispose()
+    friendsButton.dispose()
+    cancelButton.dispose()
+    engine.removeEntity(friendsLabel)
+    engine.removeEntity(cancelLabel)
     engine.removeEntity(textWrapper)
     engine.removeEntity(board)
     engine.removeEntity(entity)

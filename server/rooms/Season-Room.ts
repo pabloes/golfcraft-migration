@@ -31,7 +31,7 @@ import {pushChests} from "./chests-generator";
 const API_URL = process.env.PROD ? `https://golfcraftgame.com` : `http://localhost:2569`;
 const playfabServerApiKey = process.env.PLAYFAB_API_KEY;
 const NUM_PLAYERS = 4;
-const countdownByTierCat = [
+export const countdownByTierCat = [
     30000,
     28000,
     25000,
@@ -45,7 +45,7 @@ const countdownByTierCat = [
     10000
 ];
 
-const MATERIAL_FACTOR = {
+export const MATERIAL_FACTOR = {
     GC:36,
     WD:36,
     ST:18,
@@ -57,7 +57,7 @@ const MATERIAL_FACTOR = {
     PT:2
 };
 
-class Ghost extends Schema {
+export class Ghost extends Schema {
     @type(Vector3)
     position = new Vector3(0,0,0)
     @type(Vector3)
@@ -73,7 +73,7 @@ class Ghost extends Schema {
     shooting = false;
 }
 
-class PlayerResults extends Schema {
+export class PlayerResults extends Schema {
     @type("string")
     address:string;
 
@@ -153,10 +153,10 @@ type RecordedFrame = {
     type: number,
     value: number | number[] | null//num of frames | direction | position
 };
-const RECORDED_FPS = 30;
-const RECORDED_FRAME_MS = 1000 / RECORDED_FPS;
+export const RECORDED_FPS = 30;
+export const RECORDED_FRAME_MS = 1000 / RECORDED_FPS;
 
-enum RECORDED_FRAME {
+export enum RECORDED_FRAME {
     IDLE, SHOOT, MOVE, HOLE
 }
 const HALLOWEEN_WEARABLE_STATISTIC = "wearable:halloween-2022";//TODO make it dynamic set on chest_events table
@@ -880,7 +880,7 @@ console.log("accumulatedValue", JSON.stringify(sortedAccumulatedResult,null, "  
     }
 }
 
-function serializeFrames(frames) {
+export function serializeFrames(frames) {
     //TODO REVIEW: value maybe is always array or null/undefined.
     return frames.map(f => [f.type, ...(Array.isArray(f.value) ? f.value.map(v => Number(v.toFixed(4))) : [f.value])]);
 }

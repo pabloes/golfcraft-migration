@@ -39,7 +39,8 @@ export const seasonsApi = (router, prisma) => {
 
     router.post(`/api/get-random-recorded-games`, async (req, res) => {
         try{
-            const {address, courseAliases, minPercentile = 0, maxPercentile = 100, maxAttempts} = req.body;
+            //excludeAddresses: season-party-room excludes every party member, not just one
+            const {address, excludeAddresses, courseAliases, minPercentile = 0, maxPercentile = 100, maxAttempts} = req.body;
             console.log("GRRG get-random-recorded-games", address, minPercentile, maxPercentile, courseAliases);
             const pickedRecords = [[], [], [], []];
             const queryStartTime = Date.now();
@@ -68,7 +69,7 @@ export const seasonsApi = (router, prisma) => {
                             lte: Math.max(Number(extremeOfCourse0.start.time), Number(extremeOfCourse0.end.time))
                         } || undefined,
                         ...({
-                            AND:[{address}, ...pickedRecords[0]].map(r=>r?.address && ({
+                            AND:[...(excludeAddresses || [address]).map(a=>({address:a})), ...pickedRecords[0]].map(r=>r?.address && ({
                                 NOT:{address:r?.address}
                             }))
                         })

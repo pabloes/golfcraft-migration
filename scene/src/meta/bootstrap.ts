@@ -269,6 +269,19 @@ async function fetchBlockchainMaterials(address: string): Promise<Record<string,
   return out
 }
 
+// SDK6 services/connect/connectPlayfab.ts:196 fetches this during login: a
+// flat {key: JSON.parse(value)} map from the web API's `config` table (admin-
+// editable panel positions, currentSeasonCollectionId, etc). Stored on
+// userData.config; season-menu.ts reads config.currentSeasonCollectionId to
+// name the active season. Plain fetch (no signed identity needed) in SDK6, and
+// the route is unauthenticated on our side too.
+async function fetchConfig(): Promise<Record<string, any>> {
+  const base = USE_REMOTE_SERVER ? 'https://golfcraftgame.com' : 'http://localhost:2569'
+  const response = await fetch(`${base}/api/config`)
+  if (!response.ok) throw new Error(`/api/config ${response.status}`)
+  return response.json()
+}
+
 // Golf club model id → display name (SDK6 golfclubCatalog / GOLF_CLUB_NAME).
 // Models not listed (1, 4) fall back to the generic "GOLF CLUB".
 const GOLF_CLUB_NAMES: Record<number, string> = {
@@ -372,6 +385,16 @@ export const bootstrap = async (): Promise<BootstrapResult> => {
       await applyCombinedInfoToHud(combined)
     } catch (err) {
       console.log('[bootstrap] GetPlayerCombinedInfo failed:', err)
+    }
+
+    // Admin-editable config (currentSeasonCollectionId etc). Non-fatal:
+    // season-menu.ts falls back to a sane default if this never arrives.
+    try {
+      const config = await fetchConfig()
+      console.log('[bootstrap] config:', JSON.stringify(config))
+      globalStore.userData.setState({ config })
+    } catch (err) {
+      console.log('[bootstrap] fetchConfig failed:', err)
     }
 
     // Fetch on-chain materials separately. Only meaningful for web3 users

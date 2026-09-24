@@ -7,6 +7,12 @@ import { Vector3 } from '@dcl/sdk/math'
 import { createNpcTest, hideNpc, CreateNpcOptions } from './components/lobby/npc-storymode/npc-storymode'
 import { createBuilding, destroyBuilding } from './components/lobby/building'
 import { createLobbyTraining, destroyLobbyTraining, destroyGolfclubBoard } from './components/lobby/lobby-training'
+import { fadeInOverlay, fadeOutOverlay } from './components/ui/overlay'
+import { refreshUserData } from './meta/bootstrap'
+import { movePlayerTo } from '~system/RestrictedActions'
+import { GAME_SPAWN } from './components/spawns'
+// @ts-ignore - common/utils has @ts-nocheck
+import { sleep } from '../../common/utils'
 import { bootstrap } from './meta/bootstrap'
 import { setupUI } from './ui'
 
@@ -51,8 +57,24 @@ export async function main() {
             destroyGolfclubBoard()
             hideNpc()
           },
-          onFinish: () => {
+          // SDK6 lobby.ts:289 ends a season run with
+          // `handleLeavePlay(leaveCode, GAME_SPAWN.TRAINING)`: fade to black,
+          // restore the lobby, refresh user data, teleport, fade back in.
+          // Without the teleport the player is left standing on the course
+          // where the last hole finished, with the lobby rebuilt far away.
+          // Note it is GAME_SPAWN.TRAINING (the season/training wall), not
+          // MISSION — that one is the storymode NPC's spot.
+          onFinish: async () => {
+            await fadeInOverlay(1)
             spawnLobby()
+            await refreshUserData()
+            await sleep(500)
+            const [spawnPos, spawnCam] = GAME_SPAWN.TRAINING
+            await movePlayerTo({
+              newRelativePosition: Vector3.create(spawnPos.x, spawnPos.y, spawnPos.z),
+              cameraTarget: Vector3.create(spawnCam.x, spawnCam.y, spawnCam.z)
+            })
+            await fadeOutOverlay(1)
           }
         })
       } catch (err) {
