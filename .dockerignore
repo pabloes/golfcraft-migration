@@ -1,0 +1,34 @@
+# Build context for every deploy/*.Dockerfile is the REPO ROOT (the services
+# import ../../common, ../../lib, ../../scene/golfplay, ../../pet-store-service),
+# so this file is what keeps that context from being a few hundred megabytes.
+**/node_modules
+.git
+.DS_Store
+**/*.log
+scripts/.dev-logs
+
+# The scene is a client bundle; only the shared physics/gameplay code under
+# scene/golfplay is imported server side, and not its art.
+scene/bin
+scene/models
+scene/images
+scene/sound
+scene/assets
+scene/src
+scene/state
+scene/golfplay/models
+scene/golfplay/images
+scene/golfplay/sounds
+
+# 45M of ABIs; chain-playfab only reads contracts/metadata-server/catalog.json.
+contracts/*
+!contracts/metadata-server
+
+admin
+subgraph
+dclcontext
+.claude
+.cursor
+.agents
+.vscode
+.github
