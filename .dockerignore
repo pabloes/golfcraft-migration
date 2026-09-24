@@ -24,6 +24,11 @@ scene/golfplay/sounds
 contracts/*
 !contracts/metadata-server
 
+# web/metadata is a SEPARATE service (its own package.json, port 8113) whose
+# public/ folder is 245M of NFT art. The web API does not read it; deploy it as
+# its own app if it is ever needed.
+web/metadata
+
 admin
 subgraph
 dclcontext

@@ -20,3 +20,4 @@ yarn-error.log*
 *.pem
 *.p12
 *.keystore
+deploy/*.tar
