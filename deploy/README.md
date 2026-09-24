@@ -59,6 +59,11 @@ double quotes (dotenv strips those, CapRover does not), and a quoted
 `DATABASE_URL` makes Prisma refuse to start with *"the URL must start with the
 protocol `mysql://`"*.
 
+`bash scripts/caprover-env.sh ws|web|chain|bridge` prints the block to paste
+into *App Configs → Environmental Variables → Bulk Edit*, already unquoted and
+with the database host rewritten. It prints secrets, so run it in your own
+shell.
+
 ## Steps
 
 ### 0. Commit first
@@ -69,15 +74,22 @@ before deploying.
 
 ### 1. MySQL
 
+The dump is `~/dev/ohmyverse/golfcraft_backup_20260308_101057.sql.gz` (682 MB
+gzipped, MySQL 8.0.42, single `golfcraft` database, no `CREATE DATABASE` inside).
+
 1. One-click app → MySQL 8, with a persistent volume, and a root password you
-   keep in your password manager.
-2. Create the `golfcraft` database and the app user.
-3. Import the dump:
-   `mysql -h <host> -u root -p golfcraft < golfcraft_backup.sql`
-   (do it through a temporary container on the CapRover host, or by opening the
-   MySQL app's port to your IP just for the import).
-4. Check the counts against the old database (courses, recorded_game,
-   wearables_catalog) before trusting it.
+   keep in your password manager. Check the host has room first: the restored
+   database is several GB plus index rebuild space (`df -h /`).
+2. Create the database and the app user from a shell on the host, so the
+   password stays out of your history:
+   `docker exec -it $(docker ps -q -f name=srv-captain--golfcraft-mysql) mysql -uroot -p`
+   then `CREATE DATABASE golfcraft CHARACTER SET utf8mb4;` plus the `CREATE USER`
+   / `GRANT ALL ON golfcraft.*` for the user in `DATABASE_URL`.
+3. Copy the dump up with `rsync -P` (resumable) and import it **from the host,
+   inside tmux** — an ssh pipe that dies mid-import leaves half a database:
+   `gunzip -c /root/<dump>.sql.gz | docker exec -i $(docker ps -q -f name=srv-captain--golfcraft-mysql) mysql -uroot -p golfcraft`
+4. Check the counts (courses, recorded_game, wearables_catalog) against the old
+   database before trusting it, then delete the dump from the host.
 
 ### 2. golfcraft-web
 
@@ -132,15 +144,15 @@ ranked; it serves golfclub minting and the ERC721 metadata.
 
 ### 6. Cutover
 
-1. Lower DNS TTL a day earlier.
-2. Stop the old stack's writes (pm2 stop on the current box) and take the final
-   dump; re-import it if it moved since step 1.
-3. Point `golfcraftgame.com` and `ws.golfcraftgame.com` at the CapRover IP.
-4. Enable HTTPS on both apps.
-5. Smoke test with the live SDK6 scene: log in, play a mission, play a season
-   run, check the admin panel.
-6. **Leave the old box untouched for a few days** — rollback is putting the DNS
-   back and starting pm2 again.
+Production was already down when this migration started (2026-09-24), so there
+are no live players to protect: no maintenance window, no final dump, and the
+March backup is the baseline.
+
+1. Point `golfcraftgame.com` and `ws.golfcraftgame.com` at the CapRover IP.
+2. Enable HTTPS and *Force HTTPS* on both apps.
+3. Smoke test: `/api/config`, `/ping`, `/bridge/season-rewards`, the admin panel.
+4. **Leave the old box untouched for a few days** anyway — rollback is putting
+   the DNS back and starting pm2 again.
 
 ### 7. The scene
 
