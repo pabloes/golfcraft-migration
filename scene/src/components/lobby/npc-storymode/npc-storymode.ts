@@ -803,11 +803,17 @@ export const createNpcTest = (parent: Entity, opts: CreateNpcOptions): Entity | 
     await waitForInitialisedState(room)
     console.log('[npc] room state initialised. ball=', room.state.ball)
 
-    const golfclubs = userDataState.golfclubs
+    // A guest, or a player whose PlayFab data didn't load, has no golfclub in
+    // the store. Without this fallback the next line reads .ItemId off
+    // undefined and the mission dies with an unhandled rejection in the worker
+    // — the player just stays on the READY banner. season-demo.ts already
+    // defaulted to the basic club the same way.
+    const golfclubs = userDataState.golfclubs || []
     const activeGolfClub =
       golfclubs.find(
         (item: any) => item.CustomData?.tokenId === userDataState.activeGolfClubTokenId
-      ) || golfclubs.find((item: any) => item.ItemId === 'golfclub-1')
+      ) ||
+      golfclubs.find((item: any) => item.ItemId === 'golfclub-1') || { ItemId: 'golfclub-1' }
 
     console.log('[npc] creating clientGolfPlay with golfclub=', activeGolfClub.ItemId)
     try {
