@@ -30,3 +30,9 @@ echo "USE_REMOTE_SERVER = true; building scene…"
 
 ( cd "$ROOT/scene" && npx sdk-commands build )
 echo "scene built against production hosts (scene/bin/index.js)"
+echo
+echo "Deploy with --skip-build, ALWAYS:"
+echo "  cd scene && npx sdk-commands deploy --skip-build"
+echo "Without it the deploy rebuilds, and by then this script has already put"
+echo "USE_REMOTE_SERVER back to false — you would publish a scene pointing at"
+echo "localhost."
