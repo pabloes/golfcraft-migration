@@ -120,19 +120,13 @@ The service lives in `~/dev/ohmyverse/onchain-queue`, which now has its own
 deploy from that repo: `caprover deploy -a golfcraft-bridge`.
 
 The client calls `https://golfcraftgame.com/bridge/...` (hardcoded in the scene,
-same as SDK6), so the path has to keep working. In the **golfcraft-web** app,
-App Configs → Custom Nginx Configuration, add inside the server block:
-
-```nginx
-location /bridge/ {
-    proxy_pass http://srv-captain--golfcraft-bridge/bridge/;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-}
-```
+same as SDK6), so the path has to keep working. **The web API proxies it**
+(`web/server/index.ts`, registered before `express.json()` so bodies pipe
+through untouched), which keeps the mapping in the repo instead of in a
+dashboard field that has to be remembered when an app is recreated. The target
+is `BRIDGE_URL`, defaulting to `http://srv-captain--golfcraft-bridge` under
+`PROD` and to `http://localhost:8111` in dev. Set `BRIDGE_URL` on the
+golfcraft-web app only if the bridge app is named something else.
 
 Verify: `curl https://golfcraftgame.com/bridge/season-rewards` returns the
 wearable stock (the same JSON the prizes board reads).

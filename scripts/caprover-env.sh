@@ -4,6 +4,11 @@
 #
 #   bash scripts/caprover-env.sh ws|web|chain|bridge
 #
+# The database host defaults to srv-captain--golfcraft-mysql; CapRover's
+# one-click MySQL names the service after ITS app name, which usually ends in
+# -db, so pass the real one:
+#   DB_HOST=srv-captain--golfcraft-mysql-db bash scripts/caprover-env.sh web
+#
 # It does the two things that are easy to get wrong by hand:
 #   - strips the surrounding quotes some values carry (dotenv strips them,
 #     CapRover does not, and a quoted DATABASE_URL stops Prisma from booting)
@@ -11,6 +16,11 @@
 #
 # ⚠ This prints SECRETS to your terminal. Run it yourself, in your own shell,
 # and don't paste its output anywhere except the CapRover form.
+#
+# ⚠ The PASSWORDS it prints are the local development ones (MYSQL_PASS and the
+# password inside DATABASE_URL, ADMIN_PASS, GOLF_API_KEY). Replace them with the
+# production values before saving, or the app boots and dies with
+# "Authentication failed ... credentials for `root` are not valid".
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP="${1:-}"

@@ -20,6 +20,7 @@ import * as dcl from 'decentraland-crypto-middleware';
 
 const fallback = require("express-history-api-fallback");
 const fs = require("fs");
+const http = require("http");
 console.log("FOO")
 if(!process.env.PLAYFAB_TITLE_ID || !process.env.PLAYFAB_SECRET_KEY){
     console.log("missing PlayFab config");
@@ -67,6 +68,34 @@ router.use(cors({
 
 console.log("clientRootPath",staticPath);
 console.log("__dirname",__dirname);
+
+// The scene calls `https://golfcraftgame.com/bridge/...` (hardcoded, same as
+// SDK6) but the bridge is its own service: onchain-queue, which mints the
+// season wearables and the storymode emote. Proxying it here instead of in the
+// reverse proxy keeps the mapping in the repo, so it behaves the same locally
+// (the bridge on :8111) and in production, and survives recreating the app.
+// Registered BEFORE express.json() so the request body is piped untouched.
+const BRIDGE_URL = process.env.BRIDGE_URL
+    || (process.env.PROD ? "http://srv-captain--golfcraft-bridge" : "http://localhost:8111");
+router.use("/bridge", (req, res) => {
+    const target = new URL(BRIDGE_URL);
+    const proxyReq = http.request({
+        host: target.hostname,
+        port: target.port || 80,
+        path: "/bridge" + req.url,//express strips the mount path from req.url
+        method: req.method,
+        headers: {...req.headers, host: target.host}
+    }, (proxyRes) => {
+        res.writeHead(proxyRes.statusCode || 502, proxyRes.headers);
+        proxyRes.pipe(res);
+    });
+    proxyReq.on("error", (error) => {
+        console.log("bridge proxy error", error?.message, BRIDGE_URL);
+        if (!res.headersSent) res.status(502).json({error: "bridge unavailable"});
+    });
+    req.pipe(proxyReq);
+});
+
 router.use(express.json());
 (async ()=>{
     coursesApi(router, app, prisma);
