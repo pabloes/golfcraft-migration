@@ -50,6 +50,9 @@ case "$APP" in
   web)
     emit "$ROOT/web/.env" PLAYFAB_TITLE_ID PLAYFAB_SECRET_KEY GOLF_API_KEY DATABASE_URL \
       MYSQL_HOST MYSQL_USER MYSQL_PASS MYSQL_DB ADMIN_PASS ADMIN_COOKIE_PASSWORD
+    # Where the bridge lives is deployment config; the app code only defaults to
+    # the local one. Override BRIDGE_APP if that app has another name.
+    echo "BRIDGE_URL=http://srv-captain--${BRIDGE_APP:-golfcraft-bridge}"
     ;;
   chain)
     emit "$ROOT/chain-playfab/.env" PLAYFAB_TITLE_ID PLAYFAB_SECRET_KEY PRIVATE_KEY PUBLIC_KEY \

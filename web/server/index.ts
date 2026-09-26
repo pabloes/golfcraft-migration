@@ -75,8 +75,12 @@ console.log("__dirname",__dirname);
 // reverse proxy keeps the mapping in the repo, so it behaves the same locally
 // (the bridge on :8111) and in production, and survives recreating the app.
 // Registered BEFORE express.json() so the request body is piped untouched.
-const BRIDGE_URL = process.env.BRIDGE_URL
-    || (process.env.PROD ? "http://srv-captain--golfcraft-bridge" : "http://localhost:8111");
+// Where the bridge lives is deployment config, not code: BRIDGE_URL comes from
+// the environment, and the only default is the local dev one.
+const BRIDGE_URL = process.env.BRIDGE_URL || "http://localhost:8111";
+if (process.env.PROD && !process.env.BRIDGE_URL) {
+    console.log("⚠ BRIDGE_URL is not set: /bridge will be proxied to", BRIDGE_URL);
+}
 router.use("/bridge", (req, res) => {
     const target = new URL(BRIDGE_URL);
     const proxyReq = http.request({

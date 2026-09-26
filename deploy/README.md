@@ -42,7 +42,7 @@ Names only; the values are the ones already in the live `.env` files.
   `GOLF_API_KEY`, `SERVER` (the server id the competition matcher uses).
 - **golfcraft-web**: `PLAYFAB_TITLE_ID`, `PLAYFAB_SECRET_KEY`, `GOLF_API_KEY`,
   `DATABASE_URL`, `MYSQL_HOST`, `MYSQL_USER`, `MYSQL_PASS`, `MYSQL_DB`,
-  `ADMIN_PASS`, `ADMIN_COOKIE_PASSWORD`.
+  `ADMIN_PASS`, `ADMIN_COOKIE_PASSWORD`, `BRIDGE_URL`.
 - **golfcraft-bridge**: `PRIVATE_KEY`, `PUBLIC_KEY`, `PROVIDER_URL`,
   `PLAYFAB_TITLE_ID`, `PLAYFAB_SECRET_KEY`, `CONTRACT_MATERIALS`, `ESTIMATE_GAS`,
   `FIXED_GAS_LIMIT`, `DATABASE_URL`, `GOLF_API_KEY`, `ALCHEMY_KEY`.
@@ -124,9 +124,10 @@ same as SDK6), so the path has to keep working. **The web API proxies it**
 (`web/server/index.ts`, registered before `express.json()` so bodies pipe
 through untouched), which keeps the mapping in the repo instead of in a
 dashboard field that has to be remembered when an app is recreated. The target
-is `BRIDGE_URL`, defaulting to `http://srv-captain--golfcraft-bridge` under
-`PROD` and to `http://localhost:8111` in dev. Set `BRIDGE_URL` on the
-golfcraft-web app only if the bridge app is named something else.
+is `BRIDGE_URL`, which **must be set on the golfcraft-web app**
+(`http://srv-captain--golfcraft-bridge`): the code only defaults to the local
+`http://localhost:8111`, so that no infrastructure name lives in it.
+`scripts/caprover-env.sh web` prints the line for you.
 
 Verify: `curl https://golfcraftgame.com/bridge/season-rewards` returns the
 wearable stock (the same JSON the prizes board reads).
