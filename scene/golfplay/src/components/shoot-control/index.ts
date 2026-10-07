@@ -2,6 +2,7 @@ import { engine, Entity, inputSystem, InputAction, PointerEventType } from '@dcl
 import { Vector3, Quaternion } from '@dcl/sdk/math'
 import * as utils from '@dcl-sdk/utils'
 import { createShootControlVisual } from './shoot-control-visual'
+import { CAMERA_AIM_MODE } from '../../../../src/config/controls'
 import { createControlHint } from './bottom-panel'
 // @ts-ignore - createState is plain TS, no SDK contact
 import { createState } from '../../../../state'
@@ -23,6 +24,9 @@ type CreateShootControlOptions = {
   }
   hideGolfclub?: boolean
   currentGame?: any
+  // CAMERA_AIM_MODE: the orbit camera's heading, in degrees. When given, it is
+  // the aim.
+  getAimYaw?: () => number
 }
 
 type ShootControlState = {
@@ -57,10 +61,13 @@ const aimLengths = [0, 20, 40, 60, 80, 100]
 
 const createShootControl = (
   parent: Entity,
-  { position, rotation, golfclub, hideGolfclub, currentGame }: CreateShootControlOptions
+  { position, rotation, golfclub, hideGolfclub, currentGame, getAimYaw }: CreateShootControlOptions
 ) => {
   const _innerState = {
-    rotationEnabled: true,
+    // With the camera doing the aiming there is no manual rotation step, which
+    // is exactly what `rotationEnabled: false` already means everywhere below:
+    // every path that would return to step 1 goes to step 2 instead.
+    rotationEnabled: !CAMERA_AIM_MODE,
     bottomPanelEnabled: true
   }
 
@@ -70,7 +77,9 @@ const createShootControl = (
     rotation: initialEuler.y,
     modifiedRotation: initialEuler.y,
     power: 50,
-    step: 1,
+    // Aiming with the camera removes the rotation step, so the control opens
+    // straight on power.
+    step: CAMERA_AIM_MODE ? 2 : 1,
     ePressed: false,
     fPressed: false,
     n3Pressed: false,
@@ -161,6 +170,12 @@ const createShootControl = (
 
   const update = (dt: number) => {
     const s = store.getState() as ShootControlState
+
+    // CAMERA_AIM_MODE: the aim is the orbit camera's heading (golfplay/src/
+    // components/orbit-camera.ts), which also keeps the avatar still. The idea
+    // comes from SDK6's unshipped shoot-control/index-camera-version.ts, which
+    // had to drag the player to the ball with movePlayerTo every frame.
+    if (getAimYaw && s.visible) state.rotation = getAimYaw()
 
     // E/F key polling: SDK6 used Input.subscribe; SDK7 uses inputSystem polled
     // each frame via this system.

@@ -74,6 +74,21 @@ export async function dailyMissionsApi(router, PROD){
         return res.send({current_mission});
     });
 
+    // The storymode NPC's farewell (mission 9) has been shown: park current_mission
+    // at 10 so the scene stops spawning the scientist.
+    router.post(`/api/finish-npc-storymode`, async(req, res)=>{
+        const {PlayFabId} = req.body;
+        let current_mission = await promisify(PlayFabServer.GetPlayerStatistics)
+            ({PlayFabId, StatisticNames:["current_mission"]})
+            .then(r=>r.data?.Statistics[0]?.Value || 0);
+
+        if(current_mission === 9){
+            current_mission = 10;
+            await promisify(PlayFabServer.UpdatePlayerStatistics)({PlayFabId, Statistics:[{StatisticName:"current_mission", Value:current_mission}]})
+        }
+        return res.send({current_mission});
+    });
+
     router.post(`/api/event`, async (req, res) => {
         //TODO protect with apiKey
 

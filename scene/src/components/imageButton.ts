@@ -104,8 +104,18 @@ export const createImageButton = (parent: Entity, opts: ImageButtonOptions) => {
   const setVisible = (visible: boolean) => {
     state.visible = visible
     VisibilityComponent.createOrReplace(entity, { visible })
-    if (visible) register()
-    else unregister()
+    // VisibilityComponent hides the artwork but not the collider. A hidden
+    // button that shares its slot with a visible one (the season panel's
+    // cancel-party button sits exactly on Play) would still catch the raycast
+    // with no handler behind it, and the visible button would never get the
+    // click. So a hidden button has no collider at all.
+    if (visible) {
+      MeshCollider.setBox(clickBox, ColliderLayer.CL_POINTER)
+      register()
+    } else {
+      unregister()
+      MeshCollider.deleteFrom(clickBox)
+    }
   }
 
   return {

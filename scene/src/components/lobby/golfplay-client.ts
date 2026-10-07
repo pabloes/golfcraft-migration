@@ -30,6 +30,8 @@ import { sleep } from '../../../../common/utils'
 import { createVisualChest } from './visualChest'
 import { showMessage } from './server-notification'
 import { createFixBugButton as createFixBugButtonStub } from './golfplay-client-season'
+import { createBallOrbitCamera } from '../../../golfplay/src/components/orbit-camera'
+import { CAMERA_AIM_MODE } from '../../config/controls'
 
 const REWARD_NAMES: any = {
   WD: 'wood',
@@ -149,6 +151,16 @@ const GolfplayClientFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: string })
       }
     })
 
+    // CAMERA_AIM_MODE: circles the ball for the whole hole and gives the shoot
+    // control its aim (see orbit-camera.ts). Null in the classic scheme.
+    const orbitCam = CAMERA_AIM_MODE
+      ? createBallOrbitCamera(parent, {
+          ballEntity: ball.getEntity(),
+          getBallPosition: () => physicBall.body.position,
+          initialRotation: ballSpawnDefinition.rotation
+        })
+      : null
+
     const control = createShootControl(parent, {
       position: Vector3.create(
         ballSpawnDefinition.position[0],
@@ -161,7 +173,8 @@ const GolfplayClientFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: string })
         ballSpawnDefinition.rotation[2],
         ballSpawnDefinition.rotation[3]
       ),
-      golfclub
+      golfclub,
+      getAimYaw: orbitCam ? () => orbitCam.getYaw() : undefined
     })
     control.hide()
     const gamePlayState = { idle: true, started: false, finished: false }
@@ -223,6 +236,7 @@ const GolfplayClientFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: string })
       control.hide()
       gamePlayState.idle = false
       gamePlayState.finished = true
+      releasePlayer()
       ball.reproduceSound('hole')
       visualCourse.reproduceHoleAction()
     })
@@ -361,6 +375,14 @@ const GolfplayClientFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: string })
         if (!state.disposed) fn(...args)
       }
     }
+    // The hole is over for this player (holed, or the round/room ended): give
+    // back the normal camera, the avatar's legs and the avatars until the next
+    // hole's client takes them again. dispose() repeats it harmlessly.
+    function releasePlayer() {
+      orbitCam?.release()
+      showAvatars()
+    }
+
     function onLeave(code: number) {
       if (code < 4000 && code !== 1000) {
         const roomId = room.id
@@ -388,6 +410,7 @@ const GolfplayClientFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: string })
       }
     ) {
       const { xp, GC, PT, time, shoots, materialDrops } = data
+      releasePlayer()
       callbacks.onComplete && callbacks.onComplete({ xp, GC, PT, time, shoots, materialDrops })
     }
 
@@ -500,6 +523,7 @@ const GolfplayClientFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: string })
       gameHandler.dispose()
       visualCourse.dispose()
       control.dispose()
+      orbitCam?.dispose()
       ball.dispose()
 
       engine.removeSystem(update)

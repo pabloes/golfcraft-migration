@@ -47,6 +47,8 @@ import { showMessage } from './server-notification'
 import { hideWaitPlayers } from './season-game-countdown'
 import { createInGameResultsUi, createInGameTime } from './ingame-ui'
 import { seasonCountdownState, hideSeasonHud } from '../../ui/season-hud-state'
+import { createBallOrbitCamera } from '../../../golfplay/src/components/orbit-camera'
+import { CAMERA_AIM_MODE } from '../../config/controls'
 
 const REWARD_NAMES: any = {
   WD: 'wood',
@@ -164,6 +166,16 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
       }
     })
 
+    // CAMERA_AIM_MODE: circles the ball for the whole hole and gives the shoot
+    // control its aim (see orbit-camera.ts). Null in the classic scheme.
+    const orbitCam = CAMERA_AIM_MODE
+      ? createBallOrbitCamera(parent, {
+          ballEntity: ball.getEntity(),
+          getBallPosition: () => physicBall.body.position,
+          initialRotation: ballSpawnDefinition.rotation
+        })
+      : null
+
     const control = createShootControl(parent, {
       position: Vector3.create(
         ballSpawnDefinition.position[0],
@@ -176,7 +188,8 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
         ballSpawnDefinition.rotation[2],
         ballSpawnDefinition.rotation[3]
       ),
-      golfclub
+      golfclub,
+      getAimYaw: orbitCam ? () => orbitCam.getYaw() : undefined
     })
     control.hide()
     const gamePlayState = { idle: true, started: false, finished: false }
@@ -330,6 +343,14 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
       room.onMessage(MESSAGE.START, cancellableCallback(onMessageStart))
       room.onMessage(MESSAGE.COUNTDOWN, cancellableCallback(onMessageHoleCountdown))
       room.onMessage(MESSAGE.END_COUNTDOWN, cancellableCallback(onMessageHoleEndCountdown))
+    }
+
+    // The hole is over for this player (holed, or the round/room ended): give
+    // back the normal camera, the avatar's legs and the avatars until the next
+    // hole's client takes them again. dispose() repeats it harmlessly.
+    function releasePlayer() {
+      orbitCam?.release()
+      showAvatars()
     }
 
     function onLeave(code: number) {
@@ -496,6 +517,7 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
     }: any) {
       console.log('[season] COMPLETED round', currentGame, 'tierSub', tierSub, '->', newTierSub)
       clearGhostTimers()
+      releasePlayer()
       timeUI && timeUI.hide()
       await sleep(3000)
       callbacks.onComplete &&
@@ -558,6 +580,7 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
       frameEventHandler.onEvent(EVENT.HOLE, () => {
         gamePlayState.finished = true
         control.hide()
+        releasePlayer()
         ball.reproduceSound('hole')
         ball.hide && ball.hide()
         visualCourse.reproduceHoleAction()
@@ -676,6 +699,7 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
       gameHandler.dispose()
       visualCourse.dispose()
       control.dispose()
+      orbitCam?.dispose()
       ball.dispose()
       // Each round creates its own ghost balls; they must all go or they pile up
       // across the 4 rounds (SDK7 removeEntity does not cascade, CLAUDE.md §6 #11).

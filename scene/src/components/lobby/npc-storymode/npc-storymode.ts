@@ -74,6 +74,10 @@ export type CreateNpcOptions = {
   onFinish: (leaveCode?: number) => Promise<void> | void
 }
 
+// current_mission once the mission-9 farewell has been shown: the storymode is
+// over and neither the scientist nor the sphere containers are spawned again.
+const STORYMODE_DONE = 10
+
 let NPC_scientist: Entity | null = null
 let container1: Entity | null = null
 let container2: Entity | null = null
@@ -94,6 +98,7 @@ export const createNpcTest = (parent: Entity, opts: CreateNpcOptions): Entity | 
   const { statistic_current_mission } = userDataState
   let current_mission = statistic_current_mission || 1
   console.log('[npc] createNpcTest: current_mission=', current_mission, 'onlyClickTrigger=', current_mission >= 7)
+  if (current_mission >= STORYMODE_DONE) return
 
   // Sound entity for the sphere-teleport effect (played once during the
   // mission-2 "spheres escape" cinematic). SDK6: source_teleport, playOnce().
@@ -704,7 +709,8 @@ export const createNpcTest = (parent: Entity, opts: CreateNpcOptions): Entity | 
           text: 'Congrats for reaching STONE rank!\n You will receive an NFT wearable',
           portrait: portraits.happy,
           isEndOfDialog: true,
-          audio: getSound()
+          audio: getSound(),
+          triggeredByNext: finishStorymode
         }
       ]
     }
@@ -716,6 +722,25 @@ export const createNpcTest = (parent: Entity, opts: CreateNpcOptions): Entity | 
         isEndOfDialog: true
       }
     ]
+  }
+
+  // The farewell has been shown: park current_mission at STORYMODE_DONE on
+  // PlayFab (through the web API, like check-npc-mission) and locally, so
+  // neither a lobby respawn nor a reload brings the scientist back. He and the
+  // containers leave once the toolkit has closed its dialog window.
+  function finishStorymode() {
+    const base = USE_REMOTE_SERVER ? 'https://golfcraftgame.com' : 'http://localhost:2569'
+    fetch(`${base}/api/finish-npc-storymode`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ PlayFabId: opts.PlayFabId })
+    })
+      .then((r) => r.json())
+      .then((j) => console.log('[npc] finish-npc-storymode', JSON.stringify(j)))
+      .catch((err: any) => console.log('[npc] finish-npc-storymode failed', err))
+    current_mission = STORYMODE_DONE
+    globalStore.userData.setState({ statistic_current_mission: STORYMODE_DONE })
+    setTimeout(hideNpc, 500)
   }
 
   async function requestStartMission() {
