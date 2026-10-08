@@ -89,16 +89,20 @@ export async function runChecks(req: any, parcels?: number[][]) {
   }
 }
 
+// The signed auth chain is what proves who is calling; the Origin header only
+// keeps OTHER websites from replaying a browser user's session. SDK7 explorers
+// don't all send a decentraland.org origin: the desktop client (native) sends
+// none, and bevy-web runs scenes in a sandboxed worker whose origin is not the
+// page's. Requiring the exact play.decentraland.org origin made every login
+// from them fall back to an empty PlayFab account. So: no origin (native apps)
+// or "null" (sandboxed contexts) is fine, any Decentraland domain is fine, and
+// any other website is still rejected.
+const DECENTRALAND_ORIGIN = /^https:\/\/([a-z0-9-]+\.)*decentraland\.(org|zone)$/
+
 export function checkOrigin(req: any) {
-  if (
-    req.header('origin') !== 'https://play.decentraland.org' &&
-    req.header('origin') !== 'https://play.decentraland.zone' &&
-    req.header('origin') !== 'https://decentraland.org' &&
-    req.header('origin') !== 'https://decentraland.zone'
-  ) {
-    return false
-  }
-  return true
+  const origin = req.header('origin')
+  if (!origin || origin === 'null') return true
+  return DECENTRALAND_ORIGIN.test(origin)
 }
 
 export function checkBannedIPs(req: any) {
