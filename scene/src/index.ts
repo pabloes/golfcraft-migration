@@ -6,7 +6,7 @@ import { Vector3 } from '@dcl/sdk/math'
 
 import { createNpcTest, hideNpc, CreateNpcOptions } from './components/lobby/npc-storymode/npc-storymode'
 import { createBuilding, destroyBuilding } from './components/lobby/building'
-import { createLobbyTraining, destroyLobbyTraining, destroyGolfclubBoard } from './components/lobby/lobby-training'
+import { createLobbyTraining, destroyLobbyTraining, destroyLobbyBoards } from './components/lobby/lobby-training'
 import { fadeInOverlay, fadeOutOverlay } from './components/ui/overlay'
 import { refreshUserData } from './meta/bootstrap'
 import { movePlayerTo } from '~system/RestrictedActions'
@@ -54,7 +54,7 @@ export async function main() {
           // while playing and comes back when the run ends.
           onStarting: () => {
             destroyBuilding()
-            destroyGolfclubBoard()
+            destroyLobbyBoards()
             hideNpc()
           },
           // SDK6 lobby.ts:289 ends a season run with

@@ -183,9 +183,14 @@ export const createLobbyTraining = (parent: Entity, opts?: LobbyTrainingOptions)
   return golfclubBoard
 }
 
-// Used when a SEASON run starts: the lobby goes away but the season panel must
-// survive, since it is driving the run.
-export const destroyGolfclubBoard = () => {
+// Used when a SEASON run starts: the lobby goes away (the golfclub board and the
+// prizes board with it, both rebuilt by the next createLobbyTraining) but the
+// season panel must survive, since it is driving the run. It hides itself.
+export const destroyLobbyBoards = () => {
+  if (seasonPrizes) {
+    seasonPrizes.dispose()
+    seasonPrizes = null
+  }
   if (!golfclubBoard) return
   golfclubBoard.dispose()
   golfclubBoard = null

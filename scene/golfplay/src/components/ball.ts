@@ -7,7 +7,8 @@ import {
   Material,
   AudioSource,
   TextShape,
-  Billboard
+  Billboard,
+  VisibilityComponent
 } from '@dcl/sdk/ecs'
 import { Vector3, Quaternion, Color3, Color4 } from '@dcl/sdk/math'
 import { getGLTFShape } from '../../services/resource-repo'
@@ -48,6 +49,7 @@ const VisualBallFactory = ({ baseResourceUrl }: { baseResourceUrl: string }) => 
 
     const ballVisible = engine.addEntity()
     const scale = _scale || Vector3.create(0.09, 0.09, 0.09)
+    let ballVisibleGltf: Entity | null = null
 
     if (!dummy) {
       Transform.create(ballVisible, { parent: ball, scale })
@@ -62,7 +64,7 @@ const VisualBallFactory = ({ baseResourceUrl }: { baseResourceUrl: string }) => 
         })
       }
       if (!displayName) {
-        const ballVisibleGltf = engine.addEntity()
+        ballVisibleGltf = engine.addEntity()
         Transform.create(ballVisibleGltf, { parent: ball })
         GltfContainer.create(ballVisibleGltf, { src: ballGltf.src })
       }
@@ -97,6 +99,16 @@ const VisualBallFactory = ({ baseResourceUrl }: { baseResourceUrl: string }) => 
     Transform.create(sndEffect, { parent: ball })
 
     const url = (path: string) => baseResourceUrl + path
+
+    // SDK6 hid the ball by removing it, which took its children along. SDK7
+    // removeEntity does not cascade (CLAUDE.md §6 #11), so removing only `ball`
+    // left the sphere, the model and the sounds at the scene origin. Hiding is
+    // now a visibility switch, and dispose() removes every entity.
+    const setVisible = (visible: boolean) => {
+      for (const e of [ballVisible, ballVisibleGltf, nameEntity]) {
+        if (e !== null) VisibilityComponent.createOrReplace(e, { visible })
+      }
+    }
 
     const playOnce = (entity: Entity, audioClipUrl: string, volume: number) => {
       AudioSource.createOrReplace(entity, {
@@ -163,6 +175,7 @@ const VisualBallFactory = ({ baseResourceUrl }: { baseResourceUrl: string }) => 
       dispose: () => {
         engine.removeEntity(ball)
         engine.removeEntity(ballVisible)
+        if (ballVisibleGltf) engine.removeEntity(ballVisibleGltf)
         engine.removeEntity(sndBase)
         engine.removeEntity(sndWood)
         engine.removeEntity(sndShoot1)
@@ -170,12 +183,8 @@ const VisualBallFactory = ({ baseResourceUrl }: { baseResourceUrl: string }) => 
         engine.removeEntity(sndEffect)
         if (nameEntity) engine.removeEntity(nameEntity)
       },
-      show: () => {
-        // No-op in SDK7 (re-parenting after removal would require re-creation).
-      },
-      hide: () => {
-        engine.removeEntity(ball)
-      }
+      show: () => setVisible(true),
+      hide: () => setVisible(false)
     }
   }
 

@@ -139,6 +139,9 @@ const createShootControlVisual = (
       powerBarState.power = value
     },
     dispose: () => {
+      // SDK7 removeEntity does not cascade (CLAUDE.md §6 #11): the golf club is
+      // a child of `entity` and would be left behind at the scene origin.
+      if (rod) rod.dispose()
       engine.removeEntity(entity)
       engine.removeEntity(power)
       engine.removeEntity(aim)

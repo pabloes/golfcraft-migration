@@ -8,8 +8,8 @@
 //
 // A VirtualCamera takes no input from the explorer, so the scene reads it:
 //   - the pointer, from PrimaryPointerInfo on the root entity;
-//   - A/D and W/S (the joystick on mobile), which reach the scene even while
-//     InputModifier keeps the avatar still.
+//   - A/D to turn and W/S to zoom (the joystick on mobile), which reach the
+//     scene even while InputModifier keeps the avatar still.
 import {
   Entity,
   InputAction,
@@ -24,12 +24,15 @@ import {
 import { Quaternion, Vector3 } from '@dcl/sdk/math'
 import {
   ORBIT_DISTANCE,
+  ORBIT_DISTANCE_MAX,
+  ORBIT_DISTANCE_MIN,
   ORBIT_FOLLOW_SMOOTH,
   ORBIT_KEY_SPEED,
   ORBIT_MOUSE_SENSITIVITY,
   ORBIT_PITCH,
   ORBIT_PITCH_MAX,
-  ORBIT_PITCH_MIN
+  ORBIT_PITCH_MIN,
+  ORBIT_ZOOM_SPEED
 } from '../../../src/config/controls'
 
 type Vec3Like = { x: number; y: number; z: number }
@@ -45,6 +48,11 @@ type Options = {
 
 const pressed = (action: InputAction) => (inputSystem.isPressed(action) ? 1 : 0)
 
+// Zoom and tilt carry over from one hole to the next; only the heading starts
+// again from each tee.
+let distance = ORBIT_DISTANCE
+let pitch = ORBIT_PITCH
+
 export const createBallOrbitCamera = (
   parent: Entity,
   { ballEntity, getBallPosition, initialRotation }: Options
@@ -53,7 +61,6 @@ export const createBallOrbitCamera = (
   // Degrees. Yaw uses the shoot control's convention: the shot leaves along
   // (sin yaw, 0, cos yaw), and the camera sits on the opposite side of the ball.
   let yaw = Quaternion.toEulerAngles(Quaternion.create(rx, ry, rz, rw)).y
-  let pitch = ORBIT_PITCH
 
   const start = getBallPosition()
   // What the camera circles: the ball, slightly smoothed so bounces don't shake it.
@@ -70,10 +77,10 @@ export const createBallOrbitCamera = (
   function place() {
     const yawRad = (yaw * Math.PI) / 180
     const pitchRad = (pitch * Math.PI) / 180
-    const flat = ORBIT_DISTANCE * Math.cos(pitchRad)
+    const flat = distance * Math.cos(pitchRad)
     Transform.getMutable(camera).position = Vector3.create(
       centre.x - Math.sin(yawRad) * flat,
-      centre.y + ORBIT_DISTANCE * Math.sin(pitchRad),
+      centre.y + distance * Math.sin(pitchRad),
       centre.z - Math.cos(yawRad) * flat
     )
   }
@@ -99,13 +106,16 @@ export const createBallOrbitCamera = (
   function update(dt: number) {
     const mouse = pointerDelta()
     const turn = pressed(InputAction.IA_RIGHT) - pressed(InputAction.IA_LEFT)
-    const tilt = pressed(InputAction.IA_FORWARD) - pressed(InputAction.IA_BACKWARD)
+    // W brings the camera in, S takes it out.
+    const zoom = pressed(InputAction.IA_BACKWARD) - pressed(InputAction.IA_FORWARD)
 
     yaw += mouse.x * ORBIT_MOUSE_SENSITIVITY + turn * ORBIT_KEY_SPEED * dt
     // Screen Y grows upwards in the desktop client, so pushing the mouse up
-    // lowers the camera, which is what tilts the view up.
-    pitch += -mouse.y * ORBIT_MOUSE_SENSITIVITY + tilt * ORBIT_KEY_SPEED * 0.5 * dt
+    // raises the camera over the ball.
+    pitch += mouse.y * ORBIT_MOUSE_SENSITIVITY
     pitch = Math.max(ORBIT_PITCH_MIN, Math.min(ORBIT_PITCH_MAX, pitch))
+    distance += zoom * ORBIT_ZOOM_SPEED * dt
+    distance = Math.max(ORBIT_DISTANCE_MIN, Math.min(ORBIT_DISTANCE_MAX, distance))
 
     const ball = getBallPosition()
     centre = Vector3.lerp(centre, Vector3.create(ball.x, ball.y, ball.z), Math.min(1, dt * ORBIT_FOLLOW_SMOOTH))

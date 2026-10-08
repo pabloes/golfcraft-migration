@@ -11,9 +11,11 @@
 export const CAMERA_AIM_MODE = true
 
 // Orbit camera (golfplay/src/components/orbit-camera.ts).
-// Metres from the ball, and degrees above the ground: where it starts and how
-// far the player can tilt it.
+// Metres from the ball (W/S zoom between MIN and MAX), and degrees above the
+// ground (the mouse tilts between MIN and MAX): where each starts.
 export const ORBIT_DISTANCE = 4.5
+export const ORBIT_DISTANCE_MIN = 1.5
+export const ORBIT_DISTANCE_MAX = 12
 export const ORBIT_PITCH = 24
 export const ORBIT_PITCH_MIN = 8
 export const ORBIT_PITCH_MAX = 75
@@ -21,5 +23,7 @@ export const ORBIT_PITCH_MAX = 75
 export const ORBIT_MOUSE_SENSITIVITY = 0.25
 // Degrees per second with A/D, or the joystick on mobile.
 export const ORBIT_KEY_SPEED = 90
+// Metres per second with W/S, or the joystick on mobile.
+export const ORBIT_ZOOM_SPEED = 5
 // How fast the camera catches up with the ball.
 export const ORBIT_FOLLOW_SMOOTH = 8
