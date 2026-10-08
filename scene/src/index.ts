@@ -11,6 +11,7 @@ import { fadeInOverlay, fadeOutOverlay } from './components/ui/overlay'
 import { refreshUserData } from './meta/bootstrap'
 import { movePlayerTo } from '~system/RestrictedActions'
 import { GAME_SPAWN } from './components/spawns'
+import { globalStore } from './services/globalStore/globalStore'
 // @ts-ignore - common/utils has @ts-nocheck
 import { sleep } from '../../common/utils'
 import { bootstrap } from './meta/bootstrap'
@@ -66,6 +67,13 @@ export async function main() {
           // MISSION — that one is the storymode NPC's spot.
           onFinish: async () => {
             await fadeInOverlay(1)
+            // handleLeavePlay also clears `playing` (and courseId). Without it
+            // the bottom-right course footer stays up in the lobby, and
+            // createNpcTest bails out, so the scientist never comes back. It
+            // must happen before spawnLobby, which creates the NPC.
+            const gameState = globalStore.game.getState()
+            gameState.playing = false
+            gameState.courseId = null
             spawnLobby()
             await refreshUserData()
             await sleep(500)
