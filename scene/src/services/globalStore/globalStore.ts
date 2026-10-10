@@ -33,7 +33,11 @@ export const globalStore = {
     courseName: null,
     courseIsSeason: false,
     courseId: null,
-    introScreen: true
+    introScreen: true,
+    // Set by main() when bootstrap fails (no PlayFab account, no backend...):
+    // the error dialog shows and the lobby + HUD never load.
+    bootError: null as string | null,
+    bootErrorDismissed: false
   }),
   userData: makeStore({
     statistic_current_mission: 1,

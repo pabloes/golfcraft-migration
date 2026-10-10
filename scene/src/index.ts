@@ -122,7 +122,12 @@ export async function main() {
 
     spawnLobby()
     console.log('[main] lobby spawned, ready')
-  } catch (err) {
+  } catch (err: any) {
     console.log('[main] bootstrap failed:', err)
+    // No game at all rather than a wrong account or a dead backend behind a
+    // normal-looking lobby: the building stays as scenery, and the UI shows a
+    // dialog (dismissed with E or a click, like the intro) in place of the HUD.
+    globalStore.game.setState({ introScreen: false, bootError: String(err?.message || err) })
+    createBuilding(sceneRoot)
   }
 }

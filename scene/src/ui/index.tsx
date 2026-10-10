@@ -28,6 +28,7 @@ const ui = () => (
     <SeasonClock />
     <SeasonResults />
     <IntroScreen />
+    <BootErrorDialog />
     <NpcUtilsUi />
     <Overlay />
     {/* These three sit AFTER <Overlay /> on purpose: later siblings paint on
@@ -640,6 +641,76 @@ const IntroScreen = () => {
   )
 }
 
+// Shown instead of the lobby when bootstrap failed (main() sets bootError):
+// same full-screen treatment and the same E / click dismissal as the intro.
+const BootErrorDialog = () => {
+  const gs = globalStore.game.getState()
+  if (!gs.bootError || gs.bootErrorDismissed) return null
+
+  return (
+    <UiEntity
+      uiTransform={{
+        width: '100%',
+        height: '100%',
+        positionType: 'absolute',
+        justifyContent: 'center',
+        alignItems: 'center'
+      }}
+      uiBackground={{ color: Color4.create(0, 0, 0, 0.85) }}
+      onMouseDown={dismissBootError}
+    >
+      {/* Labels get explicit heights: ReactEcs does not grow a Label to fit
+          wrapped text, so without them the lines paint over each other. */}
+      <UiEntity
+        uiTransform={{
+          width: 640,
+          height: 290,
+          flexDirection: 'column',
+          alignItems: 'center',
+          padding: { top: 28, bottom: 24, left: 32, right: 32 }
+        }}
+        uiBackground={{ color: Color4.create(0.08, 0.05, 0.16, 0.95) }}
+      >
+        <Label
+          value="GolfCraft could not sign you in"
+          fontSize={26}
+          color={Color4.White()}
+          textAlign="middle-center"
+          uiTransform={{ width: '100%', height: 40 }}
+        />
+        <Label
+          value={
+            'Your progress and rewards would not be saved,\nso the game has not been loaded.\n' +
+            'Please try again, or come back from another realm or explorer.'
+          }
+          fontSize={16}
+          color={Color4.White()}
+          textAlign="middle-center"
+          uiTransform={{ width: '100%', height: 72, margin: { top: 12 } }}
+        />
+        <Label
+          value={gs.bootError}
+          fontSize={12}
+          color={Color4.create(0.75, 0.75, 0.8, 1)}
+          textAlign="middle-center"
+          uiTransform={{ width: '100%', height: 36, margin: { top: 10 } }}
+        />
+        <Label
+          value="Press E or click to close"
+          fontSize={14}
+          color={Color4.create(1, 0.85, 0.3, 1)}
+          textAlign="middle-center"
+          uiTransform={{ width: '100%', height: 24, margin: { top: 16 } }}
+        />
+      </UiEntity>
+    </UiEntity>
+  )
+}
+
+const dismissBootError = () => {
+  globalStore.game.setState({ bootErrorDismissed: true })
+}
+
 let systemsRegistered = false
 
 const skipIntro = () => {
@@ -648,9 +719,11 @@ const skipIntro = () => {
 }
 
 const introInputSystem = () => {
-  if (!globalStore.game.getState().introScreen) return
+  const gs = globalStore.game.getState()
+  if (!gs.introScreen && !(gs.bootError && !gs.bootErrorDismissed)) return
   if (inputSystem.isTriggered(InputAction.IA_PRIMARY, PointerEventType.PET_DOWN)) {
-    skipIntro()
+    if (gs.introScreen) skipIntro()
+    else dismissBootError()
   }
 }
 
@@ -659,7 +732,7 @@ const introInputSystem = () => {
 // state once per frame so the React tree re-renders.
 const lobbyHudVisibilitySystem = () => {
   const gs = globalStore.game.getState()
-  const visible = !gs.introScreen && !gs.playing && !gs.starting
+  const visible = !gs.introScreen && !gs.playing && !gs.starting && !gs.bootError
   if (lobbyHudState.visible !== visible) {
     lobbyHudState.visible = visible
   }

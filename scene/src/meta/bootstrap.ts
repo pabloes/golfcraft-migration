@@ -55,7 +55,11 @@ let bootstrapped: BootstrapResult | null = null
 let bootstrapPromise: Promise<BootstrapResult> | null = null
 
 // SDK6 connectPlayfab.xLoginWithCustomID resolves the player's PlayFab
-// CustomId via /api/get-login-id on the web API. The route reads the wallet
+// CustomId via /api/get-login-id on the web API. When that fails for a web3
+// player this THROWS instead of falling back to the wallet as CustomId: the
+// fallback silently landed on an empty account (storymode back at mission 1,
+// no Season panel, rewards going nowhere), which is worse than not loading the
+// game at all. main() turns the error into a dialog and skips the lobby. The route reads the wallet
 // from the x-identity-auth-chain-0 header, looks up the existing PlayFab
 // account via GetPlayFabIDsFromGenericIDs(ServiceName:"address") and returns
 // that account's opaque CustomId (NOT the wallet). Logging in with the raw
@@ -87,7 +91,7 @@ async function resolvePlayFabCustomId(userId: string, hasConnectedWeb3: boolean)
       })
       if (!response.ok) {
         console.log('[bootstrap] /api/get-login-id non-OK', response.status, response.body)
-        return userId
+        throw new Error(`get-login-id answered ${response.status}: ${describeLoginError(response.body)}`)
       }
       bodyText = response.body
     } else {
@@ -102,7 +106,7 @@ async function resolvePlayFabCustomId(userId: string, hasConnectedWeb3: boolean)
       })
       if (!response.ok) {
         console.log('[bootstrap] /api/get-login-id non-OK', response.status)
-        return userId
+        throw new Error(`get-login-id answered ${response.status}`)
       }
       bodyText = await response.text()
     }
@@ -111,12 +115,21 @@ async function resolvePlayFabCustomId(userId: string, hasConnectedWeb3: boolean)
       console.log('[bootstrap] resolved CustomId from /api/get-login-id')
       return data.CustomId
     }
-    console.log('[bootstrap] /api/get-login-id returned no CustomId; falling back to userId')
-    return userId
-  } catch (err) {
+    throw new Error('get-login-id returned no CustomId')
+  } catch (err: any) {
     console.log('[bootstrap] /api/get-login-id failed:', err)
-    return userId
+    throw new Error(`Could not resolve your GolfCraft account (${err?.message || err})`)
   }
+}
+
+// The route answers {"valid":false,"error":"..."} when its checks fail; show
+// that text rather than the raw JSON.
+function describeLoginError(body: string): string {
+  try {
+    const parsed = JSON.parse(body)
+    if (parsed?.error) return String(parsed.error)
+  } catch (_) {}
+  return body
 }
 
 // Map PlayFab data into the lobby HUD state. SDK6 production code in
