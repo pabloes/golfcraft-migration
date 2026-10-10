@@ -85,6 +85,11 @@ export async function runChecks(req: any, parcels?: number[][]) {
   if (origin && ipFilter && authChain && catalystPos && validPos) {
     return true
   } else {
+    // Which gate closed, so a rejected explorer can be diagnosed from the logs.
+    console.log('runChecks rejected', req.originalUrl, {
+      origin, ipFilter, authChain, catalystPos, validPos,
+      originHeader: req.header('origin'), signer: authchain0.payload
+    })
     return false
   }
 }
