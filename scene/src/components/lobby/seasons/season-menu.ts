@@ -26,6 +26,7 @@ import { getGLTFShape } from '../../../../golfplay/services/resource-repo'
 import { seasonCatalog } from './season-catalog'
 import { claimSeasonReward, getSeasonActionStatus } from './season-rewards-bridge'
 import { lobbyHudState } from '../../../ui/lobby-hud-state'
+import { lobbyMenuState } from '../../../ui/lobby-menu-state'
 import { showMessage } from '../server-notification'
 
 const SEASON_CATALOG: Record<string, { name: string }> = seasonCatalog as any
@@ -149,6 +150,8 @@ export const createSeasonMenu = async (
   playButton.onClick(() => {
     seasonGame.startGame()
   })
+  // The lobby menu dialog (ui/lobby-menu.tsx) drives the same run.
+  lobbyMenuState.actions.playSeason = () => seasonGame.startGame()
 
   // The party lobby is a shared room on the server; if it can't be reached the
   // panel must still work for solo play, so the button simply stays hidden.
@@ -176,6 +179,8 @@ export const createSeasonMenu = async (
     })
     friendsButton.onClick(() => seasonParty.click())
     cancelButton.onClick(() => seasonParty.cancel())
+    lobbyMenuState.actions.playWithFriends = () => seasonParty.click()
+    lobbyMenuState.actions.friendsLabel = () => seasonParty.getLabel()
   } catch (err) {
     console.log('[season] party lobby unavailable', err)
   }
@@ -341,6 +346,9 @@ export const createSeasonMenu = async (
 
   function dispose() {
     engine.removeSystem(transactionStatusSystem)
+    lobbyMenuState.actions.playSeason = null
+    lobbyMenuState.actions.playWithFriends = null
+    lobbyMenuState.actions.friendsLabel = null
     seasonParty?.dispose()
     emblem.dispose()
     playButton.dispose()

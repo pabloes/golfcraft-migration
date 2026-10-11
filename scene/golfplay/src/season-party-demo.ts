@@ -70,7 +70,9 @@ export const createSeasonPartyDemo = async (
                 rewardsBonus,
                 state.currentGame === 4 && eligible === false
                   ? 'You played below your own rank, so this run gives no season points.'
-                  : undefined
+                  : undefined,
+                // The members' rows are humans; the rest are ghosts.
+                room.state.players.map((p: any) => p.address)
               )
               fadeOutOverlay(1)
               if (state.currentGame < 4) {

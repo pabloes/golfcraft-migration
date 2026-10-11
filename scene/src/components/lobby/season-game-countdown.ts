@@ -53,8 +53,10 @@ export const showWaitForPlayers = (
     }
 
     seasonWaitState.visible = true
+    seasonWaitState.mode = 'solo'
     seasonWaitState.title = 'Waiting players to join ...'
     seasonWaitState.players = [{ userId: userData.userId, displayName: currentUserName }]
+    seasonWaitState.secondsLeft = state.countdown
     seasonWaitState.sub = ''
 
     loadConfessions()
@@ -63,6 +65,7 @@ export const showWaitForPlayers = (
       countdownInterval = setInterval(async () => {
         if (state.countdown <= 0) return
         state.countdown--
+        seasonWaitState.secondsLeft = state.countdown
 
         if (state.cancelled) {
           stopTimers()
@@ -121,6 +124,8 @@ export async function hideWaitPlayers() {
   seasonWaitState.visible = false
   seasonWaitState.onCancel = null
   seasonWaitState.players = []
+  seasonWaitState.secondsLeft = 0
+  seasonWaitState.roomTierName = ''
   seasonWaitState.sub = ''
   seasonWaitState.info = ''
   seasonWaitState.onStart = null

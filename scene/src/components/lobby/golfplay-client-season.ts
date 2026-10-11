@@ -46,7 +46,7 @@ import { createVisualChest } from './visualChest'
 import { showMessage } from './server-notification'
 import { hideWaitPlayers } from './season-game-countdown'
 import { createInGameResultsUi, createInGameTime } from './ingame-ui'
-import { seasonCountdownState, hideSeasonHud } from '../../ui/season-hud-state'
+import { seasonCountdownState, seasonHoleState, hideSeasonHud } from '../../ui/season-hud-state'
 import { createBallOrbitCamera } from '../../../golfplay/src/components/orbit-camera'
 import { CAMERA_AIM_MODE } from '../../config/controls'
 
@@ -389,8 +389,12 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
         }
       }, 100)
 
+      // Scoreboard rows: the local player's row and where the ghosts start (a
+      // solo run is me + 3 ghosts; a party is the members, then 3 ghosts).
+      const meIndex = partyPlayerIndex >= 0 ? partyPlayerIndex : 0
+      const playerCount = partyPlayers ? partyPlayers.length : 1
       if (currentGame === 0) {
-        inGameResults = inGameResults || createInGameResultsUi(room.state.results)
+        inGameResults = inGameResults || createInGameResultsUi(room.state.results, meIndex, playerCount)
         // Colyseus schema listeners: any change to a player's row refreshes the
         // scoreboard. SDK6 wired onChange on the row, its time and its shots.
         room.state.results.forEach((playerResult: any) => {
@@ -401,7 +405,7 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
         })
       }
 
-      if (!inGameResults) inGameResults = createInGameResultsUi(room.state.results)
+      if (!inGameResults) inGameResults = createInGameResultsUi(room.state.results, meIndex, playerCount)
       inGameResults.resetView()
       inGameResults.show()
 
@@ -488,6 +492,7 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
 
         timeUI = timeUI || createInGameTime()
         timeUI.show()
+        seasonHoleState.current = currentGame + 1
         timeInterval = setInterval(() => {
           if (room.state.finished) {
             clearInterval(timeInterval)

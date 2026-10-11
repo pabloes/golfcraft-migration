@@ -1,28 +1,44 @@
-// State for SDK6's "waiting for players" screen (season-game-countdown.ts).
-// SDK6 built it from a UIContainerRect with 4 UIImages fed by AvatarTexture,
-// a title, a player list and a cancel button. In SDK7 the avatars come from
-// uiBackground's avatarTexture, so we only need the userIds here.
+// State for the "waiting for players" screens (ui/season-screens.tsx):
+// the solo Season join (season-game-countdown.ts) and the "play ranked with
+// friends" room (seasons/season-party.ts). SDK6 built the solo one from a
+// UIContainerRect with 4 UIImages fed by AvatarTexture; in SDK7 the avatars
+// come from uiBackground's avatarTexture, so only the userIds travel here.
 
-export type SeasonWaitPlayer = { userId: string; displayName: string }
+export type SeasonWaitPlayer = {
+  userId: string
+  displayName: string
+  // Party room only.
+  isHost?: boolean
+  tierName?: string
+  // false when the member is above the room's level and plays for fun.
+  eligible?: boolean
+}
 
 export type SeasonWaitState = {
   visible: boolean
+  mode: 'solo' | 'party'
   title: string
-  // Revealed one by one as SDK6's countdown ticks 8 -> 7 -> 6.
+  // Solo: revealed one by one as the countdown ticks 8 -> 7 -> 6.
   players: SeasonWaitPlayer[]
+  // Seconds until the round starts (solo countdown, party reaper).
+  secondsLeft: number
+  // Party: the level the room plays at (the lowest member's).
+  roomTierName: string
   // "Anonymous confession: ..." ticker along the bottom.
   sub: string
   onCancel: (() => void) | null
-  // The two below only exist for "play ranked with friends" (season-party.ts):
-  // a line under the title ("Starts in 42s") and the host's START button.
+  // Party: the caption under the title and the host's START button.
   info: string
   onStart: (() => void) | null
 }
 
 export const seasonWaitState: SeasonWaitState = {
   visible: false,
+  mode: 'solo',
   title: '',
   players: [],
+  secondsLeft: 0,
+  roomTierName: '',
   sub: '',
   onCancel: null,
   info: '',

@@ -16,7 +16,7 @@ import { hideWaitPlayers } from '../season-game-countdown'
 import { seasonWaitState } from '../../../ui/season-wait-state'
 import { showMessage } from '../server-notification'
 // @ts-ignore - common/utils has @ts-nocheck
-import { getTierFromSub } from '../../../../../common/utils'
+import { getCatFromTier, getTierFromSub, getTierPercentiles } from '../../../../../common/utils'
 // @ts-ignore - season-tier-definitions has @ts-nocheck
 import { seasonTierDefinitions } from '../../../../../common/season-tier-definitions'
 
@@ -172,15 +172,30 @@ export const createSeasonParty = async (
     const secondsLeft = lobby.state.secondsLeft || 0
 
     seasonWaitState.visible = true
+    seasonWaitState.mode = 'party'
     seasonWaitState.title = `Ranked with friends (${members.length}/${MAX_PARTY_PLAYERS})`
+    seasonWaitState.secondsLeft = secondsLeft
+    seasonWaitState.roomTierName = tierName
     seasonWaitState.info =
       members.length > 1
         ? `Starts in ${secondsLeft}s · playing at ${tierName} level`
         : `Cancels in ${secondsLeft}s if nobody joins`
-    seasonWaitState.players = members.map((m: any, index: number) => ({
-      userId: m.address,
-      displayName: index === 0 ? `${m.displayName} (host)` : m.displayName
-    }))
+    // The same rule the room applies (CLAUDE.md §12): a member is "at the
+    // room's level" when their tier shares its category and percentile band.
+    const roomTier = getTierFromSub(roomTierSub) || 0
+    const sameLevel = (tier: number) =>
+      getCatFromTier(tier) === getCatFromTier(roomTier) &&
+      JSON.stringify(getTierPercentiles(tier)) === JSON.stringify(getTierPercentiles(roomTier))
+    seasonWaitState.players = members.map((m: any, index: number) => {
+      const tier = getTierFromSub(Number(m.tierSub) || 0) || 0
+      return {
+        userId: m.address,
+        displayName: m.displayName,
+        isHost: index === 0,
+        tierName: seasonTierDefinitions[tier]?.name || '',
+        eligible: sameLevel(tier)
+      }
+    })
     seasonWaitState.sub = ''
     // The host cancels the whole party; anyone else just steps out and the
     // party carries on (the host seat moves to the next member).
