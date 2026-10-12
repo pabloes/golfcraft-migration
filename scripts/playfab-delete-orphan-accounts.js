@@ -38,7 +38,8 @@ if (!PlayFab.settings.titleId || !PlayFab.settings.developerSecretKey) {
   console.error('missing PLAYFAB_TITLE_ID / PLAYFAB_SECRET_KEY in web/.env');
   process.exit(1);
 }
-const once = (fn, req) => new Promise((res, rej) => fn(req, (e, r) => (e ? rej(e) : res(r.data))));
+const once = (fn, req) =>
+  fn === adminPost ? adminPost(req[0], req[1]) : new Promise((res, rej) => fn(req, (e, r) => (e ? rej(e) : res(r.data))));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // PlayFab answers the odd 503 "Connection error"; retry those a few times.
 const call = async (fn, req) => {
@@ -51,6 +52,35 @@ const call = async (fn, req) => {
     }
   }
 };
+// The web service's playfab-sdk predates the segment export API, so those two
+// Admin calls go straight to the REST endpoint with the same secret key.
+const adminPost = (method, body) =>
+  new Promise((res, rej) => {
+    const req = https.request(
+      {
+        host: `${PlayFab.settings.titleId}.playfabapi.com`,
+        path: `/Admin/${method}`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-SecretKey': PlayFab.settings.developerSecretKey }
+      },
+      (r) => {
+        const chunks = [];
+        r.on('data', (c) => chunks.push(c));
+        r.on('end', () => {
+          let reply;
+          try {
+            reply = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+          } catch (e) {
+            return rej({ code: 503, error: 'Connection error', errorMessage: `${method}: non-JSON reply (${r.statusCode})` });
+          }
+          if (r.statusCode !== 200 || reply.code !== 200) return rej(reply);
+          res(reply.data);
+        });
+      }
+    );
+    req.on('error', (e) => rej({ code: 503, error: 'Connection error', errorMessage: String(e) }));
+    req.end(JSON.stringify(body));
+  });
 const download = (url) =>
   new Promise((res, rej) => {
     https
@@ -87,11 +117,11 @@ async function exportAllPlayers() {
   const { Segments } = await call(PlayFabAdmin.GetAllSegments, {});
   const all = Segments.find((s) => /^all players$/i.test(s.Name));
   if (!all) throw new Error('no "All Players" segment: ' + Segments.map((s) => s.Name).join(', '));
-  const { ExportId } = await call(PlayFabAdmin.ExportPlayersInSegment, { SegmentId: all.Id });
+  const { ExportId } = await call(adminPost, ['ExportPlayersInSegment', { SegmentId: all.Id }]);
   console.log('export started', ExportId);
   let IndexUrl;
   for (let i = 0; i < 90; i++) {
-    const r = await call(PlayFabAdmin.GetSegmentExport, { ExportId });
+    const r = await call(adminPost, ['GetSegmentExport', { ExportId }]);
     if (r.State === 'Complete') {
       IndexUrl = r.IndexUrl;
       break;
@@ -140,17 +170,29 @@ function readProfiles(files) {
   const report = [];
   for (const p of recent) {
     const PlayFabId = p.PlayerId;
-    const { InfoResultPayload: info } = await call(PlayFabServer.GetPlayerCombinedInfo, {
-      PlayFabId,
-      InfoRequestParameters: {
-        GetUserAccountInfo: true,
-        GetUserData: true,
-        GetUserReadOnlyData: true,
-        GetUserInventory: true,
-        GetUserVirtualCurrency: true,
-        GetPlayerStatistics: true
+    let info;
+    try {
+      info = (
+        await call(PlayFabServer.GetPlayerCombinedInfo, {
+          PlayFabId,
+          InfoRequestParameters: {
+            GetUserAccountInfo: true,
+            GetUserData: true,
+            GetUserReadOnlyData: true,
+            GetUserInventory: true,
+            GetUserVirtualCurrency: true,
+            GetPlayerStatistics: true
+          }
+        })
+      ).InfoResultPayload;
+    } catch (e) {
+      // Accounts deleted on an earlier run linger in the export for a while.
+      if (e && (e.error === 'AccountDeleted' || e.error === 'AccountNotFound')) {
+        console.log(`${PlayFabId}  ${p.Created.slice(0, 16)}  -> already ${e.error}`);
+        continue;
       }
-    });
+      throw e;
+    }
     const customId = (info.AccountInfo && info.AccountInfo.CustomIdInfo && info.AccountInfo.CustomIdInfo.CustomId) || '';
     const initialized = !!(info.UserReadOnlyData && info.UserReadOnlyData.initialized && info.UserReadOnlyData.initialized.Value);
     const address = (info.UserData && info.UserData.address && info.UserData.address.Value) || '';
