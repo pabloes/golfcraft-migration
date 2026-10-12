@@ -16,8 +16,9 @@ import { getPlayer } from '@dcl/sdk/players'
 
 import { globalStore } from '../services/globalStore/globalStore'
 import { lobbyHudState } from './lobby-hud-state'
-import { lobbyMenuState, closeLobbyMenu, openLobbyMenu } from './lobby-menu-state'
-import { C, fmt, shortName, pressable, counter, chip } from './ui-theme'
+import { lobbyMenuState, closeLobbyMenu, openLobbyMenu, closeOrBack, showLobbyView } from './lobby-menu-state'
+import { TutorialView, WorkshopView, PrizesView } from './lobby-views'
+import { C, fmt, shortName, pressable, counter, chip, materialIcon } from './ui-theme'
 import { containLayout, scaler, DESIGN_W, DESIGN_H, type Px } from './ui-scale'
 import { seasonCatalog } from '../components/lobby/seasons/season-catalog'
 // @ts-ignore - common/utils has @ts-nocheck
@@ -49,6 +50,9 @@ const UPGRADE_COSTS = [10, 20, 30, 60, 120]
 export const LobbyMenu = () => {
   const gs = globalStore.game.getState()
   if (!lobbyMenuState.visible || gs.bootError || gs.playing || gs.starting || gs.introScreen) return null
+  if (lobbyMenuState.view === 'tutorial') return <TutorialView />
+  if (lobbyMenuState.view === 'workshop') return <WorkshopView />
+  if (lobbyMenuState.view === 'prizes') return <PrizesView />
 
   // Keeps the 1280x720 proportion, as large as fits in the interactable area,
   // with the "Press E or F to close" line reserved under it.
@@ -141,10 +145,10 @@ export const LobbyMenu = () => {
           </UiEntity>
 
           <UiEntity uiTransform={{ height: px(76), flexDirection: 'row', alignItems: 'center' }}>
-            {counter(px, fs, C.cyan, num(energy))}
-            {counter(px, fs, C.yellow, num(r.GC))}
-            {counter(px, fs, C.diamond, num(r.DM))}
-            {counter(px, fs, C.ticket, num(r.FT))}
+            {counter(px, fs, 'EN', num(energy))}
+            {counter(px, fs, 'GC', num(r.GC))}
+            {counter(px, fs, 'DM', num(r.DM))}
+            {counter(px, fs, 'FT', num(r.FT))}
           </UiEntity>
         </UiEntity>
 
@@ -332,7 +336,9 @@ export const LobbyMenu = () => {
                   />
                 ))}
               </UiEntity>,
-              closeLobbyMenu
+              () => showLobbyView('tutorial'),
+              // Dr. Par, happy once the tutorial is done (or about to be).
+              tutorialDone || currentMission === 9 ? 'images/NPC/expresion3.png' : 'images/NPC/expresion1.png'
             )}
             {card(
               px, fs, 'workshop',
@@ -341,7 +347,10 @@ export const LobbyMenu = () => {
               'WORKSHOP',
               club ? `Equipped: ${club.name} · ${club.power} / ${club.control} / ${club.aim}` : 'Equipped: -',
               upgradeHint ? chip(px, fs, upgradeHint, C.green) : null,
-              null
+              () => showLobbyView('workshop'),
+              // The equipped club's thumbnail (same one the WORKSHOP view and the
+              // 3D board use); refreshUserData updates r.golfclub after EQUIP.
+              `images/${club?.id || 1}.png`
             )}
             {card(
               px, fs, 'prizes',
@@ -350,7 +359,8 @@ export const LobbyMenu = () => {
               'PRIZES',
               lobbyMenuState.prizes.length ? `${lobbyMenuState.prizes.length} COCOBAY wearables, diamonds for the top 10` : 'Season wearables and diamonds for the top 10',
               soldOut.length ? chip(px, fs, soldOut.length === 1 ? `${shortName(soldOut[0].name)} sold out` : `${soldOut.length} wearables sold out`, C.yellow) : null,
-              null
+              () => showLobbyView('prizes'),
+              'images/icons/prizes.png'
             )}
           </UiEntity>
         </UiEntity>
@@ -390,7 +400,7 @@ export const LobbyMenu = () => {
               borderWidth: 0,
               borderColor: C.dark,
               shadow: px(4),
-              onClick: closeLobbyMenu
+              onClick: closeOrBack
             },
             <Label value="X" fontSize={fs(20)} color={C.white} textAlign="middle-center" uiTransform={{ width: px(36), height: px(36) }} textWrap="nowrap" />
           )}
@@ -415,12 +425,13 @@ export const LobbyMenu = () => {
   )
 }
 
+// Footer material: the game's icon and the amount, no text code.
 const material = (px: Px, fs: Px, code: string, value: string) => (
   <UiEntity
-    uiTransform={{ height: px(48), flexDirection: 'row', alignItems: 'center', margin: { right: px(8) }, padding: { left: px(12), right: px(14) }, borderRadius: px(14) }}
+    uiTransform={{ height: px(48), flexDirection: 'row', alignItems: 'center', margin: { right: px(8) }, padding: { left: px(6), right: px(14) }, borderRadius: px(14) }}
     uiBackground={{ color: C.dark }}
   >
-    <Label value={code} fontSize={fs(13)} color={C.muted} textAlign="middle-left" uiTransform={{ height: px(48) }} textWrap="nowrap" />
+    {materialIcon(px, code, 34)}
     <Label value={value} fontSize={fs(19)} color={C.white} textAlign="middle-left" uiTransform={{ height: px(48), margin: { left: px(8) } }} textWrap="nowrap" />
   </UiEntity>
 )
@@ -438,7 +449,10 @@ const card = (
   title: string,
   subtitle: string,
   extra: ReactEcs.JSX.Element | null,
-  onClick: (() => void) | null
+  onClick: (() => void) | null,
+  // Optional picture inside the card's icon box (transparent PNG over the
+  // box's own colour), e.g. Dr. Par's portrait on the TUTORIAL card.
+  iconSrc?: string
 ) =>
   pressable(
     {
@@ -454,7 +468,12 @@ const card = (
       justifyContent: 'flex-start',
       onClick: onClick || undefined
     },
-    <UiEntity uiTransform={{ width: px(92), height: px(92), borderRadius: px(22), borderWidth: Math.max(1, px(3)), borderColor: C.dark }} uiBackground={{ color: iconColor }} />,
+    <UiEntity
+      uiTransform={{ width: px(92), height: px(92), borderRadius: px(22), borderWidth: Math.max(1, px(3)), borderColor: C.dark, padding: px(3) }}
+      uiBackground={{ color: iconColor }}
+    >
+      {iconSrc ? <UiEntity uiTransform={{ width: '100%', height: '100%' }} uiBackground={{ texture: { src: iconSrc }, textureMode: 'stretch' }} /> : null}
+    </UiEntity>,
     <UiEntity uiTransform={{ flexGrow: 1, flexDirection: 'column', justifyContent: 'center', margin: { left: px(20) } }}>
       <Label value={title} fontSize={fs(32)} color={C.white} textAlign="middle-left" uiTransform={{ height: px(36) }} textWrap="nowrap" />
       <Label value={subtitle} fontSize={fs(17)} color={C.white} textAlign="middle-left" uiTransform={{ height: px(24), margin: { top: px(2) } }} textWrap="nowrap" />
@@ -463,13 +482,14 @@ const card = (
     <Label value=">" fontSize={fs(30)} color={C.white} textAlign="middle-center" uiTransform={{ width: px(24), height: px(40) }} />
   )
 
-// E or F closes the menu (E is also what dismisses the intro image).
+// E or F: back to the lobby from a sub-view, close from the lobby (E is also
+// what dismisses the intro image).
 export const lobbyMenuInputSystem = () => {
   if (!lobbyMenuState.visible) return
   if (
     inputSystem.isTriggered(InputAction.IA_PRIMARY, PointerEventType.PET_DOWN) ||
     inputSystem.isTriggered(InputAction.IA_SECONDARY, PointerEventType.PET_DOWN)
   ) {
-    closeLobbyMenu()
+    closeOrBack()
   }
 }

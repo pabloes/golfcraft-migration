@@ -15,7 +15,7 @@ import { seasonNextGameState, SeasonScoreRow } from './season-results-state'
 import { lobbyMenuState } from './lobby-menu-state'
 import { lobbyHudState } from './lobby-hud-state'
 import { seasonCatalog } from '../components/lobby/seasons/season-catalog'
-import { C, hex, fmt, mmss, ordinal, shortName, pressable, title } from './ui-theme'
+import { C, hex, fmt, mmss, ordinal, shortName, pressable, title, materialIcon, MATERIAL_ICON } from './ui-theme'
 import { containLayout, scaler, DESIGN_W, DESIGN_H, type Px, type Layout } from './ui-scale'
 // @ts-ignore - common/utils has @ts-nocheck
 import { getCatFromTier, getPointsOnCurrentTier, getTierFromSub, seasonPointsPerCategory } from '../../../common/utils'
@@ -404,9 +404,13 @@ const rewardTile = (px: Px, fs: Px, code: string, amount: number, size: number) 
       }}
       uiBackground={{ color: C.tealDark }}
     >
-      <UiEntity uiTransform={{ width: px(30), height: px(30), borderRadius: px(9), borderWidth: Math.max(1, px(3)), borderColor: C.darker, justifyContent: 'center', alignItems: 'center' }} uiBackground={{ color: style.color }}>
-        <Label value={style.label} fontSize={fs(10)} color={C.dark} textAlign="middle-center" uiTransform={{ height: px(30) }} textWrap="nowrap" />
-      </UiEntity>
+      {MATERIAL_ICON[code.toUpperCase()] ? (
+        materialIcon(px, code, 32)
+      ) : (
+        <UiEntity uiTransform={{ width: px(30), height: px(30), borderRadius: px(9), borderWidth: Math.max(1, px(3)), borderColor: C.darker, justifyContent: 'center', alignItems: 'center' }} uiBackground={{ color: style.color }}>
+          <Label value={style.label} fontSize={fs(10)} color={C.dark} textAlign="middle-center" uiTransform={{ height: px(30) }} textWrap="nowrap" />
+        </UiEntity>
+      )}
       <Label value={`+${fmt(amount)}`} fontSize={fs(21)} color={C.white} textAlign="middle-left" uiTransform={{ height: px(size), margin: { left: px(8) } }} textWrap="nowrap" />
     </UiEntity>
   )

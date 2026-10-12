@@ -186,8 +186,42 @@ export const pressable = (o: PressableOpts, ...children: ReactEcs.JSX.Element[])
   )
 }
 
-// A dark pill with a coloured dot and a number: resources in headers and HUDs.
-export const counter = (px: Px, fs: Px, iconColor: Color4, value: string, label?: string) => (
+// The game's own material icons, cut from the materials panel of
+// images/ui-spritesheet.png with the white panel background made transparent
+// (scene/images/icons). Energy has no icon in the game's art, so it keeps a
+// coloured dot; the same goes for XP.
+export const MATERIAL_ICON: Record<string, string> = {
+  GC: 'images/icons/gc.png',
+  DM: 'images/icons/dm.png',
+  WD: 'images/icons/wd.png',
+  IR: 'images/icons/ir.png',
+  FT: 'images/icons/ft.png',
+  PT: 'images/icons/pt.png',
+  ST: 'images/icons/st.png',
+  GD: 'images/icons/gd.png'
+}
+export const MATERIAL_DOT: Record<string, Color4> = {
+  EN: C.cyan,
+  XP: C.green
+}
+
+// The icon for a resource code at `size` px: the sprite when there is one,
+// a coloured dot otherwise.
+export const materialIcon = (px: Px, code: string, size: number, margin?: { left?: number; right?: number }) => {
+  const src = MATERIAL_ICON[code.toUpperCase()]
+  if (src) {
+    return <UiEntity uiTransform={{ width: px(size), height: px(size), margin }} uiBackground={{ texture: { src }, textureMode: 'stretch' }} />
+  }
+  return (
+    <UiEntity
+      uiTransform={{ width: px(size), height: px(size), margin, borderRadius: px(size / 2), borderWidth: Math.max(1, px(3)), borderColor: C.darker }}
+      uiBackground={{ color: MATERIAL_DOT[code.toUpperCase()] || C.lilac }}
+    />
+  )
+}
+
+// A dark pill with a resource icon and a number: resources in headers and HUDs.
+export const counter = (px: Px, fs: Px, code: string, value: string, label?: string) => (
   <UiEntity
     uiTransform={{
       height: px(50),
@@ -199,10 +233,7 @@ export const counter = (px: Px, fs: Px, iconColor: Color4, value: string, label?
     }}
     uiBackground={{ color: C.dark }}
   >
-    <UiEntity
-      uiTransform={{ width: px(30), height: px(30), borderRadius: px(15), borderWidth: Math.max(1, px(3)), borderColor: C.darker }}
-      uiBackground={{ color: iconColor }}
-    />
+    {materialIcon(px, code, 30)}
     {label ? (
       <Label value={label} fontSize={fs(12)} color={C.muted} textAlign="middle-left" uiTransform={{ height: px(50), margin: { left: px(6) } }} textWrap="nowrap" />
     ) : null}

@@ -16,8 +16,16 @@ export type SeasonPrize = {
   stock: number
 }
 
+export type LobbyMenuView = 'lobby' | 'tutorial' | 'workshop' | 'prizes'
+
 export const lobbyMenuState: {
   visible: boolean
+  // Which screen the dialog shows; the cards open the three sub-views.
+  view: LobbyMenuView
+  // WORKSHOP: the club being looked at (tokenId; null = the basic club) and
+  // whether a PlayFab call is in flight.
+  selectedClubTokenId: string | null | undefined
+  busy: boolean
   prizes: SeasonPrize[]
   prizesFetchedAt: number
   actions: {
@@ -28,6 +36,9 @@ export const lobbyMenuState: {
   }
 } = {
   visible: false,
+  view: 'lobby',
+  selectedClubTokenId: undefined,
+  busy: false,
   prizes: [],
   prizesFetchedAt: 0,
   actions: { playSeason: null, playWithFriends: null, friendsLabel: null }
@@ -37,11 +48,24 @@ const PRIZES_TTL_MS = 60 * 1000
 
 export const openLobbyMenu = () => {
   lobbyMenuState.visible = true
+  lobbyMenuState.view = 'lobby'
   refreshLobbyMenuPrizes()
+}
+
+export const showLobbyView = (view: LobbyMenuView) => {
+  lobbyMenuState.view = view
+  clearPointerState()
+}
+
+// E, F and the X: a sub-view goes back to the lobby, the lobby closes.
+export const closeOrBack = () => {
+  if (lobbyMenuState.view !== 'lobby') showLobbyView('lobby')
+  else closeLobbyMenu()
 }
 
 export const closeLobbyMenu = () => {
   lobbyMenuState.visible = false
+  lobbyMenuState.view = 'lobby'
   // Closing with E while the pointer is over a button means no onMouseLeave.
   clearPointerState()
 }

@@ -36,7 +36,7 @@ let seasonPrizes: any = null
 
 // SDK6 lobby-training.ts:deserializeGolfclubs — maps PlayFab inventory items
 // into the board's shape, then appends the hardcoded CocoBay promo club.
-function deserializeGolfclubs(golfclubs: any[]): BoardGolfclub[] {
+export function deserializeGolfclubs(golfclubs: any[]): BoardGolfclub[] {
   return (golfclubs || [])
     .map((golfclubData: any): BoardGolfclub => {
       const customData = golfclubData.CustomData || {}
@@ -67,7 +67,48 @@ function deserializeGolfclubs(golfclubs: any[]): BoardGolfclub[] {
     ])
 }
 
-const currentCollection = () => deserializeGolfclubs(globalStore.userData.getState().golfclubs)
+export const getGolfclubCollection = () => deserializeGolfclubs(globalStore.userData.getState().golfclubs)
+const currentCollection = getGolfclubCollection
+
+// The two PlayFab actions of the golf club board, shared with the lobby
+// dialog's WORKSHOP view. Both end with refreshUserData, so every reader of
+// the store sees the result; they return whether the cloudscript succeeded.
+export async function selectGolfclub(tokenId: string | null): Promise<boolean> {
+  try {
+    const ticket = getSessionTicket()
+    if (!ticket) throw new Error('no PlayFab session ticket')
+    await executeCloudScript(ticket, 'selectGolfClubTokenId', { tokenId })
+    await sleep(1000)
+    await refreshUserData()
+    return true
+  } catch (err) {
+    // SDK6 had no error handling here and left the board stuck on "loading"
+    // forever when the cloudscript threw. Surface it and recover instead.
+    console.log('[golfclub-board] select failed', err)
+    showMessage({ timeout: 3000, message: 'Could not select that golf club' })
+    return false
+  }
+}
+
+export async function upgradeGolfclubAttribute(ItemInstanceId: string | undefined, attribute: string): Promise<boolean> {
+  try {
+    const ticket = getSessionTicket()
+    if (!ticket) throw new Error('no PlayFab session ticket')
+    if (!ItemInstanceId) throw new Error('golf club has no ItemInstanceId (not a PlayFab inventory item)')
+    // The `upgradeGolfclub` cloudscript re-validates cost/availability, spends
+    // the material (power->IR, control->ST, aim->WD) and bumps the item's
+    // attribute_<name> CustomData.
+    await executeCloudScript(ticket, 'upgradeGolfclub', { ItemInstanceId, attribute })
+    await sleep(1000)
+    await refreshUserData()
+    console.log('[golfclub-board] upgraded', attribute)
+    return true
+  } catch (err) {
+    console.log('[golfclub-board] upgrade failed', err)
+    showMessage({ timeout: 3000, message: 'Golf club upgrade not available' })
+    return false
+  }
+}
 
 export type LobbyTrainingOptions = {
   // Gameplay is parented to the scene root, not to the panel.
@@ -135,39 +176,14 @@ export const createLobbyTraining = (parent: Entity, opts?: LobbyTrainingOptions)
   golfclubBoard.onSelect(async ({ golfclub }) => {
     if (!golfclubBoard) return
     golfclubBoard.updateState({ loading: true })
-    try {
-      const ticket = getSessionTicket()
-      if (!ticket) throw new Error('no PlayFab session ticket')
-      await executeCloudScript(ticket, 'selectGolfClubTokenId', { tokenId: golfclub.tokenId })
-      await sleep(1000)
-      await refreshUserData()
-    } catch (err) {
-      // SDK6 had no error handling here and left the board stuck on "loading"
-      // forever when the cloudscript threw. Surface it and recover instead.
-      console.log('[golfclub-board] select failed', err)
-      showMessage({ timeout: 3000, message: 'Could not select that golf club' })
-    }
+    await selectGolfclub(golfclub.tokenId)
     syncBoardFromStore()
   })
 
   golfclubBoard.onUpgrade(async ({ attribute, ItemInstanceId }) => {
     if (!golfclubBoard) return
     golfclubBoard.updateState({ loading: true })
-    try {
-      const ticket = getSessionTicket()
-      if (!ticket) throw new Error('no PlayFab session ticket')
-      if (!ItemInstanceId) throw new Error('golf club has no ItemInstanceId (not a PlayFab inventory item)')
-      // The `upgradeGolfclub` cloudscript re-validates cost/availability, spends
-      // the material (power->IR, control->ST, aim->WD) and bumps the item's
-      // attribute_<name> CustomData.
-      await executeCloudScript(ticket, 'upgradeGolfclub', { ItemInstanceId, attribute })
-      await sleep(1000)
-      await refreshUserData()
-      console.log('[golfclub-board] upgraded', attribute)
-    } catch (err) {
-      console.log('[golfclub-board] upgrade failed', err)
-      showMessage({ timeout: 3000, message: 'Golf club upgrade not available' })
-    }
+    await upgradeGolfclubAttribute(ItemInstanceId, attribute)
     syncBoardFromStore()
   })
 

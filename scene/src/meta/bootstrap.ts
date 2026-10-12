@@ -319,7 +319,7 @@ async function fetchConfig(): Promise<Record<string, any>> {
 
 // Golf club model id → display name (SDK6 golfclubCatalog / GOLF_CLUB_NAME).
 // Models not listed (1, 4) fall back to the generic "GOLF CLUB".
-const GOLF_CLUB_NAMES: Record<number, string> = {
+export const GOLF_CLUB_NAMES: Record<number, string> = {
   0: 'Star trail',
   2: 'Star',
   3: 'Eye wide shot',

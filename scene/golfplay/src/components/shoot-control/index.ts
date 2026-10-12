@@ -53,11 +53,11 @@ const controlHint = createControlHint()
 const MIN_VELOCITY = 0.5
 const MAX_VELOCITY = 4
 const START_OF_DEVIANCE_BY_POWER = 40
-const MAX_DEGREES_DEVIANCE = 2
+export const MAX_DEGREES_DEVIANCE = 2
 
-const devianceFactorLevels = [1, 0.8, 0.6, 0.4, 0.2, 0]
-const maxPowerByGolfclubLevel = [60, 70, 80, 90, 95, 100]
-const aimLengths = [0, 20, 40, 60, 80, 100]
+export const devianceFactorLevels = [1, 0.8, 0.6, 0.4, 0.2, 0]
+export const maxPowerByGolfclubLevel = [60, 70, 80, 90, 95, 100]
+export const aimLengths = [0, 20, 40, 60, 80, 100]
 
 const createShootControl = (
   parent: Entity,

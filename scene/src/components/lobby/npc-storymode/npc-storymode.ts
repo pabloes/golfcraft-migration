@@ -79,6 +79,12 @@ export type CreateNpcOptions = {
 const STORYMODE_DONE = 10
 
 let NPC_scientist: Entity | null = null
+// The current NPC's onActivate, so the lobby dialog's TUTORIAL view can start
+// the same conversation (missions, requestStartMission...) without copying it.
+let activateNpcDialog: (() => Promise<void>) | null = null
+export const talkToNpc = async () => {
+  if (activateNpcDialog) await activateNpcDialog()
+}
 let container1: Entity | null = null
 let container2: Entity | null = null
 let container_sound: Entity | null = null
@@ -204,6 +210,8 @@ export const createNpcTest = (parent: Entity, opts: CreateNpcOptions): Entity | 
       loading = false
     }
   }
+
+  activateNpcDialog = onActivateExecuteDialog
 
   NPC_scientist = npc.create(
     {
@@ -916,6 +924,7 @@ export const createNpcTest = (parent: Entity, opts: CreateNpcOptions): Entity | 
 }
 
 export const hideNpc = () => {
+  activateNpcDialog = null
   if (NPC_scientist !== null) {
     engine.removeEntity(NPC_scientist)
     NPC_scientist = null
