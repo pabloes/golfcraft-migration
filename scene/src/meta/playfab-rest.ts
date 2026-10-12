@@ -21,6 +21,12 @@ export type LoginResult = {
   SessionTicket: string
   PlayFabId: string
   NewlyCreated: boolean
+  // SDK6 loginAndInitialize read these two off the login to decide whether the
+  // account still needs `initializePlayer` and the UserData.address write.
+  InfoResultPayload?: {
+    UserReadOnlyData?: { [key: string]: { Value: string } }
+    UserData?: { [key: string]: { Value: string } }
+  }
 }
 
 export async function loginWithCustomID(customId: string, createAccount = true): Promise<LoginResult> {
@@ -30,7 +36,8 @@ export async function loginWithCustomID(customId: string, createAccount = true):
     body: JSON.stringify({
       TitleId: TITLE_ID,
       CustomId: customId,
-      CreateAccount: createAccount
+      CreateAccount: createAccount,
+      InfoRequestParameters: { GetUserReadOnlyData: true, GetUserData: true }
     })
   })
   if (!response.ok) {
@@ -161,3 +168,29 @@ export async function executeCloudScript(
   }
   return result.FunctionResult
 }
+
+// A Client call that only needs a success/failure: PlayFab answers errors
+// with a non-200 HTTP status AND a JSON body ({errorCode, errorMessage}).
+async function clientPost(sessionTicket: string, path: string, body: any): Promise<void> {
+  const response = await fetch(`${PLAYFAB_BASE}/Client/${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Authorization': sessionTicket
+    },
+    body: JSON.stringify(body)
+  })
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(`PlayFab ${path} failed (${response.status}): ${text}`)
+  }
+}
+
+// SDK6 connectPlayer fired this after every login so the PlayFab profile
+// carries the explorer's display name (3-25 characters).
+export const updateUserTitleDisplayName = (sessionTicket: string, displayName: string) =>
+  clientPost(sessionTicket, 'UpdateUserTitleDisplayName', { DisplayName: displayName })
+
+// SDK6 xLoginWithCustomID wrote UserData.address once per account.
+export const updateUserData = (sessionTicket: string, data: { [key: string]: string }) =>
+  clientPost(sessionTicket, 'UpdateUserData', { Data: data })

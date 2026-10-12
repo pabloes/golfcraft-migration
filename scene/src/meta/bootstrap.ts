@@ -13,7 +13,15 @@ import {
   POLYGON_RPC
 } from '../../../common/constants'
 import { getLevelInfo } from '../../../common/utils'
-import { loginWithCustomID, getPlayerCombinedInfo, CombinedInfo } from './playfab-rest'
+import {
+  loginWithCustomID,
+  getPlayerCombinedInfo,
+  executeCloudScript,
+  updateUserData,
+  updateUserTitleDisplayName,
+  CombinedInfo,
+  LoginResult
+} from './playfab-rest'
 import { decorateRemotePhysicParts } from '../../golfplay/physics/course-element-loader'
 import { updateLobbyResources, lobbyHudState } from '../ui/lobby-hud-state'
 import { globalStore } from '../services/globalStore/globalStore'
@@ -379,6 +387,49 @@ function computeTrainingBonus(models: number[], wearablesBonus: number, hasTrain
   return bonus
 }
 
+// SDK6 connectPlayfab.loginAndInitialize + connectPlayer, the part of the
+// login that sets a player up. A freshly created account (or one that never
+// got initialised) runs the `initializePlayer` cloudscript, which links the
+// wallet as the "address" generic ID (what /api/get-login-id looks up, so the
+// next login lands on the SAME account instead of creating another one),
+// grants golfclub-1 and writes initialized/currentTrainingID to ReadOnlyData.
+// Without it every login made a new empty account, the HUD had no club and
+// the `completeMission` cloudscript threw (it bumps golfclub-1's xp before it
+// writes current_mission), so missions never advanced. Then, as SDK6:
+// UserData.address when missing and the explorer's display name every login.
+// The generic ID is stored lowercase because that is how get-login-id looks
+// it up; guests (no wallet) use their userId so each one stays unique.
+async function initializePlayerAccount(
+  login: LoginResult,
+  user: { userId: string; publicKey?: string; displayName: string }
+): Promise<void> {
+  const payload = login.InfoResultPayload || {}
+  const address = String(user.publicKey || user.userId).toLowerCase()
+  if (login.NewlyCreated || !payload.UserReadOnlyData?.initialized?.Value) {
+    try {
+      await executeCloudScript(login.SessionTicket, 'initializePlayer', { user: { publicKey: address } })
+      console.log('[bootstrap] initializePlayer OK: account linked to', address)
+    } catch (err) {
+      console.log('[bootstrap] initializePlayer FAILED (account not linked, no golf club):', err)
+    }
+  }
+  if (!payload.UserData?.address?.Value) {
+    try {
+      await updateUserData(login.SessionTicket, { address: user.publicKey || address })
+    } catch (err) {
+      console.log('[bootstrap] UpdateUserData address failed:', err)
+    }
+  }
+  const displayName = String(user.displayName || '').slice(0, 25)
+  if (displayName.length >= 3) {
+    try {
+      await updateUserTitleDisplayName(login.SessionTicket, displayName)
+    } catch (err) {
+      console.log('[bootstrap] UpdateUserTitleDisplayName failed:', err)
+    }
+  }
+}
+
 export const bootstrap = async (): Promise<BootstrapResult> => {
   if (bootstrapped) return bootstrapped
   if (bootstrapPromise) return bootstrapPromise
@@ -408,6 +459,7 @@ export const bootstrap = async (): Promise<BootstrapResult> => {
     sessionTicket = login.SessionTicket
     playFabIdForMissions = login.PlayFabId
     console.log('[bootstrap] PlayFab login OK:', login.PlayFabId, 'newly created:', login.NewlyCreated)
+    await initializePlayerAccount(login, user)
 
     // Stash on engine so other modules (golfplay-client) can read the base
     // resource URL for golfplay GLBs/sounds. SDK6 meta.ts set this to
