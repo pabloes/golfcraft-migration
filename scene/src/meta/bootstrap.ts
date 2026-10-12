@@ -27,6 +27,8 @@ let sessionTicket: string | null = null
 // The golfclub board calls cloudscript handlers (upgradeGolfclub /
 // selectGolfClubTokenId), which need the same ticket.
 export const getSessionTicket = () => sessionTicket
+// The signed-in player's PlayFabId (empty until login), for the leaderboard.
+export const getPlayFabId = () => playFabIdForMissions
 
 export async function refreshUserData(): Promise<void> {
   if (!sessionTicket) return

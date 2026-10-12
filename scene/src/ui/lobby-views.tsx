@@ -14,7 +14,7 @@ import { containLayout, scaler, DESIGN_W, DESIGN_H, type Px, type Layout } from 
 import { talkToNpc } from '../components/lobby/npc-storymode/npc-storymode'
 import { getGolfclubCollection, selectGolfclub, upgradeGolfclubAttribute } from '../components/lobby/lobby-training'
 import { BoardGolfclub } from '../components/lobby/golfclub-screen/golfclub-screen-ui'
-import { GOLF_CLUB_NAMES } from '../meta/bootstrap'
+import { GOLF_CLUB_NAMES, getPlayFabId } from '../meta/bootstrap'
 import {
   aimLengths,
   devianceFactorLevels,
@@ -346,6 +346,20 @@ const BLUE_CARD = hex('#163C93')
 const BLUE_TRACK = hex('#0F2B6E')
 const BLUE_TEXT = hex('#BFD3FF')
 
+// MY CLUBS pagination, in design px (the panel scales uniformly). The column
+// is the row under the header: the panel's padding, the header and the row's
+// top margin come off DESIGN_H. A card slot is the pressable's wrapper (face +
+// shadow + hover lift) plus its bottom margin. The pager only appears when the
+// clubs do not all fit, so a short collection keeps the full height.
+const CLUBS_COLUMN_H = DESIGN_H - 22 - 24 - 66 - 18
+const CLUB_CARD_H = 92
+const CLUB_CARD_SHADOW = 6
+const CLUB_CARD_GAP = 10
+const CLUB_CARD_SLOT = CLUB_CARD_H + CLUB_CARD_SHADOW * 1.25 + CLUB_CARD_GAP
+const CLUBS_LABEL_H = 24 + 10
+const CLUBS_NOTE_H = 44 + 10
+const CLUBS_PAGER_H = 46 + 6
+
 const clubName = (club: BoardGolfclub) => club.DisplayName || GOLF_CLUB_NAMES[Number(club.golfclubId)] || 'Golf club'
 const clubLevel = (club: BoardGolfclub) => 1 + club.attributes.power + club.attributes.control + club.attributes.aim
 // eslint-disable-next-line eqeqeq
@@ -382,18 +396,44 @@ export const WorkshopView = () => {
   const equipped = !!club && club.tokenId === activeTokenId
   const busy = lobbyMenuState.busy
 
+  const fitAll = Math.max(1, Math.floor((CLUBS_COLUMN_H - CLUBS_LABEL_H - CLUBS_NOTE_H) / CLUB_CARD_SLOT))
+  const paged = clubs.length > fitAll
+  const perPage = paged ? Math.max(1, Math.floor((CLUBS_COLUMN_H - CLUBS_LABEL_H - CLUBS_NOTE_H - CLUBS_PAGER_H) / CLUB_CARD_SLOT)) : fitAll
+  const pages = Math.max(1, Math.ceil(clubs.length / perPage))
+  const page = Math.max(0, Math.min(pages - 1, lobbyMenuState.clubsPage ?? Math.floor(selectedIndex / perPage)))
+  const pageClubs = clubs.slice(page * perPage, (page + 1) * perPage)
+
+  const pageButton = (id: string, text: string, enabled: boolean, target: number) =>
+    pressable(
+      {
+        id,
+        width: px(40),
+        height: px(40),
+        color: enabled ? C.white : C.disabled,
+        radius: px(12),
+        borderWidth: Math.max(1, px(3)),
+        borderColor: C.dark,
+        shadow: px(4),
+        disabled: !enabled,
+        onClick: () => {
+          lobbyMenuState.clubsPage = target
+        }
+      },
+      <Label value={text} fontSize={fs(22)} color={C.dark} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: px(40), height: px(40) }} />
+    )
+
   const clubCard = (c: BoardGolfclub, i: number) =>
     pressable(
       {
         id: `club-${i}`,
         width: '100%',
-        height: px(92),
+        height: px(CLUB_CARD_H),
         color: i === selectedIndex ? C.yellow : BLUE_CARD,
         radius: px(20),
         borderWidth: Math.max(2, px(4)),
         borderColor: C.dark,
-        shadow: px(6),
-        margin: { bottom: px(12) },
+        shadow: px(CLUB_CARD_SHADOW),
+        margin: { bottom: px(CLUB_CARD_GAP) },
         padding: { left: px(12), right: px(12) },
         justifyContent: 'flex-start',
         onClick: () => {
@@ -506,7 +546,17 @@ export const WorkshopView = () => {
       {/* My clubs */}
       <UiEntity uiTransform={{ width: px(250), height: '100%', flexDirection: 'column' }}>
         <Label value="MY CLUBS" fontSize={fs(16)} color={BLUE_TEXT} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(24), margin: { bottom: px(10) } }} />
-        {clubs.map((c, i) => clubCard(c, i))}
+        {/* Fixed height, so the pager stays put on a short last page. */}
+        <UiEntity uiTransform={{ width: '100%', height: px(perPage * CLUB_CARD_SLOT), flexDirection: 'column' }}>
+          {pageClubs.map((c, j) => clubCard(c, page * perPage + j))}
+        </UiEntity>
+        {paged ? (
+          <UiEntity uiTransform={{ width: '100%', height: px(46), flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', margin: { top: px(6) } }}>
+            {pageButton('clubs-prev', '<', page > 0, page - 1)}
+            <Label value={`${page + 1} / ${pages}`} fontSize={fs(18)} color={C.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(40) }} />
+            {pageButton('clubs-next', '>', page < pages - 1, page + 1)}
+          </UiEntity>
+        ) : null}
         <UiEntity uiTransform={{ flexGrow: 1 }} />
         <Label
           value="NFT clubs come maxed out. Your basic club levels up with materials."
@@ -514,7 +564,7 @@ export const WorkshopView = () => {
           color={hex('#D7E3FF')}
           textAlign="middle-left"
           textWrap="wrap"
-          uiTransform={{ width: '100%', height: px(44) }}
+          uiTransform={{ width: '100%', height: px(44), margin: { top: px(10) } }}
         />
       </UiEntity>
       <UiEntity uiTransform={{ width: px(22) }} />
@@ -591,14 +641,27 @@ export const WorkshopView = () => {
 // ---------------------------------------------------------------------------
 // PRIZES
 
-const TOP10 = [
-  ['1st', 3000],
-  ['2nd', 2000],
-  ['3rd', 1000],
-  ['4th to 10th', 500]
-] as const
+// A 5x4 grid of square cells with the wearable's thumbnail, next to the TOP 10
+// list. Sizes in design px: the grid is as tall as the row under the header
+// allows (DESIGN_H minus the panel's padding, the header and the row margin
+// is 590), the side panel takes what is left of the panel's inner width.
+const PRIZE_COLS = 5
+const PRIZE_ROWS = 4
+const PRIZE_CELL = 130
+const PRIZE_GAP = 10
+const PRIZE_GRID_PAD = 10
+const PRIZE_BORDER = 4
+const PRIZE_GRID_W = 2 * (PRIZE_BORDER + PRIZE_GRID_PAD) + PRIZE_COLS * PRIZE_CELL + (PRIZE_COLS - 1) * PRIZE_GAP
+const PRIZE_GRID_H = 2 * (PRIZE_BORDER + PRIZE_GRID_PAD) + PRIZE_ROWS * PRIZE_CELL + (PRIZE_ROWS - 1) * PRIZE_GAP
+const PRIZE_SIDE_W = DESIGN_W - 2 * 28 - PRIZE_GRID_W - 24
+const PRIZE_THUMB = 74
+// Diamonds for the Season's top 10, by position.
+const TOP10_PRIZES = [3000, 2000, 1000, 500, 500, 500, 500, 500, 500, 500]
 
 const prizeTier = (p: SeasonPrize) => Number(getTierFromSub(p.tierReward) || 0)
+// "Golfcraft x COCOBAY Cap" -> "Cap": the header already names the collection.
+const prizeName = (name: string) => shortName(name).replace(/^cocobay\s*/i, '')
+const dim = (c: Color4) => Color4.create(c.r * 0.55, c.g * 0.55, c.b * 0.55, 1)
 
 // Without the stock service there are still 20 wearable tiers in the season
 // table; show those ranks so the grid is never blank.
@@ -608,6 +671,27 @@ const fallbackPrizes = (): SeasonPrize[] =>
     .filter(({ def }: any) => def?.prize?.wearable)
     .slice(0, 20)
     .map(({ tier }: any, i: number) => ({ name: `Wearable ${i + 1}`, tierReward: Number(getPointsToTier(tier) || 0), stock: -1 }))
+
+const rankChip = (px: Px, fs: Px, tier: number, name: string, height: number, width?: number) => (
+  <UiEntity
+    uiTransform={{
+      width,
+      height: px(height),
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: { left: px(6), right: px(6) },
+      borderRadius: px(height / 2.5),
+      alignSelf: 'flex-start'
+    }}
+    uiBackground={{ color: C.dark }}
+  >
+    <UiEntity
+      uiTransform={{ width: px(9), height: px(9), borderRadius: px(5), borderWidth: Math.max(1, px(1.5)), borderColor: C.white }}
+      uiBackground={{ color: hex(TIER_COLORS[getCatFromTier(tier)] || '#FFFFFF') }}
+    />
+    <Label value={name} fontSize={fs(10)} color={C.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(height), margin: { left: px(4) } }} />
+  </UiEntity>
+)
 
 export const PrizesView = () => {
   const L = containLayout(DESIGN_W, DESIGN_H, { margin: MARGIN })
@@ -624,60 +708,106 @@ export const PrizesView = () => {
   const myTier = Number(getTierFromSub(tierSub) || 0)
   const myRank = seasonTierDefinitions[myTier]?.name || 'WOOD 5'
   const toNext = next ? Math.max(0, next.tierReward - tierSub) : 0
+  const myPlayFabId = getPlayFabId()
+  const board = lobbyMenuState.leaderboard
 
   const cell = (p: SeasonPrize, i: number) => {
     const tier = prizeTier(p)
     const rank = seasonTierDefinitions[tier]?.name || ''
-    const dot = hex(TIER_COLORS[getCatFromTier(tier)] || '#FFFFFF')
     const soldOut = live && p.stock <= 0
     const claimed = live && p.tierReward <= tierSubMax
     const isNext = i === nextIndex
     const base = i < 10 ? C.blue : i < 15 ? hex('#6B21D9') : C.pink
+    const textColor = soldOut ? C.muted : C.white
+    const col = i % PRIZE_COLS
+    const row = Math.floor(i / PRIZE_COLS)
     return (
       <UiEntity
         key={`${p.name}-${i}`}
         uiTransform={{
-          width: '19%',
-          height: '23%',
-          flexDirection: 'column',
-          padding: { top: px(8), bottom: px(8), left: px(10), right: px(10) },
-          margin: { bottom: px(8) },
+          positionType: 'absolute',
+          position: { left: px(PRIZE_GRID_PAD + col * (PRIZE_CELL + PRIZE_GAP)), top: px(PRIZE_GRID_PAD + row * (PRIZE_CELL + PRIZE_GAP)) },
+          width: px(PRIZE_CELL),
+          height: px(PRIZE_CELL),
           borderRadius: px(16),
           borderWidth: Math.max(1, px(isNext ? 4 : 3)),
           borderColor: isNext ? C.white : C.dark
         }}
-        uiBackground={{ color: soldOut ? Color4.create(base.r * 0.55, base.g * 0.55, base.b * 0.55, 1) : base }}
+        uiBackground={{ color: soldOut ? dim(base) : base }}
       >
-        <UiEntity uiTransform={{ height: px(22), flexDirection: 'row', alignItems: 'center', padding: { left: px(8), right: px(8) }, borderRadius: px(8), alignSelf: 'flex-start' }} uiBackground={{ color: C.dark }}>
-          <UiEntity uiTransform={{ width: px(11), height: px(11), borderRadius: px(6), borderWidth: Math.max(1, px(2)), borderColor: C.white }} uiBackground={{ color: dot }} />
-          <Label value={rank} fontSize={fs(12)} color={C.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(22), margin: { left: px(6) } }} />
-        </UiEntity>
-        <UiEntity uiTransform={{ flexGrow: 1 }} />
-        <Label value={shortName(p.name)} fontSize={fs(16)} color={soldOut ? C.muted : C.white} textAlign="middle-left" textWrap="wrap" uiTransform={{ width: '100%', height: px(40) }} />
+        {p.thumbnail ? (
+          <UiEntity
+            uiTransform={{ positionType: 'absolute', position: { left: px((PRIZE_CELL - PRIZE_THUMB) / 2 - 3), top: px(10) }, width: px(PRIZE_THUMB), height: px(PRIZE_THUMB) }}
+            uiBackground={{ texture: { src: p.thumbnail }, textureMode: 'stretch', color: soldOut ? Color4.create(1, 1, 1, 0.5) : C.white }}
+          />
+        ) : null}
+        <UiEntity uiTransform={{ positionType: 'absolute', position: { left: px(5), top: px(5) } }}>{rankChip(px, fs, tier, rank, 18)}</UiEntity>
+        <Label
+          value={prizeName(p.name)}
+          fontSize={fs(11)}
+          color={textColor}
+          textAlign="middle-center"
+          textWrap="wrap"
+          uiTransform={{ positionType: 'absolute', position: { left: px(4), top: px(84) }, width: px(PRIZE_CELL - 14), height: px(28) }}
+        />
         <Label
           value={!live ? 'Stock unavailable' : soldOut ? 'SOLD OUT' : `${p.stock} left`}
-          fontSize={fs(13)}
-          color={soldOut ? C.muted : C.white}
-          textAlign="middle-left"
+          fontSize={fs(10)}
+          color={textColor}
+          textAlign="middle-center"
           textWrap="nowrap"
-          uiTransform={{ height: px(18) }}
+          uiTransform={{ positionType: 'absolute', position: { left: 0, top: px(108) }, width: '100%', height: px(14) }}
         />
         {claimed ? (
           <UiEntity
-            uiTransform={{ positionType: 'absolute', position: { top: px(-10), right: px(-8) }, width: px(30), height: px(30), borderRadius: px(15), borderWidth: Math.max(1, px(3)), borderColor: C.dark, justifyContent: 'center', alignItems: 'center' }}
+            uiTransform={{ positionType: 'absolute', position: { top: px(-9), right: px(-7) }, width: px(26), height: px(26), borderRadius: px(13), borderWidth: Math.max(1, px(3)), borderColor: C.dark, justifyContent: 'center', alignItems: 'center' }}
             uiBackground={{ color: C.green }}
           >
-            <UiEntity uiTransform={{ width: px(12), height: px(12), borderRadius: px(6) }} uiBackground={{ color: C.dark }} />
+            <UiEntity uiTransform={{ width: px(10), height: px(10), borderRadius: px(5) }} uiBackground={{ color: C.dark }} />
           </UiEntity>
         ) : null}
         {isNext ? (
           <UiEntity
-            uiTransform={{ positionType: 'absolute', position: { top: px(-12), right: px(-8) }, height: px(24), padding: { left: px(8), right: px(8) }, borderRadius: px(9), borderWidth: Math.max(1, px(3)), borderColor: C.dark, justifyContent: 'center' }}
+            uiTransform={{ positionType: 'absolute', position: { top: px(-11), right: px(-7) }, height: px(22), padding: { left: px(7), right: px(7) }, borderRadius: px(8), borderWidth: Math.max(1, px(3)), borderColor: C.dark, justifyContent: 'center' }}
             uiBackground={{ color: C.yellow }}
           >
-            <Label value="NEXT" fontSize={fs(13)} color={C.dark} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(24) }} />
+            <Label value="NEXT" fontSize={fs(12)} color={C.dark} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(22) }} />
           </UiEntity>
         ) : null}
+      </UiEntity>
+    )
+  }
+
+  // One leaderboard row: position, name, rank, points and the diamonds that
+  // position wins. Mine is pink. Without data the names and points read "—".
+  const boardRow = (i: number) => {
+    const entry = board[i]
+    const mine = !!entry && !!myPlayFabId && entry.playFabId === myPlayFabId
+    const tier = entry ? Number(getTierFromSub(entry.points) || 0) : 0
+    return (
+      <UiEntity
+        key={i}
+        uiTransform={{
+          width: '100%',
+          height: px(34),
+          flexDirection: 'row',
+          alignItems: 'center',
+          padding: { left: px(8), right: px(8) },
+          margin: { bottom: px(1) },
+          borderRadius: px(10)
+        }}
+        uiBackground={{ color: mine ? C.pink : i % 2 ? hex('#6B4500') : C.transparent }}
+      >
+        <Label value={String(i + 1)} fontSize={fs(15)} color={C.yellow} textAlign="middle-left" textWrap="nowrap" uiTransform={{ width: px(26), height: px(34) }} />
+        <UiEntity uiTransform={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, height: px(34), overflow: 'hidden' }}>
+          <Label value={entry ? entry.name : '—'} fontSize={fs(14)} color={C.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ width: '100%', height: px(34) }} />
+        </UiEntity>
+        <UiEntity uiTransform={{ width: px(104), height: px(34), justifyContent: 'center' }}>
+          {entry ? rankChip(px, fs, tier, seasonTierDefinitions[tier]?.name || '', 20) : null}
+        </UiEntity>
+        <Label value={entry ? String(entry.points) : '—'} fontSize={fs(14)} color={C.white} textAlign="middle-right" textWrap="nowrap" uiTransform={{ width: px(44), height: px(34) }} />
+        <Label value={String(TOP10_PRIZES[i])} fontSize={fs(14)} color={C.yellow} textAlign="middle-right" textWrap="nowrap" uiTransform={{ width: px(48), height: px(34), margin: { left: px(8) } }} />
+        {materialIcon(px, 'DM', 18, { left: px(4) })}
       </UiEntity>
     )
   }
@@ -690,27 +820,16 @@ export const PrizesView = () => {
     ]),
     <UiEntity uiTransform={{ width: '100%', flexGrow: 1, flexDirection: 'row', margin: { top: px(18) } }}>
       <UiEntity
-        uiTransform={{ flexGrow: 1, height: '100%', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignContent: 'space-between', padding: px(12), borderRadius: px(26), borderWidth: Math.max(2, px(4)), borderColor: C.dark }}
+        uiTransform={{ width: px(PRIZE_GRID_W), height: px(PRIZE_GRID_H), borderRadius: px(26), borderWidth: Math.max(2, px(PRIZE_BORDER)), borderColor: C.dark }}
         uiBackground={{ color: C.yellow }}
       >
         {prizes.map((p, i) => cell(p, i))}
       </UiEntity>
       <UiEntity uiTransform={{ width: px(24) }} />
-      {panelFrame(px, { width: px(320), height: '100%', padding: { top: px(20), bottom: px(18), left: px(20), right: px(20) } }, hex('#8A5A00'), [
-        <Label value="SUPREME TOP 10" fontSize={fs(28)} color={C.yellow} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(34) }} />,
-        <Label value="Diamonds for the best players when the season ends" fontSize={fs(14)} color={hex('#FFF0C2')} textAlign="middle-left" textWrap="wrap" uiTransform={{ width: '100%', height: px(40), margin: { top: px(4) } }} />,
-        ...TOP10.map(([place, amount]) => (
-          <UiEntity
-            key={place}
-            uiTransform={{ width: '100%', height: px(50), flexDirection: 'row', alignItems: 'center', margin: { top: px(10) }, padding: { left: px(14), right: px(12) }, borderRadius: px(16), borderWidth: Math.max(1, px(3)), borderColor: C.dark }}
-            uiBackground={{ color: hex('#6B4500') }}
-          >
-            <Label value={place} fontSize={fs(place.length > 3 ? 18 : 24)} color={C.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(50) }} />
-            <UiEntity uiTransform={{ flexGrow: 1 }} />
-            <Label value={String(amount)} fontSize={fs(26)} color={C.white} textAlign="middle-right" textWrap="nowrap" uiTransform={{ height: px(50) }} />
-            {materialIcon(px, 'DM', 28, { left: px(8) })}
-          </UiEntity>
-        )),
+      {panelFrame(px, { width: px(PRIZE_SIDE_W), height: px(PRIZE_GRID_H), padding: { top: px(16), bottom: px(14), left: px(16), right: px(16) } }, hex('#8A5A00'), [
+        <Label value="TOP 10" fontSize={fs(28)} color={C.yellow} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(34) }} />,
+        <Label value="Diamonds for the best players when the season ends" fontSize={fs(13)} color={hex('#FFF0C2')} textAlign="middle-left" textWrap="nowrap" uiTransform={{ width: '100%', height: px(20) }} />,
+        <UiEntity uiTransform={{ width: '100%', flexDirection: 'column', margin: { top: px(8) } }}>{Array.from({ length: 10 }, (_, i) => boardRow(i))}</UiEntity>,
         <UiEntity uiTransform={{ flexGrow: 1 }} />,
         <UiEntity uiTransform={{ width: '100%', flexDirection: 'column', padding: px(12), borderRadius: px(16) }} uiBackground={{ color: C.dark }}>
           <Label value={`YOU · ${myRank}`} fontSize={fs(16)} color={C.yellow} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(22) }} />
@@ -718,15 +837,15 @@ export const PrizesView = () => {
             value={
               !live
                 ? 'Stock unavailable right now'
-                : `${last ? `${shortName(last.name)} received. ` : 'No prize received yet. '}${
-                    next ? `${shortName(next.name)} unlocks at ${seasonTierDefinitions[prizeTier(next)]?.name || ''}, ${toNext} points away.` : 'Every prize received!'
+                : `${last ? `${prizeName(last.name)} received. ` : 'No prize received yet. '}${
+                    next ? `${prizeName(next.name)} unlocks at ${seasonTierDefinitions[prizeTier(next)]?.name || ''}, ${toNext} points away.` : 'Every prize received!'
                   }`
             }
             fontSize={fs(13)}
             color={C.lilac}
             textAlign="middle-left"
             textWrap="wrap"
-            uiTransform={{ width: '100%', height: px(54), margin: { top: px(4) } }}
+            uiTransform={{ width: '100%', height: px(46), margin: { top: px(4) } }}
           />
         </UiEntity>
       ])}
