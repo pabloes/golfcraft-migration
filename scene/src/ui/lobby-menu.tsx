@@ -17,7 +17,7 @@ import { getPlayer } from '@dcl/sdk/players'
 import { globalStore } from '../services/globalStore/globalStore'
 import { lobbyHudState } from './lobby-hud-state'
 import { lobbyMenuState, closeLobbyMenu, openLobbyMenu, closeOrBack, showLobbyView } from './lobby-menu-state'
-import { TutorialView, WorkshopView, PrizesView } from './lobby-views'
+import { TutorialView, WorkshopView, PrizesView, DailyMissionsView } from './lobby-views'
 import { C, fmt, shortName, pressable, counter, chip, materialIcon } from './ui-theme'
 import { containLayout, scaler, DESIGN_W, DESIGN_H, type Px } from './ui-scale'
 import { seasonCatalog } from '../components/lobby/seasons/season-catalog'
@@ -53,6 +53,7 @@ export const LobbyMenu = () => {
   if (lobbyMenuState.view === 'tutorial') return <TutorialView />
   if (lobbyMenuState.view === 'workshop') return <WorkshopView />
   if (lobbyMenuState.view === 'prizes') return <PrizesView />
+  if (lobbyMenuState.view === 'daily') return <DailyMissionsView />
 
   // Keeps the 1280x720 proportion, as large as fits in the interactable area,
   // with the "Press E or F to close" line reserved under it.
@@ -90,6 +91,9 @@ export const LobbyMenu = () => {
   const soldOut = lobbyMenuState.prizes.filter((p) => p.stock <= 0)
 
   const club = r.golfclub
+  // Today's daily missions are done in order: the index is how many are done.
+  const daily = lobbyHudState.dailyMissions
+  const dailyDone = daily ? `${Math.min(daily.dailyMissionIndex, daily.state.missions.length)} / ${daily.state.missions.length}` : '- / 5'
   const clubAim = club?.aim || 0
   const upgradeHint =
     club && club.id === 1 && clubAim < UPGRADE_COSTS.length ? `Basic club: aim +1 for ${UPGRADE_COSTS[clubAim]} wood` : null
@@ -375,16 +379,22 @@ export const LobbyMenu = () => {
           <UiEntity uiTransform={{ flexGrow: 1 }} />
           {pressable(
             {
-              id: 'how-to-play',
-              width: px(170),
+              id: 'daily-missions',
+              width: px(236),
               height: px(44),
               color: C.transparent,
               radius: px(14),
               borderWidth: Math.max(2, px(3)),
               borderColor: C.white,
-              shadow: 0
+              shadow: 0,
+              padding: { left: px(14), right: px(6) },
+              justifyContent: 'space-between',
+              onClick: () => showLobbyView('daily')
             },
-            <Label value="HOW TO PLAY" fontSize={fs(18)} color={C.white} textAlign="middle-center" uiTransform={{ width: '100%', height: px(44) }} textWrap="nowrap" />
+            <Label value="DAILY MISSIONS" fontSize={fs(18)} color={C.white} textAlign="middle-left" uiTransform={{ height: px(44) }} textWrap="nowrap" />,
+            <UiEntity uiTransform={{ height: px(28), padding: { left: px(10), right: px(10) }, borderRadius: px(9), justifyContent: 'center' }} uiBackground={{ color: C.dark }}>
+              <Label value={dailyDone} fontSize={fs(15)} color={C.yellow} textAlign="middle-center" uiTransform={{ height: px(28) }} textWrap="nowrap" />
+            </UiEntity>
           )}
         </UiEntity>
 

@@ -8,6 +8,7 @@
 // which registers them here when it is built. The 3D lobby is untouched.
 import { getSeasonRewardsStock } from '../components/lobby/seasons/season-rewards-bridge'
 import { clearPointerState } from './ui-theme'
+import { fetchDailyMissions } from '../meta/bootstrap'
 // @ts-ignore - common/constants has @ts-nocheck
 import { USE_REMOTE_SERVER } from '../../../common/constants'
 
@@ -30,7 +31,7 @@ export type LeaderboardEntry = {
   points: number
 }
 
-export type LobbyMenuView = 'lobby' | 'tutorial' | 'workshop' | 'prizes'
+export type LobbyMenuView = 'lobby' | 'tutorial' | 'workshop' | 'prizes' | 'daily'
 
 export const lobbyMenuState: {
   visible: boolean
@@ -80,6 +81,8 @@ export const showLobbyView = (view: LobbyMenuView) => {
   lobbyMenuState.selectedClubTokenId = undefined
   lobbyMenuState.clubsPage = null
   if (view === 'prizes') refreshLobbyLeaderboard()
+  // Progress moves while playing, so DAILY MISSIONS always re-reads it.
+  if (view === 'daily') fetchDailyMissions().catch((err) => console.log('[lobby] daily missions refresh failed', err))
   clearPointerState()
 }
 

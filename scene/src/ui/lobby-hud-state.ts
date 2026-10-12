@@ -37,9 +37,11 @@ export type DailyMission = {
   alias: string
   description: string
   rewards: Record<string, number> | null
+  difficulty?: number
 }
 export type DailyMissionsData = {
-  state: { missions: DailyMission[] }
+  // `date` is when this set was drawn; the server renews it 24 h later.
+  state: { missions: DailyMission[]; date?: string }
   dailyMissionIndex: number
   dailyMissionStep: number
 }

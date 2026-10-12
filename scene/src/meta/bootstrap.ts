@@ -45,14 +45,16 @@ export async function refreshUserData(): Promise<void> {
 // from production; ours follows USE_REMOTE_SERVER like the other web API
 // calls. Non-fatal: the panel just shows nothing until it arrives.
 let playFabIdForMissions = ''
-async function fetchDailyMissions(): Promise<void> {
+// Also called when the lobby dialog opens DAILY MISSIONS, since progress
+// moves while playing.
+export async function fetchDailyMissions(): Promise<void> {
   if (!playFabIdForMissions) return
   const base = USE_REMOTE_SERVER ? 'https://golfcraftgame.com' : 'http://localhost:2569'
   try {
     const data = await fetch(`${base}/api/get-daily-missions/${playFabIdForMissions}`).then((r) => r.json())
     if (data?.state?.missions) {
       lobbyHudState.dailyMissions = {
-        state: { missions: data.state.missions },
+        state: { missions: data.state.missions, date: data.state.date },
         dailyMissionIndex: Number(data.dailyMissionIndex || 0),
         dailyMissionStep: Number(data.dailyMissionStep || 0)
       }

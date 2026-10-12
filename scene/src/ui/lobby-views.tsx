@@ -7,7 +7,7 @@ import ReactEcs, { Label, UiEntity } from '@dcl/sdk/react-ecs'
 import { Color4 } from '@dcl/sdk/math'
 
 import { globalStore } from '../services/globalStore/globalStore'
-import { lobbyHudState } from './lobby-hud-state'
+import { lobbyHudState, DailyMission } from './lobby-hud-state'
 import { lobbyMenuState, showLobbyView, closeLobbyMenu, SeasonPrize } from './lobby-menu-state'
 import { C, hex, fmt, shortName, pressable, counter, materialIcon, title } from './ui-theme'
 import { containLayout, scaler, DESIGN_W, DESIGN_H, type Px, type Layout } from './ui-scale'
@@ -849,6 +849,217 @@ export const PrizesView = () => {
           />
         </UiEntity>
       ])}
+    </UiEntity>
+  ])
+}
+
+// ---------------------------------------------------------------------------
+// DAILY MISSIONS (DailyMissions.dc.html)
+
+const DAILY_BG = hex('#B8430E')
+const DAILY_SIDE_W = 300
+const DAILY_GAP = 10
+const DAILY_LIGHT = hex('#EDE7F7')
+const DAILY_MUTED = hex('#5A4A7A')
+const DAILY_NOTE = 'Rewards land in your account the moment a mission completes. Missions renew every 24 hours.'
+const REWARD_ORDER = ['FT', 'DM', 'GD', 'IR', 'ST', 'WD', 'GC', 'PT', 'EN']
+
+// A counted mission's target is the number at the end of its alias
+// (competition-played5 -> 5, tournament-finished4 -> 4); the all-modes
+// training one counts its 4 modes. No number, no progress bar.
+const missionTarget = (alias: string): number | null => {
+  if (alias === 'training-success-all-modes') return 4
+  const m = /(\d+)$/.exec(alias)
+  return m ? Number(m[1]) : null
+}
+// Tournaments, competitions, refining and crafting are not in the SDK7 scene
+// yet: only Season runs and training missions can actually be completed.
+const missionAvailable = (alias: string) => alias === 'season-game' || alias.startsWith('training-')
+
+// Time until the server redraws the set: its date + 24 h. Null once passed.
+const renewalText = (date?: string): string | null => {
+  const left = (date ? Date.parse(date) : NaN) + 24 * 3600 * 1000 - Date.now()
+  if (isNaN(left) || left <= 0) return null
+  const h = Math.floor(left / 3600000)
+  const m = Math.floor((left % 3600000) / 60000)
+  return `${h}h ${m}m`
+}
+
+export const DailyMissionsView = () => {
+  const L = containLayout(DESIGN_W, DESIGN_H, { margin: MARGIN })
+  const { px, fs } = scaler(L.scale)
+  const data = lobbyHudState.dailyMissions
+  const missions: DailyMission[] = data?.state.missions || []
+  const index = data ? data.dailyMissionIndex : 0
+  const step = data ? data.dailyMissionStep : 0
+  const total = missions.length || 5
+  const doneCount = Math.min(index, total)
+  const renew = renewalText(data?.state.date)
+
+  // Rewards still to earn: every mission not yet done, grouped by material.
+  const toEarn: Record<string, number> = {}
+  missions.forEach((m, i) => {
+    if (i < index || !m.rewards) return
+    for (const code of Object.keys(m.rewards)) toEarn[code] = (toEarn[code] || 0) + Number(m.rewards[code] || 0)
+  })
+  const order = (code: string) => {
+    const i = REWARD_ORDER.indexOf(code)
+    return i < 0 ? 99 : i
+  }
+  const toEarnCodes = Object.keys(toEarn).sort((a, b) => order(a) - order(b))
+
+  const card = (m: DailyMission, i: number) => {
+    const done = i < index
+    const active = i === index
+    const locked = i > index
+    // Locked missions sit at 60 % opacity: there is no opacity prop, so the
+    // alpha goes into every colour of the card.
+    const alpha = (c: Color4) => (locked ? Color4.create(c.r, c.g, c.b, c.a * 0.6) : c)
+    const target = missionTarget(m.alias)
+    const available = missionAvailable(m.alias)
+    const fg = alpha(C.dark)
+    const pill = alpha(active ? C.white : DAILY_LIGHT)
+    const shadow = active ? 8 : 6
+    const rewards = m.rewards ? Object.keys(m.rewards) : []
+    const smallTag = (text: string, color: Color4) => (
+      <UiEntity uiTransform={{ height: px(20), padding: { left: px(9), right: px(9) }, margin: { left: px(10) }, borderRadius: px(8), justifyContent: 'center' }} uiBackground={{ color: alpha(C.dark) }}>
+        <Label value={text} fontSize={fs(12)} color={alpha(color)} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(20) }} />
+      </UiEntity>
+    )
+    return (
+      <UiEntity key={m.alias + i} uiTransform={{ width: '100%', flexGrow: 1, flexBasis: 0, margin: { bottom: i < total - 1 ? px(DAILY_GAP) : 0 } }}>
+        <UiEntity uiTransform={{ positionType: 'absolute', position: { left: 0, top: px(shadow) }, width: '100%', height: '100%', borderRadius: px(20) }} uiBackground={{ color: alpha(C.dark) }} />
+        <UiEntity
+          uiTransform={{
+            positionType: 'absolute',
+            position: { left: 0, top: 0 },
+            width: '100%',
+            height: '100%',
+            flexDirection: 'row',
+            alignItems: 'center',
+            padding: { left: px(14), right: px(18) },
+            borderRadius: px(20),
+            borderWidth: Math.max(2, px(4)),
+            borderColor: active ? C.white : alpha(C.dark)
+          }}
+          uiBackground={{ color: alpha(active ? C.yellow : C.white) }}
+        >
+          <UiEntity
+            uiTransform={{ width: px(50), height: px(50), borderRadius: px(25), borderWidth: Math.max(1, px(3)), borderColor: alpha(C.dark), justifyContent: 'center', alignItems: 'center' }}
+            uiBackground={{ color: alpha(done ? C.green : active ? C.yellow : DAILY_LIGHT) }}
+          >
+            {done ? (
+              <UiEntity uiTransform={{ width: px(18), height: px(18), borderRadius: px(9) }} uiBackground={{ color: C.dark }} />
+            ) : (
+              <Label value={String(i + 1)} fontSize={fs(24)} color={fg} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: px(50), height: px(50) }} />
+            )}
+          </UiEntity>
+          <UiEntity uiTransform={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, flexDirection: 'column', justifyContent: 'center', margin: { left: px(16) }, overflow: 'hidden' }}>
+            <UiEntity uiTransform={{ height: px(28), flexDirection: 'row', alignItems: 'center' }}>
+              <Label value={m.description} fontSize={fs(22)} color={fg} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(28) }} />
+              {active ? smallTag('IN PROGRESS', C.yellow) : null}
+              {done ? smallTag('DONE', C.green) : null}
+              {!done && !available ? smallTag('Not in this version yet', hex('#FFB38A')) : null}
+            </UiEntity>
+            <UiEntity uiTransform={{ height: px(26), flexDirection: 'row', alignItems: 'center', margin: { top: px(5) } }}>
+              <Label value="REWARDS" fontSize={fs(13)} color={alpha(DAILY_MUTED)} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(26) }} />
+              {rewards.map((code) => (
+                <UiEntity key={code} uiTransform={{ height: px(26), flexDirection: 'row', alignItems: 'center', padding: { left: px(5), right: px(9) }, margin: { left: px(8) }, borderRadius: px(9) }} uiBackground={{ color: pill }}>
+                  {materialIcon(px, code, 18)}
+                  <Label value={`${m.rewards ? m.rewards[code] : ''} ${code}`} fontSize={fs(15)} color={fg} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(26), margin: { left: px(5) } }} />
+                </UiEntity>
+              ))}
+            </UiEntity>
+          </UiEntity>
+          {active && target ? (
+            <UiEntity uiTransform={{ width: px(150), flexDirection: 'column', alignItems: 'flex-end', margin: { right: px(16) } }}>
+              <Label value={`${Math.min(step, target)} / ${target}`} fontSize={fs(15)} color={fg} textAlign="middle-right" textWrap="nowrap" uiTransform={{ height: px(20) }} />
+              <UiEntity uiTransform={{ width: px(150), height: px(14), margin: { top: px(5) }, borderRadius: px(8), borderWidth: Math.max(1, px(2)), borderColor: C.dark }} uiBackground={{ color: DAILY_LIGHT }}>
+                <UiEntity uiTransform={{ width: `${Math.round((100 * Math.min(step, target)) / target)}%`, height: '100%', borderRadius: px(6) }} uiBackground={{ color: C.green }} />
+              </UiEntity>
+            </UiEntity>
+          ) : null}
+          <UiEntity uiTransform={{ flexDirection: 'row', alignItems: 'center' }}>
+            {[1, 2, 3, 4, 5].map((n) => (
+              <UiEntity
+                key={n}
+                uiTransform={{ width: px(14), height: px(14), borderRadius: px(7), borderWidth: Math.max(1, px(2)), borderColor: alpha(C.dark), margin: { left: px(3) } }}
+                uiBackground={{ color: alpha(n <= (m.difficulty || 0) ? C.yellow : DAILY_LIGHT) }}
+              />
+            ))}
+          </UiEntity>
+        </UiEntity>
+      </UiEntity>
+    )
+  }
+
+  return screen(L, px, DAILY_BG, [
+    header(px, fs, 'DAILY MISSIONS', C.yellow, [
+      tag(px, fs, 'Done in order, one at a time', C.dark, C.white),
+      <UiEntity uiTransform={{ flexGrow: 1 }} />,
+      <UiEntity uiTransform={{ height: px(52), flexDirection: 'row', alignItems: 'center', padding: { left: px(12), right: px(16) }, borderRadius: px(16) }} uiBackground={{ color: C.dark }}>
+        <UiEntity uiTransform={{ width: px(30), height: px(30), borderRadius: px(15), borderWidth: Math.max(1, px(3)), borderColor: hex('#FFD6C2'), margin: { right: px(10) }, justifyContent: 'center', alignItems: 'center' }} uiBackground={{ color: C.white }}>
+          <UiEntity uiTransform={{ width: px(3), height: px(10), position: { bottom: px(4) } }} uiBackground={{ color: C.dark }} />
+        </UiEntity>
+        {renew ? (
+          <UiEntity uiTransform={{ flexDirection: 'column', justifyContent: 'center' }}>
+            <Label value="NEW MISSIONS IN" fontSize={fs(12)} color={hex('#FFD6C2')} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(16) }} />
+            <Label value={renew} fontSize={fs(22)} color={C.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(26) }} />
+          </UiEntity>
+        ) : (
+          <Label value="New missions soon" fontSize={fs(18)} color={C.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(52) }} />
+        )}
+      </UiEntity>
+    ]),
+    <UiEntity uiTransform={{ width: '100%', flexGrow: 1, flexDirection: 'row', margin: { top: px(18) } }}>
+      {/* Today's missions */}
+      <UiEntity uiTransform={{ flexGrow: 1, flexBasis: 0, height: '100%', flexDirection: 'column' }}>
+        {missions.length ? (
+          missions.map((m, i) => card(m, i))
+        ) : (
+          <Label value={data ? 'No missions today' : 'Loading missions...'} fontSize={fs(22)} color={C.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />
+        )}
+      </UiEntity>
+      <UiEntity uiTransform={{ width: px(22) }} />
+      {/* Side */}
+      <UiEntity uiTransform={{ width: px(DAILY_SIDE_W), height: '100%', flexDirection: 'column' }}>
+        <UiEntity
+          uiTransform={{ width: '100%', flexDirection: 'column', alignItems: 'center', padding: { top: px(18), bottom: px(18), left: px(18), right: px(18) }, borderRadius: px(24), borderWidth: Math.max(2, px(4)), borderColor: C.yellow }}
+          uiBackground={{ color: C.purple }}
+        >
+          <Label value="TODAY" fontSize={fs(14)} color={C.lilac} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(18) }} />
+          <Label value={`${doneCount} / ${total}`} fontSize={fs(64)} color={C.yellow} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(70) }} />
+          <Label value="missions done" fontSize={fs(16)} color={C.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(22) }} />
+          <UiEntity uiTransform={{ flexDirection: 'row', margin: { top: px(8) } }}>
+            {Array.from({ length: total }, (_, i) => (
+              <UiEntity
+                key={i}
+                uiTransform={{ width: px(34), height: px(12), borderRadius: px(6), borderWidth: Math.max(1, px(2)), borderColor: C.dark, margin: { left: i ? px(6) : 0 } }}
+                uiBackground={{ color: i < index ? C.green : i === index ? C.yellow : C.bg }}
+              />
+            ))}
+          </UiEntity>
+        </UiEntity>
+        <UiEntity
+          uiTransform={{ width: '100%', flexGrow: 1, flexDirection: 'column', margin: { top: px(16) }, padding: { top: px(16), bottom: px(16), left: px(18), right: px(18) }, borderRadius: px(24), borderWidth: Math.max(2, px(4)), borderColor: C.dark }}
+          uiBackground={{ color: C.white }}
+        >
+          <Label value="STILL TO EARN TODAY" fontSize={fs(22)} color={C.dark} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(28) }} />
+          <UiEntity uiTransform={{ width: '100%', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', margin: { top: px(10) } }}>
+            {toEarnCodes.map((code) => (
+              <UiEntity key={code} uiTransform={{ width: '48%', height: px(40), flexDirection: 'row', alignItems: 'center', padding: { left: px(10) }, margin: { bottom: px(8) }, borderRadius: px(12) }} uiBackground={{ color: DAILY_LIGHT }}>
+                {materialIcon(px, code, 24)}
+                <Label value={`${toEarn[code]} ${code}`} fontSize={fs(18)} color={C.dark} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(40), margin: { left: px(8) } }} />
+              </UiEntity>
+            ))}
+            {!toEarnCodes.length ? (
+              <Label value={data ? 'Everything earned today!' : 'Loading...'} fontSize={fs(16)} color={DAILY_MUTED} textAlign="middle-left" textWrap="nowrap" uiTransform={{ width: '100%', height: px(40) }} />
+            ) : null}
+          </UiEntity>
+          <UiEntity uiTransform={{ flexGrow: 1 }} />
+          <Label value={DAILY_NOTE} fontSize={fs(14)} color={DAILY_MUTED} textAlign="middle-left" textWrap="wrap" uiTransform={{ width: '100%', height: px(60) }} />
+        </UiEntity>
+      </UiEntity>
     </UiEntity>
   ])
 }
