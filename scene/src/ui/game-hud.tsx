@@ -1,6 +1,5 @@
-// HUD pieces in the new visual language (design canvas HUD.dc.html and the
-// lobby header): the lobby resources panel, and during a hole the HOLE / TIME
-// / SHOTS block, the "Ending in" banner, the live ranking, the power column,
+// In-hole HUD pieces in the new visual language (design canvas HUD.dc.html):
+// the HOLE / TIME / SHOTS block, the "Ending in" banner, the live ranking, the power column,
 // the controls help and the map footer. Everything is anchored to the
 // explorer's interactable area and scales with the contain ratio.
 //
@@ -10,68 +9,12 @@ import ReactEcs, { Label, UiEntity } from '@dcl/sdk/react-ecs'
 import { Color4 } from '@dcl/sdk/math'
 
 import { globalStore } from '../services/globalStore/globalStore'
-import { lobbyHudState } from './lobby-hud-state'
 import { topbarState, formatTopBarTime } from './topbar-state'
 import { powerBarState, controlHintState } from './shoot-hud-state'
 import { seasonClockState, seasonResultsState, seasonCountdownState, seasonHoleState, SeasonResultRow } from './season-hud-state'
-import { hudGeometry } from './lobby-hud-layout'
 import { C, hex, fmt, mmss } from './ui-theme'
 import { hudScale, type Px } from './ui-scale'
 import { CAMERA_AIM_MODE } from '../config/controls'
-
-// ---------------------------------------------------------------------------
-// Lobby resources: energy, coins, diamonds, tickets on top, the four materials
-// underneath. The golfclub strip and the PLAYER panel of the SDK6 HUD are gone:
-// the lobby menu shows level, XP and the equipped club.
-const pill = (px: Px, fs: Px, w: number, h: number, color: Color4, value: string, code?: string) => (
-  <UiEntity
-    uiTransform={{ width: w, height: h, flexDirection: 'row', alignItems: 'center', padding: { left: px(6), right: px(8) }, borderRadius: px(12) }}
-    uiBackground={{ color: C.panelDim }}
-  >
-    <UiEntity
-      uiTransform={{ width: px(24), height: px(24), borderRadius: px(12), borderWidth: Math.max(1, px(2)), borderColor: C.darker }}
-      uiBackground={{ color }}
-    />
-    {code ? <Label value={code} fontSize={fs(11)} color={C.muted} textAlign="middle-left" uiTransform={{ height: h, margin: { left: px(5) } }} textWrap="nowrap" /> : null}
-    <Label value={value} fontSize={fs(16)} color={C.white} textAlign="middle-left" uiTransform={{ height: h, margin: { left: px(6) } }} textWrap="nowrap" />
-  </UiEntity>
-)
-
-export const LobbyHud = () => {
-  if (!lobbyHudState.visible) return null
-  const r = lobbyHudState.resources
-  const { canvas, s, scale } = hudScale()
-  const { px, fs } = s
-  const g = hudGeometry(scale)
-  const num = (value: number) => (r.loaded ? fmt(value) : '-')
-  const row = (items: ReactEcs.JSX.Element[]) => (
-    <UiEntity uiTransform={{ width: g.width, height: g.pillH, flexDirection: 'row', justifyContent: 'space-between' }}>{items}</UiEntity>
-  )
-  return (
-    <UiEntity
-      uiTransform={{
-        positionType: 'absolute',
-        position: { top: canvas.area.top + g.top, right: canvas.area.right + g.right },
-        width: g.width,
-        flexDirection: 'column'
-      }}
-    >
-      {row([
-        pill(px, fs, g.pillW, g.pillH, C.cyan, num(r.EN)),
-        pill(px, fs, g.pillW, g.pillH, C.yellow, num(r.GC)),
-        pill(px, fs, g.pillW, g.pillH, C.diamond, num(r.DM)),
-        pill(px, fs, g.pillW, g.pillH, C.ticket, num(r.FT))
-      ])}
-      <UiEntity uiTransform={{ height: g.gap }} />
-      {row([
-        pill(px, fs, g.pillW, g.pillH, C.wood, num(r.WD), 'WD'),
-        pill(px, fs, g.pillW, g.pillH, C.stone, num(r.ST), 'ST'),
-        pill(px, fs, g.pillW, g.pillH, C.iron, num(r.IR), 'IR'),
-        pill(px, fs, g.pillW, g.pillH, C.gold, num(r.GD), 'GD')
-      ])}
-    </UiEntity>
-  )
-}
 
 // ---------------------------------------------------------------------------
 // A labelled stat box: small caption on top, big value under it.

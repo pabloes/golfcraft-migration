@@ -22,11 +22,19 @@ export const DESIGN_W = 1280
 export const DESIGN_H = 720
 export const MIN_FONT = 11
 
+let lastTrace = ''
 export const readCanvas = (): Canvas => {
   const info = UiCanvasInformation.getOrNull(engine.RootEntity)
   const width = info?.width || DESIGN_W
   const height = info?.height || DESIGN_H
   const area = info?.interactableArea || { top: 0, left: 0, right: 0, bottom: 0 }
+  // Logged on change only: what the explorer reports (size and the margins
+  // its own HUD takes), for layout questions.
+  const trace = `${width}x${height} dpr=${info?.devicePixelRatio ?? '?'} area t${area.top} l${area.left} r${area.right} b${area.bottom}`
+  if (trace !== lastTrace) {
+    lastTrace = trace
+    console.log('[ui] canvas', trace)
+  }
   return {
     width,
     height,

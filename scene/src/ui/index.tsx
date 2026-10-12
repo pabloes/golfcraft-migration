@@ -7,9 +7,11 @@ import { globalStore } from '../services/globalStore/globalStore'
 import { lobbyHudState } from './lobby-hud-state'
 import { overlayState } from '../components/ui/overlay'
 import { centerPanelState, BANNER_SPRITES, showBanner } from './centerpanel-state'
-import { LobbyMenu, MenuButton, lobbyMenuInputSystem } from './lobby-menu'
+import { LobbyMenu, lobbyMenuInputSystem } from './lobby-menu'
 import { lobbyMenuState, openLobbyMenu } from './lobby-menu-state'
-import { LobbyHud, MissionTimer, HoleStats, LiveRanking, PowerColumn, ControlsHelp, MapFooter, EndingBanner } from './game-hud'
+import { MissionTimer, HoleStats, LiveRanking, PowerColumn, ControlsHelp, MapFooter, EndingBanner } from './game-hud'
+import { LobbyHud } from './lobby-hud'
+import { ATLAS, spriteUvs } from './sprites'
 import { JoiningScreen, PartyScreen, HoleResultScreen, RunCompleteScreen } from './season-screens'
 import { containLayout, scaler } from './ui-scale'
 
@@ -19,7 +21,6 @@ import { containLayout, scaler } from './ui-scale'
 const ui = () => (
   <UiEntity uiTransform={{ width: '100%', height: '100%' }}>
     <LobbyHud />
-    <MenuButton />
     <MissionTimer />
     <HoleStats />
     <LiveRanking />
@@ -90,27 +91,6 @@ const CenterPopup = () => {
       />
     </UiEntity>
   )
-}
-
-const ATLAS = 2048
-
-// Crop a sub-rectangle out of a spritesheet via uvs. ReactEcs renders the
-// quad with the empirically-working corner order BL, TL, TR, BR (V=1 at the
-// top of the atlas image, U increases left-to-right). The previous BR/TR/TL/BL
-// order fixed the vertical flip but produced a horizontal mirror; swapping to
-// BL/TL/TR/BR (same V semantics, opposite U traversal) renders correctly.
-const spriteUvs = (
-  pixelLeft: number,
-  pixelTop: number,
-  pixelWidth: number,
-  pixelHeight: number,
-  atlasSize: number
-): number[] => {
-  const uL = pixelLeft / atlasSize
-  const uR = (pixelLeft + pixelWidth) / atlasSize
-  const vT = 1 - pixelTop / atlasSize
-  const vB = 1 - (pixelTop + pixelHeight) / atlasSize
-  return [uL, vB, uL, vT, uR, vT, uR, vB]
 }
 
 const IntroScreen = () => {

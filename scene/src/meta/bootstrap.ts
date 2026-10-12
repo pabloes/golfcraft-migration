@@ -15,7 +15,7 @@ import {
 import { getLevelInfo } from '../../../common/utils'
 import { loginWithCustomID, getPlayerCombinedInfo, CombinedInfo } from './playfab-rest'
 import { decorateRemotePhysicParts } from '../../golfplay/physics/course-element-loader'
-import { updateLobbyResources } from '../ui/lobby-hud-state'
+import { updateLobbyResources, lobbyHudState } from '../ui/lobby-hud-state'
 import { globalStore } from '../services/globalStore/globalStore'
 
 // PlayFab session ticket from the last login, kept so refreshUserData() can
@@ -35,6 +35,28 @@ export async function refreshUserData(): Promise<void> {
     await applyCombinedInfoToHud(combined)
   } catch (err) {
     console.log('[bootstrap] refreshUserData failed:', err)
+  }
+  await fetchDailyMissions()
+}
+
+// SDK6 meta.ts fetched this at boot and userData.ts on every refresh, always
+// from production; ours follows USE_REMOTE_SERVER like the other web API
+// calls. Non-fatal: the panel just shows nothing until it arrives.
+let playFabIdForMissions = ''
+async function fetchDailyMissions(): Promise<void> {
+  if (!playFabIdForMissions) return
+  const base = USE_REMOTE_SERVER ? 'https://golfcraftgame.com' : 'http://localhost:2569'
+  try {
+    const data = await fetch(`${base}/api/get-daily-missions/${playFabIdForMissions}`).then((r) => r.json())
+    if (data?.state?.missions) {
+      lobbyHudState.dailyMissions = {
+        state: { missions: data.state.missions },
+        dailyMissionIndex: Number(data.dailyMissionIndex || 0),
+        dailyMissionStep: Number(data.dailyMissionStep || 0)
+      }
+    }
+  } catch (err) {
+    console.log('[bootstrap] get-daily-missions failed:', err)
   }
 }
 
@@ -380,6 +402,7 @@ export const bootstrap = async (): Promise<BootstrapResult> => {
     const customId = await resolvePlayFabCustomId(user.userId, user.hasConnectedWeb3)
     const login = await loginWithCustomID(customId, true)
     sessionTicket = login.SessionTicket
+    playFabIdForMissions = login.PlayFabId
     console.log('[bootstrap] PlayFab login OK:', login.PlayFabId, 'newly created:', login.NewlyCreated)
 
     // Stash on engine so other modules (golfplay-client) can read the base
@@ -399,6 +422,8 @@ export const bootstrap = async (): Promise<BootstrapResult> => {
     } catch (err) {
       console.log('[bootstrap] GetPlayerCombinedInfo failed:', err)
     }
+
+    await fetchDailyMissions()
 
     // Admin-editable config (currentSeasonCollectionId etc). Non-fatal:
     // season-menu.ts falls back to a sane default if this never arrives.

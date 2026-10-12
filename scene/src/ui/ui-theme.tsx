@@ -232,3 +232,25 @@ export const chip = (px: Px, fs: Px, text: string, color: Color4, bg: Color4 = C
 export const title = (fs: Px, text: string, size: number, height: number, color: Color4 = C.yellow) => (
   <Label value={text} fontSize={fs(size)} color={color} textAlign="middle-center" uiTransform={{ height }} textWrap="nowrap" />
 )
+
+// The "expand" glyph: four L-shaped corners drawn with thin bars, since the
+// UI has no vector icons. `size` is the glyph's side in px.
+export const ExpandIcon = ({ size, color }: { size: number; color: Color4 }) => {
+  const arm = Math.round(size * 0.38)
+  const thick = Math.max(2, Math.round(size * 0.14))
+  const bar = (left: number, top: number, width: number, height: number, key: string) => (
+    <UiEntity key={key} uiTransform={{ positionType: 'absolute', position: { left, top }, width, height }} uiBackground={{ color }} />
+  )
+  return (
+    <UiEntity uiTransform={{ width: size, height: size }}>
+      {bar(0, 0, arm, thick, 'tl-h')}
+      {bar(0, 0, thick, arm, 'tl-v')}
+      {bar(size - arm, 0, arm, thick, 'tr-h')}
+      {bar(size - thick, 0, thick, arm, 'tr-v')}
+      {bar(0, size - thick, arm, thick, 'bl-h')}
+      {bar(0, size - arm, thick, arm, 'bl-v')}
+      {bar(size - arm, size - thick, arm, thick, 'br-h')}
+      {bar(size - thick, size - arm, thick, arm, 'br-v')}
+    </UiEntity>
+  )
+}

@@ -31,8 +31,29 @@ export type LobbyResources = {
   loaded: boolean
 }
 
-export const lobbyHudState: { visible: boolean; resources: LobbyResources } = {
+// /api/get-daily-missions/:PlayFabId — five missions for the day, done in
+// order; the player's progress lives in PlayFab (index, step).
+export type DailyMission = {
+  alias: string
+  description: string
+  rewards: Record<string, number> | null
+}
+export type DailyMissionsData = {
+  state: { missions: DailyMission[] }
+  dailyMissionIndex: number
+  dailyMissionStep: number
+}
+
+export const lobbyHudState: {
+  visible: boolean
+  resources: LobbyResources
+  dailyMissions: DailyMissionsData | null
+  // The DAILY MISSIONS box on the strip toggles the panel (SDK6 state.open=2).
+  dailyMissionsOpen: boolean
+} = {
   visible: false,
+  dailyMissions: null,
+  dailyMissionsOpen: false,
   resources: {
     GC: 0,
     FT: 0,

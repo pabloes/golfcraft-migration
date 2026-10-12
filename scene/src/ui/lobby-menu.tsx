@@ -17,9 +17,8 @@ import { getPlayer } from '@dcl/sdk/players'
 import { globalStore } from '../services/globalStore/globalStore'
 import { lobbyHudState } from './lobby-hud-state'
 import { lobbyMenuState, closeLobbyMenu, openLobbyMenu } from './lobby-menu-state'
-import { hudGeometry } from './lobby-hud-layout'
 import { C, fmt, shortName, pressable, counter, chip } from './ui-theme'
-import { containLayout, scaler, hudScale, DESIGN_W, DESIGN_H, type Px } from './ui-scale'
+import { containLayout, scaler, DESIGN_W, DESIGN_H, type Px } from './ui-scale'
 import { seasonCatalog } from '../components/lobby/seasons/season-catalog'
 // @ts-ignore - common/utils has @ts-nocheck
 import { getCatFromTier, getPointsOnCurrentTier, getPointsToTier, getTierFromSub, seasonPointsPerCategory } from '../../../common/utils'
@@ -473,62 +472,4 @@ export const lobbyMenuInputSystem = () => {
   ) {
     closeLobbyMenu()
   }
-}
-
-// The "expand" glyph: four L-shaped corners drawn with thin bars, since the
-// UI has no vector icons. `size` is the glyph's side in px.
-const ExpandIcon = ({ size, color }: { size: number; color: Color4 }) => {
-  const arm = Math.round(size * 0.38)
-  const thick = Math.max(2, Math.round(size * 0.14))
-  const bar = (left: number, top: number, width: number, height: number, key: string) => (
-    <UiEntity key={key} uiTransform={{ positionType: 'absolute', position: { left, top }, width, height }} uiBackground={{ color }} />
-  )
-  return (
-    <UiEntity uiTransform={{ width: size, height: size }}>
-      {bar(0, 0, arm, thick, 'tl-h')}
-      {bar(0, 0, thick, arm, 'tl-v')}
-      {bar(size - arm, 0, arm, thick, 'tr-h')}
-      {bar(size - thick, 0, thick, arm, 'tr-v')}
-      {bar(0, size - thick, arm, thick, 'bl-h')}
-      {bar(0, size - arm, thick, arm, 'bl-v')}
-      {bar(size - arm, size - thick, arm, thick, 'br-h')}
-      {bar(size - thick, size - arm, thick, arm, 'br-v')}
-    </UiEntity>
-  )
-}
-
-// HUD button that brings the menu back once it has been closed. It hangs just
-// left of the resources panel (top-right HUD), top-aligned with its first row
-// of counters, and never above the explorer's interactable area.
-const MENU_BUTTON_GAP = 12
-export const MenuButton = () => {
-  if (!lobbyHudState.visible || lobbyMenuState.visible) return null
-  const { canvas, scale } = hudScale()
-  const g = hudGeometry(scale)
-  return (
-    <UiEntity
-      uiTransform={{
-        positionType: 'absolute',
-        position: { top: canvas.area.top + g.top, right: canvas.area.right + g.leftEdgeRight + MENU_BUTTON_GAP },
-        width: 118,
-        height: 50
-      }}
-    >
-      {pressable(
-        {
-          id: 'menu',
-          width: 118,
-          height: 40,
-          color: C.yellow,
-          radius: 12,
-          borderWidth: 3,
-          borderColor: C.dark,
-          shadow: 6,
-          onClick: openLobbyMenu
-        },
-        <ExpandIcon size={18} color={C.dark} />,
-        <Label value="MENU" fontSize={18} color={C.dark} textAlign="middle-center" uiTransform={{ height: 40, margin: { left: 8 } }} textWrap="nowrap" />
-      )}
-    </UiEntity>
-  )
 }
