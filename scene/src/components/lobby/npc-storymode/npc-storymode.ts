@@ -797,18 +797,26 @@ export const createNpcTest = (parent: Entity, opts: CreateNpcOptions): Entity | 
         }
       )
 
-    if (!room) {
-      console.log('[npc] No room returned, aborting mission start')
+    // Recovery for anything that fails between the fade to black and the
+    // course reveal: a rejected join (onAuth, CLAUDE.md §6 #21), a room state
+    // that never initialises, or a course that fails or hangs while loading
+    // (first seen on mobile). onStart() already destroyed the lobby and faded
+    // to black, so without this the player is stuck on a black screen. Reveal
+    // the world, stop the music, leave the room and respawn the lobby.
+    const abortMissionStart = async (reason: string, err?: any, roomToLeave?: any) => {
+      console.log('[npc] mission start aborted:', reason, err || '')
       gameState.starting = false
       gameState.playing = false
-      // Recover from a failed join (e.g. onAuth rejects because the player's
-      // server-side current_mission != the mission-1 we always request — see
-      // CLAUDE.md §6 #21). onStart() already destroyed the lobby and faded to
-      // black, so without this the player is stuck on a black screen. Reveal
-      // the world, stop the music, and respawn the lobby.
       stopMapMusic()
       fadeOutOverlay(1)
+      try {
+        roomToLeave?.leave()
+      } catch (_) {}
       await opts.onFinish()
+    }
+
+    if (!room) {
+      await abortMissionStart('no room returned')
       return
     }
 
@@ -833,7 +841,12 @@ export const createNpcTest = (parent: Entity, opts: CreateNpcOptions): Entity | 
     })
 
     console.log('[npc] waiting for initialised room state...')
-    await waitForInitialisedState(room)
+    try {
+      await withTimeout(waitForInitialisedState(room), 30000)
+    } catch (err) {
+      await abortMissionStart('room state never initialised', err, room)
+      return
+    }
     console.log('[npc] room state initialised. ball=', room.state.ball)
 
     // A guest, or a player whose PlayFab data didn't load, has no golfclub in
@@ -849,23 +862,36 @@ export const createNpcTest = (parent: Entity, opts: CreateNpcOptions): Entity | 
       golfclubs.find((item: any) => item.ItemId === 'golfclub-1') || { ItemId: 'golfclub-1' }
 
     console.log('[npc] creating clientGolfPlay with golfclub=', activeGolfClub.ItemId)
+    // The course load (physics parts, 200+ models, the teleport) is bounded:
+    // if it throws or takes over 90 s the start is aborted. Should a timed-out
+    // load still finish later, its result is disposed instead of popping up
+    // under the restored lobby.
+    let creationAborted = false
+    const creation = createClientGolfPlay(opts.root, {
+      gameType: 'training',
+      room,
+      gameDefinition,
+      golfclub: {
+        id: activeGolfClub.ItemId.replace('golfclub-', ''),
+        power: Number(activeGolfClub.CustomData?.attribute_power || 0),
+        control: Number(activeGolfClub.CustomData?.attribute_control || 0),
+        aim: Number(activeGolfClub.CustomData?.attribute_aim || 0)
+      },
+      colyseus: opts.colyseus,
+      expressionState
+    })
+    creation.then(
+      (late: any) => {
+        if (creationAborted && late?.dispose) late.dispose()
+      },
+      () => {}
+    )
     try {
-      clientGolfPlay = await createClientGolfPlay(opts.root, {
-        gameType: 'training',
-        room,
-        gameDefinition,
-        golfclub: {
-          id: activeGolfClub.ItemId.replace('golfclub-', ''),
-          power: Number(activeGolfClub.CustomData?.attribute_power || 0),
-          control: Number(activeGolfClub.CustomData?.attribute_control || 0),
-          aim: Number(activeGolfClub.CustomData?.attribute_aim || 0)
-        },
-        colyseus: opts.colyseus,
-        expressionState
-      })
+      clientGolfPlay = await withTimeout(creation, 90000)
       console.log('[npc] clientGolfPlay created')
     } catch (err) {
-      console.log('[npc] FAILED to create clientGolfPlay:', err)
+      creationAborted = true
+      await abortMissionStart('clientGolfPlay failed', err, room)
       return
     }
 

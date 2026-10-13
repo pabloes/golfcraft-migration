@@ -34,6 +34,7 @@ import {
   ORBIT_PITCH_MIN,
   ORBIT_ZOOM_SPEED
 } from '../../../src/config/controls'
+import { mobileShootState } from '../../../src/ui/mobile-shoot-state'
 
 type Vec3Like = { x: number; y: number; z: number }
 
@@ -105,7 +106,8 @@ export const createBallOrbitCamera = (
 
   function update(dt: number) {
     const mouse = pointerDelta()
-    const turn = pressed(InputAction.IA_RIGHT) - pressed(InputAction.IA_LEFT)
+    // The mobile touch panel's aim arrows count as A / D.
+    const turn = pressed(InputAction.IA_RIGHT) - pressed(InputAction.IA_LEFT) + mobileShootState.aimHold
     // W brings the camera in, S takes it out.
     const zoom = pressed(InputAction.IA_BACKWARD) - pressed(InputAction.IA_FORWARD)
 

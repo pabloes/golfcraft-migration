@@ -3,6 +3,8 @@ import { Vector3, Quaternion } from '@dcl/sdk/math'
 import * as utils from '@dcl-sdk/utils'
 import { createShootControlVisual } from './shoot-control-visual'
 import { CAMERA_AIM_MODE } from '../../../../src/config/controls'
+import { isMobile } from '../../../../src/services/platform'
+import { mobileShootState } from '../../../../src/ui/mobile-shoot-state'
 import { createControlHint } from './bottom-panel'
 // @ts-ignore - createState is plain TS, no SDK contact
 import { createState } from '../../../../state'
@@ -112,9 +114,19 @@ const createShootControl = (
   control.setPower(state.power)
   showBottomPanel()
   controlHint.setStep(0)
+  // Mobile touch panel (src/ui/mobile-shoot-controls.tsx): its SHOOT button
+  // takes the place of the click, which on a phone is any touch.
+  mobileShootState.shoot = () => onMouseDown()
+  let mobileHoldActive = false
 
   const unsubscribeStoreChange = store.onChange(() => {
     const s = store.getState() as ShootControlState
+    mobileShootState.visible = s.visible
+    mobileShootState.power = s.power
+    if (!s.visible) {
+      mobileShootState.aimHold = 0
+      mobileShootState.powerHold = 0
+    }
     control.setAngle(s.modifiedRotation)
     control.setPower(s.power)
     if (s.visible) {
@@ -195,7 +207,25 @@ const createShootControl = (
     }
     if (fDown) state.fPressed = true
     if (fUp) state.fPressed = false
-    if (click) onMouseDown()
+    if (isMobile()) {
+      // A held power button is the held key; releasing it releases the key.
+      const hold = mobileShootState.powerHold
+      if (hold !== 0) {
+        state.ePressed = hold > 0
+        state.fPressed = hold < 0
+        mobileHoldActive = true
+      } else if (mobileHoldActive) {
+        state.ePressed = false
+        state.fPressed = false
+        mobileHoldActive = false
+      }
+      // Without the orbit camera the arrows turn the shot itself.
+      if (!CAMERA_AIM_MODE && mobileShootState.aimHold && s.step === 1) {
+        store.setState({ rotation: s.rotation + mobileShootState.aimHold * s.VELOCITY })
+      }
+    } else if (click) {
+      onMouseDown()
+    }
 
     if (XOR(state.ePressed, state.fPressed)) {
       state.VELOCITY = Math.min(MAX_VELOCITY, state.VELOCITY + dt * 2)
@@ -282,6 +312,10 @@ const createShootControl = (
       callbacks.onShoot = null
       callbacks.onFinishShootAnimation = null
       controlHint.hide()
+      mobileShootState.shoot = null
+      mobileShootState.visible = false
+      mobileShootState.aimHold = 0
+      mobileShootState.powerHold = 0
       control.dispose()
       engine.removeSystem(update)
     },

@@ -15,6 +15,7 @@ import { seasonClockState, seasonResultsState, seasonCountdownState, seasonHoleS
 import { C, hex, fmt, mmss } from './ui-theme'
 import { hudScale, type Px } from './ui-scale'
 import { CAMERA_AIM_MODE } from '../config/controls'
+import { isMobile } from '../services/platform'
 
 // ---------------------------------------------------------------------------
 // A labelled stat box: small caption on top, big value under it.
@@ -251,7 +252,8 @@ const helpItem = (px: Px, fs: Px, keys: ReactEcs.JSX.Element[], what: string) =>
 )
 
 export const ControlsHelp = () => {
-  if (!controlHintState.visible) return null
+  // Keyboard and mouse hints: nothing to say on a phone.
+  if (!controlHintState.visible || isMobile()) return null
   const { canvas, s } = hudScale()
   const { px, fs } = s
   const items: ReactEcs.JSX.Element[] = []

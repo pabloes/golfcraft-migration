@@ -258,25 +258,14 @@ export const createSeasonMenu = async (
     }
   }
 
+  // Deviation from SDK6 (user request, 2026-10-12): the Season no longer waits
+  // for Dr. Par's missions (SDK6 hid the panel until current_mission >= 6).
   function refreshInner() {
     const userData = globalStore.userData.getState()
-    const currentMission = userData['statistic_current_mission'] || 0
     const userTierSub = userData['statistic_tier-sub'] || 0
     const tier = getTierFromSub(userTierSub)
     const tierDefinition = seasonTierDefinitions[tier || 0]
     const text = TextShape.getMutableOrNull(textWrapper)
-
-    if (!currentMission || currentMission < 6) {
-      emblem.hide()
-      playButton.hide()
-      friendsButton.hide()
-      setFriendsLabel('')
-      if (text) {
-        text.text =
-          'MOUNTAIN SEASON\n\n\n\nYou need to complete\nDr. Par initial missions\nbefore participating on\nSeason competition'
-      }
-      return
-    }
 
     emblem.show()
     emblem.setImage(`images/season-badges/${tier || 0}.png`)
@@ -304,11 +293,9 @@ export const createSeasonMenu = async (
   // follows the same energy rule (a run costs 1 EN per player) and takes Play's
   // place while the player is committed to a party.
   function refreshFriendsButton() {
-    const userData = globalStore.userData.getState()
-    const currentMission = userData['statistic_current_mission'] || 0
     const energy = lobbyHudState.resources.EN || 0
 
-    if (!currentMission || currentMission < 6 || !energy || !seasonParty) {
+    if (!energy || !seasonParty) {
       friendsButton.hide()
       setFriendsLabel('')
       hideCancelButton()

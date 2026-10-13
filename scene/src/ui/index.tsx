@@ -13,7 +13,8 @@ import { MissionTimer, HoleStats, LiveRanking, PowerColumn, ControlsHelp, MapFoo
 import { LobbyHud } from './lobby-hud'
 import { ATLAS, spriteUvs } from './sprites'
 import { JoiningScreen, PartyScreen, HoleResultScreen, RunCompleteScreen } from './season-screens'
-import { containLayout, scaler } from './ui-scale'
+import { containLayout, scaler, isSmallCanvas } from './ui-scale'
+import { MobileShootControls } from './mobile-shoot-controls'
 
 // SDK6 game.ts called initializeIntroScreen() on startup. It used UICanvas +
 // UIImage from the legacy DCL UI; here we port the same flow to ReactEcs.
@@ -26,6 +27,7 @@ const ui = () => (
     <LiveRanking />
     <PowerColumn />
     <ControlsHelp />
+    <MobileShootControls />
     <MapFooter />
     <LobbyMenu />
     <IntroScreen />
@@ -95,24 +97,31 @@ const CenterPopup = () => {
 
 const IntroScreen = () => {
   if (!globalStore.game.getState().introScreen) return null
-  const { scale } = containLayout()
+  // Contained like the lobby dialog, except on a small canvas (phones), where
+  // the 1280x720 contain scale leaves the 708x543 card unreadable: there it
+  // grows to about 62 % of the screen height and hugs the top, which keeps it
+  // clear of the explorer's touch controls in the bottom corners.
+  const L = containLayout()
+  const small = isSmallCanvas(L.scale)
+  const fit = Math.min(((L.canvas.width - 24) / 708) * 0.95, (L.canvas.height / 543) * 0.62)
+  const scale = small ? Math.max(L.scale, fit) : L.scale
+  const cardW = 708 * scale
+  const cardH = 543 * scale
+  const left = L.canvas.area.left + (L.canvas.availW - cardW) / 2
+  const top = small ? L.canvas.area.top + 12 : L.canvas.area.top + (L.canvas.availH - cardH) / 2
 
   return (
     <UiEntity
-      uiTransform={{
-        width: '100%',
-        height: '100%',
-        positionType: 'absolute',
-        justifyContent: 'center',
-        alignItems: 'center'
-      }}
+      uiTransform={{ width: '100%', height: '100%', positionType: 'absolute' }}
       uiBackground={{ color: Color4.create(0, 0, 0, 0.85) }}
       onMouseDown={skipIntro}
     >
       <UiEntity
         uiTransform={{
-          width: 708 * scale,
-          height: 543 * scale
+          positionType: 'absolute',
+          position: { left, top },
+          width: cardW,
+          height: cardH
         }}
         uiBackground={{
           texture: { src: 'images/intro-screen.png' },

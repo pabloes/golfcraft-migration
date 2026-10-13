@@ -27,6 +27,7 @@ import { getCatFromTier, getPointsOnCurrentTier, getPointsToTier, getTierFromSub
 import { TIER_CATEGORIES } from '../../../common/constants'
 // @ts-ignore - season-tier-definitions has @ts-nocheck
 import { seasonTierDefinitions } from '../../../common/season-tier-definitions'
+import { isMobile } from '../services/platform'
 
 const MARGIN = 16 // keeps the border off the interactable area's edges
 const HINT_H = 40 // the "Press E or F to close" line under the panel
@@ -57,7 +58,9 @@ export const LobbyMenu = () => {
 
   // Keeps the 1280x720 proportion, as large as fits in the interactable area,
   // with the "Press E or F to close" line reserved under it.
-  const L = containLayout(DESIGN_W, DESIGN_H, { margin: MARGIN, reserveBottom: HINT_H })
+  // The E / F hint is a desktop thing; on a phone the X closes the dialog.
+  const mobile = isMobile()
+  const L = containLayout(DESIGN_W, DESIGN_H, { margin: MARGIN, reserveBottom: mobile ? 0 : HINT_H })
   const { px, fs } = scaler(L.scale)
 
   const r = lobbyHudState.resources
@@ -80,9 +83,8 @@ export const LobbyMenu = () => {
 
   const currentMission = Number(userData['statistic_current_mission'] || 1)
   const tutorialDone = currentMission > TUTORIAL_STEPS
-  const seasonUnlocked = currentMission >= 6
   const energy = r.EN || 0
-  const canPlay = seasonUnlocked && energy > 0 && !!lobbyMenuState.actions.playSeason
+  const canPlay = energy > 0 && !!lobbyMenuState.actions.playSeason
   const friendsLabel = lobbyMenuState.actions.friendsLabel ? lobbyMenuState.actions.friendsLabel() : ''
   const canFriends = canPlay && !!lobbyMenuState.actions.playWithFriends && friendsLabel !== ''
 
@@ -178,7 +180,7 @@ export const LobbyMenu = () => {
               </UiEntity>
             </UiEntity>
             <Label
-              value={seasonUnlocked ? 'Race 3 ghost players over 4 holes. Win to climb.' : "Finish Dr. Par's first missions to unlock the Season."}
+              value="Race 3 ghost players over 4 holes. Win to climb."
               fontSize={fs(18)}
               color={C.lilac}
               textAlign="middle-left"
@@ -283,7 +285,7 @@ export const LobbyMenu = () => {
                 <Label value="PLAY" fontSize={fs(36)} color={C.dark} textAlign="middle-center" uiTransform={{ height: px(72) }} textWrap="nowrap" />,
                 <UiEntity uiTransform={{ height: px(30), margin: { left: px(12) }, padding: { left: px(10), right: px(10) }, borderRadius: px(10), justifyContent: 'center' }} uiBackground={{ color: C.dark }}>
                   <Label
-                    value={seasonUnlocked ? (energy > 0 ? '1 energy' : 'no energy') : 'locked'}
+                    value={energy > 0 ? '1 energy' : 'no energy'}
                     fontSize={fs(16)}
                     color={C.cyan}
                     textAlign="middle-center"
@@ -419,18 +421,20 @@ export const LobbyMenu = () => {
 
       {/* Outside the dialog, as the design asks; it names the real keys, and
           it stays inside the interactable area because HINT_H was reserved. */}
-      <UiEntity
-        uiTransform={{
-          positionType: 'absolute',
-          position: { left: L.left, top: L.top + L.panelH + 6 },
-          width: L.panelW,
-          height: HINT_H - 6,
-          justifyContent: 'center',
-          alignItems: 'center'
-        }}
-      >
-        <Label value="Press E or F to close" fontSize={16} color={C.white} textAlign="middle-center" uiTransform={{ height: HINT_H - 6 }} textWrap="nowrap" />
-      </UiEntity>
+      {mobile ? null : (
+        <UiEntity
+          uiTransform={{
+            positionType: 'absolute',
+            position: { left: L.left, top: L.top + L.panelH + 6 },
+            width: L.panelW,
+            height: HINT_H - 6,
+            justifyContent: 'center',
+            alignItems: 'center'
+          }}
+        >
+          <Label value="Press E or F to close" fontSize={16} color={C.white} textAlign="middle-center" uiTransform={{ height: HINT_H - 6 }} textWrap="nowrap" />
+        </UiEntity>
+      )}
     </UiEntity>
   )
 }

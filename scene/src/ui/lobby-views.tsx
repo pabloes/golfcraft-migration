@@ -240,7 +240,7 @@ export const TutorialView = () => {
     <UiEntity uiTransform={{ width: '100%', height: px(372), flexDirection: 'row', margin: { top: px(16) } }}>
       {/* Mission map */}
       <UiEntity
-        uiTransform={{ flexGrow: 1, height: '100%', borderRadius: px(26), borderWidth: Math.max(2, px(4)), borderColor: C.dark }}
+        uiTransform={{ width: px(DESIGN_W - 56 - 20 - 300), height: '100%', borderRadius: px(26), borderWidth: Math.max(2, px(4)), borderColor: C.dark }}
         uiBackground={{ color: SAND }}
       >
         {mapPath(px)}
@@ -280,7 +280,7 @@ export const TutorialView = () => {
       ])}
     </UiEntity>,
     /* Dr. Par */
-    panelFrame(px, { width: '100%', grow: true, column: false, margin: { top: px(16) }, padding: { left: px(18), right: px(26) }, align: 'center' }, C.white, [
+    panelFrame(px, { width: '100%', height: px(DESIGN_H - 22 - 24 - 66 - 16 - 372 - 16), column: false, margin: { top: px(16) }, padding: { left: px(18), right: px(26) }, align: 'center' }, C.white, [
       <UiEntity
         uiTransform={{ width: px(130), height: px(130), borderRadius: px(65), borderWidth: Math.max(2, px(5)), borderColor: C.dark, padding: px(6) }}
         uiBackground={{ color: C.teal }}
@@ -628,7 +628,7 @@ export const WorkshopView = () => {
       ])}
       <UiEntity uiTransform={{ width: px(22) }} />
       {/* Attributes */}
-      <UiEntity uiTransform={{ flexGrow: 1, height: '100%', flexDirection: 'column' }}>
+      <UiEntity uiTransform={{ width: px(DESIGN_W - 56 - 250 - 22 - 380 - 22), height: '100%', flexDirection: 'column' }}>
         <Label value="ATTRIBUTES" fontSize={fs(16)} color={BLUE_TEXT} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(24), margin: { bottom: px(10) } }} />
         {attributeRow('power')}
         {attributeRow('control')}
@@ -1013,7 +1013,7 @@ export const DailyMissionsView = () => {
     ]),
     <UiEntity uiTransform={{ width: '100%', flexGrow: 1, flexDirection: 'row', margin: { top: px(18) } }}>
       {/* Today's missions */}
-      <UiEntity uiTransform={{ flexGrow: 1, flexBasis: 0, height: '100%', flexDirection: 'column' }}>
+      <UiEntity uiTransform={{ width: px(DESIGN_W - 56 - 22 - DAILY_SIDE_W), height: '100%', flexDirection: 'column' }}>
         {missions.length ? (
           missions.map((m, i) => card(m, i))
         ) : (

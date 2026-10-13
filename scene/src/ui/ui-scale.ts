@@ -67,15 +67,25 @@ export const containLayout = (
   const scale = Math.max(0.1, Math.min(availW / designW, availH / designH))
   const panelW = designW * scale
   const panelH = designH * scale
+  // On a small canvas (phones) the explorer's touch controls sit over the
+  // bottom corners and are not part of the interactable area it reports, so
+  // a centred panel lands on them. There the panel hugs the top instead.
+  const top = isSmallCanvas(scale) ? canvas.area.top + margin : canvas.area.top + margin + (availH - panelH) / 2
   return {
     canvas,
     scale,
     panelW,
     panelH,
     left: canvas.area.left + margin + (availW - panelW) / 2,
-    top: canvas.area.top + margin + (availH - panelH) / 2
+    top
   }
 }
+
+// A canvas where the 1280x720 design has to shrink below 80 %: phones in
+// landscape (and very small desktop windows). Layouts move up and the intro
+// card grows there.
+export const SMALL_CANVAS_SCALE = 0.8
+export const isSmallCanvas = (containScale: number) => containScale < SMALL_CANVAS_SCALE
 
 // Design px -> canvas px, and the same for font sizes (never under MIN_FONT).
 export type Px = (n: number) => number
