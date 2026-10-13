@@ -35,6 +35,7 @@ import {
   ORBIT_ZOOM_SPEED
 } from '../../../src/config/controls'
 import { mobileShootState } from '../../../src/ui/mobile-shoot-state'
+import { isMobile } from '../../../src/services/platform'
 
 type Vec3Like = { x: number; y: number; z: number }
 
@@ -48,6 +49,11 @@ type Options = {
 }
 
 const pressed = (action: InputAction) => (inputSystem.isPressed(action) ? 1 : 0)
+// Degrees per second while a pitch arrow is held on mobile.
+const ORBIT_PITCH_KEY_SPEED = 45
+// How fast the camera catches up with a touch drag on mobile (1/s): about
+// 90 % of the way in a quarter of a second.
+const ORBIT_TOUCH_EASE = 9
 
 // Zoom and tilt carry over from one hole to the next; only the heading starts
 // again from each tee.
@@ -62,11 +68,18 @@ export const createBallOrbitCamera = (
   // Degrees. Yaw uses the shoot control's convention: the shot leaves along
   // (sin yaw, 0, cos yaw), and the camera sits on the opposite side of the ball.
   let yaw = Quaternion.toEulerAngles(Quaternion.create(rx, ry, rz, rw)).y
+  // Input moves these; yaw / pitch follow them. On desktop they snap (the
+  // mouse is already smooth); on phones they ease in, because the scene only
+  // sees the finger once per tick and applying each step at once made a drag
+  // look jerky.
+  let targetYaw = yaw
+  let targetPitch = pitch
 
   const start = getBallPosition()
   // What the camera circles: the ball, slightly smoothed so bounces don't shake it.
   let centre = Vector3.create(start.x, start.y, start.z)
   let lastPointer: { x: number; y: number } | null = null
+  let touchDown = false
 
   const camera = engine.addEntity()
   Transform.create(camera, { parent })
@@ -96,6 +109,22 @@ export const createBallOrbitCamera = (
     const at = pointer.screenCoordinates
     const previous = lastPointer
     lastPointer = at ? { x: at.x, y: at.y } : null
+    if (isMobile()) {
+      // Touch: a finger landing somewhere else must not swing the camera, so
+      // only a finger that was already down counts, and one tick is capped so
+      // a flick cannot spin it. Explorers that report no touch position give
+      // zero, and the panel's arrows do the job instead.
+      const down = inputSystem.isPressed(InputAction.IA_POINTER)
+      const wasDown = touchDown
+      touchDown = down
+      if (!down || !wasDown || !at || !previous) return { x: 0, y: 0 }
+      // Only a guard against a glitched sample; the easing does the rest.
+      const cap = 160
+      return {
+        x: Math.max(-cap, Math.min(cap, at.x - previous.x)),
+        y: Math.max(-cap, Math.min(cap, at.y - previous.y))
+      }
+    }
     if (at && previous && (at.x !== previous.x || at.y !== previous.y)) {
       return { x: at.x - previous.x, y: at.y - previous.y }
     }
@@ -111,11 +140,20 @@ export const createBallOrbitCamera = (
     // W brings the camera in, S takes it out.
     const zoom = pressed(InputAction.IA_BACKWARD) - pressed(InputAction.IA_FORWARD)
 
-    yaw += mouse.x * ORBIT_MOUSE_SENSITIVITY + turn * ORBIT_KEY_SPEED * dt
+    targetYaw += mouse.x * ORBIT_MOUSE_SENSITIVITY + turn * ORBIT_KEY_SPEED * dt
     // Screen Y grows upwards in the desktop client, so pushing the mouse up
     // raises the camera over the ball.
-    pitch += mouse.y * ORBIT_MOUSE_SENSITIVITY
-    pitch = Math.max(ORBIT_PITCH_MIN, Math.min(ORBIT_PITCH_MAX, pitch))
+    // The mobile panel's ^ / v arrows raise and lower the camera.
+    targetPitch += mouse.y * ORBIT_MOUSE_SENSITIVITY + mobileShootState.pitchHold * ORBIT_PITCH_KEY_SPEED * dt
+    targetPitch = Math.max(ORBIT_PITCH_MIN, Math.min(ORBIT_PITCH_MAX, targetPitch))
+    if (isMobile()) {
+      const ease = 1 - Math.exp(-ORBIT_TOUCH_EASE * dt)
+      yaw += (targetYaw - yaw) * ease
+      pitch += (targetPitch - pitch) * ease
+    } else {
+      yaw = targetYaw
+      pitch = targetPitch
+    }
     distance += zoom * ORBIT_ZOOM_SPEED * dt
     distance = Math.max(ORBIT_DISTANCE_MIN, Math.min(ORBIT_DISTANCE_MAX, distance))
 

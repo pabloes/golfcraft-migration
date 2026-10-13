@@ -49,6 +49,7 @@ import { createInGameResultsUi, createInGameTime } from './ingame-ui'
 import { seasonCountdownState, seasonHoleState, hideSeasonHud } from '../../ui/season-hud-state'
 import { createBallOrbitCamera } from '../../../golfplay/src/components/orbit-camera'
 import { CAMERA_AIM_MODE } from '../../config/controls'
+import { mobileShootState } from '../../ui/mobile-shoot-state'
 
 const REWARD_NAMES: any = {
   WD: 'wood',
@@ -693,8 +694,20 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
       }
     }
 
+    // Mobile QUIT button (src/ui/mobile-shoot-controls.tsx): leaving the room
+    // ends the hole for this player the same way a server kick does
+    // (room.onLeave -> the finish handler).
+    mobileShootState.quit = () => {
+      try {
+        room.leave()
+      } catch (err) {
+        console.log('[golfplay] leave failed', err)
+      }
+    }
     function dispose() {
       disposed = true
+      mobileShootState.quit = null
+      mobileShootState.quitConfirm = false
       pingDisposed = true
       clearInterval(pingInterval)
       clearGhostTimers()

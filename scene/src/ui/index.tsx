@@ -15,6 +15,7 @@ import { ATLAS, spriteUvs } from './sprites'
 import { JoiningScreen, PartyScreen, HoleResultScreen, RunCompleteScreen } from './season-screens'
 import { containLayout, scaler, isSmallCanvas } from './ui-scale'
 import { MobileShootControls } from './mobile-shoot-controls'
+import { isMobile } from '../services/platform'
 
 // SDK6 game.ts called initializeIntroScreen() on startup. It used UICanvas +
 // UIImage from the legacy DCL UI; here we port the same flow to ReactEcs.
@@ -97,18 +98,23 @@ const CenterPopup = () => {
 
 const IntroScreen = () => {
   if (!globalStore.game.getState().introScreen) return null
-  // Contained like the lobby dialog, except on a small canvas (phones), where
-  // the 1280x720 contain scale leaves the 708x543 card unreadable: there it
-  // grows to about 62 % of the screen height and hugs the top, which keeps it
-  // clear of the explorer's touch controls in the bottom corners.
+  // Contained like the lobby dialog on desktop. On phones and tablets the
+  // card is text to read once and dismiss with a tap, so it takes 90 % of the
+  // screen height (it may run under the corners of the touch controls, which
+  // are drawn on top anyway). A very small desktop window gets 62 %, top.
   const L = containLayout()
-  const small = isSmallCanvas(L.scale)
-  const fit = Math.min(((L.canvas.width - 24) / 708) * 0.95, (L.canvas.height / 543) * 0.62)
-  const scale = small ? Math.max(L.scale, fit) : L.scale
+  const c = L.canvas
+  const mobile = isMobile()
+  const small = !mobile && isSmallCanvas(L.scale)
+  const scale = mobile
+    ? Math.min((c.height * 0.9) / 543, (c.width * 0.96) / 708)
+    : small
+      ? Math.max(L.scale, Math.min(((c.width - 24) / 708) * 0.95, (c.height / 543) * 0.62))
+      : L.scale
   const cardW = 708 * scale
   const cardH = 543 * scale
-  const left = L.canvas.area.left + (L.canvas.availW - cardW) / 2
-  const top = small ? L.canvas.area.top + 12 : L.canvas.area.top + (L.canvas.availH - cardH) / 2
+  const left = mobile ? (c.width - cardW) / 2 : c.area.left + (c.availW - cardW) / 2
+  const top = mobile ? (c.height - cardH) / 2 : small ? c.area.top + 12 : c.area.top + (c.availH - cardH) / 2
 
   return (
     <UiEntity

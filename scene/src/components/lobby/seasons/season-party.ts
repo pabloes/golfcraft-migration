@@ -76,7 +76,7 @@ export const createSeasonParty = async (
 
   syncUi()
 
-  return { click, cancel, getLabel, getCancelLabel, isBusy, dispose }
+  return { click, cancel, getLabel, getCancelLabel, getAction, isBusy, isHost, dispose }
 
   // The first state patch can land after the join resolves, so nothing may read
   // lobby.state without this guard.
@@ -84,15 +84,21 @@ export const createSeasonParty = async (
     return !!lobby.state?.members
   }
 
-  // One button, two actions: join the waiting party if there is one, otherwise
-  // open a new one.
+  // One button, three actions (getAction): LEAVE the party I am in, JOIN the
+  // waiting one, or CREATE a new one.
   function click() {
     if (playing || !hasState()) return
     if (!address) {
       showMessage({ timeout: 4000, message: 'Connect a wallet to play ranked' })
       return
     }
-    if (isMember()) return
+    if (isMember()) {
+      // Stepping out; if I was the host the next member takes the seat.
+      lobby.send(MESSAGE.PARTY_LEAVE)
+      hideWait()
+      notifyChange()
+      return
+    }
     if (lobby.state.starting) {
       showMessage({ timeout: 4000, message: 'That party is already starting' })
       return
@@ -121,6 +127,17 @@ export const createSeasonParty = async (
     return isHost() ? 'CANCEL PARTY' : 'LEAVE PARTY'
   }
 
+  // What the party button does right now; drives its artwork
+  // (images/button-{create,join,leave}.png). 'busy' = nothing to do (a party
+  // is starting, or I am playing).
+  function getAction(): 'create' | 'join' | 'leave' | 'busy' {
+    if (playing) return 'busy'
+    if (!hasState()) return 'create'
+    if (isMember()) return 'leave'
+    if (lobby.state.starting) return 'busy'
+    return lobby.state.open ? 'join' : 'create'
+  }
+
   // The caption carries the same countdown the waiting screen shows, so the
   // panel alone tells you how long is left to join (or before the party is
   // dropped for being alone).
@@ -136,7 +153,7 @@ export const createSeasonParty = async (
     }
     if (lobby.state.starting) return 'PARTY STARTING...'
     if (lobby.state.open) return `JOIN PARTY (${count}/${MAX_PARTY_PLAYERS}) ${seconds}s`
-    return 'PLAY WITH FRIENDS'
+    return 'CREATE PARTY'
   }
 
   // The season panel hides its solo Play button while the player is committed

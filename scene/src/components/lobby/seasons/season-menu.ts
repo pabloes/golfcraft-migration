@@ -90,16 +90,18 @@ export const createSeasonMenu = async (
   // migrated, so it would drop the player into an area that doesn't exist —
   // left out on purpose. Restore it together with the tournament lobby.
 
-  // NOT in SDK6: "play ranked with friends" (CLAUDE.md §12). It reuses the Play
-  // artwork — there is no sprite for it — with a caption underneath that doubles
-  // as the party status ("JOIN PARTY (2/4)", "WAITING FRIENDS"...).
+  // NOT in SDK6: "play ranked with friends" (CLAUDE.md §12). Its face says
+  // what it does right now, CREATE / JOIN / LEAVE (images/button-*.png, drawn
+  // in the PLAY sprite's style), with a caption underneath for the party
+  // status ("JOIN PARTY (2/4) 41s", "WAITING FRIENDS..."...).
   const friendsButton = createImageButton(entity, {
     position: Vector3.create(-0.8, 1.3, -0.1),
     scale: Vector3.create(1, 0.4, 1),
     rotation: Quaternion.Identity(),
-    imageSrc: 'images/button-play.png',
+    imageSrc: 'images/button-create.png',
     hoverText: 'Play ranked with friends'
   })
+  let friendsImage = 'create'
   const friendsLabel = engine.addEntity()
   Transform.create(friendsLabel, { parent: entity, position: Vector3.create(-0.8, 1.04, -0.11) })
   TextShape.create(friendsLabel, {
@@ -181,6 +183,7 @@ export const createSeasonMenu = async (
     cancelButton.onClick(() => seasonParty.cancel())
     lobbyMenuState.actions.playWithFriends = () => seasonParty.click()
     lobbyMenuState.actions.friendsLabel = () => seasonParty.getLabel()
+    lobbyMenuState.actions.friendsAction = () => seasonParty.getAction()
   } catch (err) {
     console.log('[season] party lobby unavailable', err)
   }
@@ -303,13 +306,28 @@ export const createSeasonMenu = async (
       return
     }
 
-    friendsButton.show()
+    const action = seasonParty.getAction()
+    if (action === 'busy') {
+      friendsButton.hide()
+    } else {
+      if (action !== friendsImage) {
+        friendsImage = action
+        friendsButton.setImage(`images/button-${action}.png`)
+      }
+      friendsButton.show()
+    }
     setFriendsLabel(seasonParty.getLabel())
 
     if (seasonParty.isBusy()) {
       playButton.hide()
-      cancelButton.show()
-      setCancelLabel(seasonParty.getCancelLabel())
+      // The host's way to drop the whole party; everyone else just LEAVEs
+      // with the party button.
+      if (seasonParty.isHost()) {
+        cancelButton.show()
+        setCancelLabel(seasonParty.getCancelLabel())
+      } else {
+        hideCancelButton()
+      }
     } else {
       playButton.show()
       hideCancelButton()
@@ -336,6 +354,7 @@ export const createSeasonMenu = async (
     lobbyMenuState.actions.playSeason = null
     lobbyMenuState.actions.playWithFriends = null
     lobbyMenuState.actions.friendsLabel = null
+    lobbyMenuState.actions.friendsAction = null
     seasonParty?.dispose()
     emblem.dispose()
     playButton.dispose()

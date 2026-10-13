@@ -32,6 +32,7 @@ import { showMessage } from './server-notification'
 import { createFixBugButton as createFixBugButtonStub } from './golfplay-client-season'
 import { createBallOrbitCamera } from '../../../golfplay/src/components/orbit-camera'
 import { CAMERA_AIM_MODE } from '../../config/controls'
+import { mobileShootState } from '../../ui/mobile-shoot-state'
 
 const REWARD_NAMES: any = {
   WD: 'wood',
@@ -151,6 +152,16 @@ const GolfplayClientFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: string })
       }
     })
 
+    // Mobile QUIT button (src/ui/mobile-shoot-controls.tsx): leaving the room
+    // ends the hole for this player the same way a server kick does
+    // (room.onLeave -> the finish handler).
+    mobileShootState.quit = () => {
+      try {
+        room.leave()
+      } catch (err) {
+        console.log('[golfplay] leave failed', err)
+      }
+    }
     // CAMERA_AIM_MODE: circles the ball for the whole hole and gives the shoot
     // control its aim (see orbit-camera.ts). Null in the classic scheme.
     const orbitCam = CAMERA_AIM_MODE
@@ -513,6 +524,8 @@ const GolfplayClientFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: string })
 
     function dispose() {
       pingDisposed = true
+      mobileShootState.quit = null
+      mobileShootState.quitConfirm = false
       fixBug.hide()
       clearInterval(pingInterval)
       visualChests.forEach((v: any) => v.dispose())

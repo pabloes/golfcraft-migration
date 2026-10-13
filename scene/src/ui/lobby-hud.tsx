@@ -16,7 +16,8 @@ import { Color4 } from '@dcl/sdk/math'
 
 import { lobbyHudState, renderCount, DailyMissionsData } from './lobby-hud-state'
 import { ATLAS, spriteUvs } from './sprites'
-import { hudScale, type Px } from './ui-scale'
+import { hudScale, scaler, type Px } from './ui-scale'
+import { isMobile } from '../services/platform'
 import { C, ExpandIcon, pointerState, pressable } from './ui-theme'
 import { lobbyMenuState, openLobbyMenu } from './lobby-menu-state'
 import {
@@ -127,7 +128,14 @@ const DailyMissionsPanel = ({ data, px, fs }: { data: DailyMissionsData | null; 
 export const LobbyHud = () => {
   if (!lobbyHudState.visible) return null
   const r = lobbyHudState.resources
-  const { canvas, s } = hudScale()
+  const hud = hudScale()
+  const canvas = hud.canvas
+  // Phones: the contain scale (and the interactable area the explorer
+  // reports) leave the sprite panels unreadable and short of the right edge.
+  // There the strip takes the whole height and sits flush right; its column
+  // is clear of the explorer's buttons, which end well before the edge.
+  const mobile = isMobile()
+  const s = mobile ? scaler(Math.min(1, (canvas.height - 16) / HUD_H)) : hud.s
   const { px, fs } = s
 
   // The materials panel sprite (1360,1797,564x183) has all icons baked in:
@@ -171,7 +179,7 @@ export const LobbyHud = () => {
     <UiEntity
       uiTransform={{
         positionType: 'absolute',
-        position: { top: canvas.area.top, right: canvas.area.right },
+        position: mobile ? { top: 8, right: 8 } : { top: canvas.area.top, right: canvas.area.right },
         // Wide enough for the daily missions panel, which opens to the left
         // of the strip; the MENU button still aligns to HUD_W.
         width: px(Math.max(HUD_W, DAILY_PANEL_RIGHT + DAILY_PANEL_W)),

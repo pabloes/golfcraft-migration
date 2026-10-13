@@ -13,9 +13,11 @@ import { topbarState, formatTopBarTime } from './topbar-state'
 import { powerBarState, controlHintState } from './shoot-hud-state'
 import { seasonClockState, seasonResultsState, seasonCountdownState, seasonHoleState, SeasonResultRow } from './season-hud-state'
 import { C, hex, fmt, mmss } from './ui-theme'
-import { hudScale, type Px } from './ui-scale'
+import { hudScale, type Canvas, type Px } from './ui-scale'
 import { CAMERA_AIM_MODE } from '../config/controls'
 import { isMobile } from '../services/platform'
+import { mobileShootState } from './mobile-shoot-state'
+import { scaler } from './ui-scale'
 
 // ---------------------------------------------------------------------------
 // A labelled stat box: small caption on top, big value under it.
@@ -41,12 +43,17 @@ const statBox = (px: Px, fs: Px, w: number, caption: string, value: string, bg: 
 
 // Storymode missions keep their own single timer (topbarState); a season hole
 // shows HOLE, TIME and SHOTS together. Neither block exists outside a hole.
+// Left edge of the HOLE / TIME / SHOTS row and the live ranking. On phones and
+// tablets the reported interactable area pushed them toward the centre, onto
+// the map name; there they start just right of the avatar + chat buttons.
+const hudLeft = (canvas: Canvas, px: Px) => (isMobile() ? canvas.width * 0.2 : canvas.area.left + px(24))
+
 export const MissionTimer = () => {
   if (!topbarState.visible) return null
   const { canvas, s } = hudScale()
   const { px, fs } = s
   return (
-    <UiEntity uiTransform={{ positionType: 'absolute', position: { top: canvas.area.top + px(22), left: canvas.area.left + px(24) }, flexDirection: 'row' }}>
+    <UiEntity uiTransform={{ positionType: 'absolute', position: { top: canvas.area.top + px(22), left: hudLeft(canvas, px) }, flexDirection: 'row' }}>
       {statBox(px, fs, px(104), 'TIME', formatTopBarTime(topbarState.ms), C.panelDim, false)}
     </UiEntity>
   )
@@ -58,7 +65,7 @@ export const HoleStats = () => {
   const { px, fs } = s
   const me = seasonResultsState.rows.find((row) => row.isMe)
   return (
-    <UiEntity uiTransform={{ positionType: 'absolute', position: { top: canvas.area.top + px(22), left: canvas.area.left + px(24) }, flexDirection: 'row' }}>
+    <UiEntity uiTransform={{ positionType: 'absolute', position: { top: canvas.area.top + px(22), left: hudLeft(canvas, px) }, flexDirection: 'row' }}>
       {statBox(px, fs, px(112), 'HOLE', `${seasonHoleState.current} / ${seasonHoleState.total}`, C.purple, true)}
       {statBox(px, fs, px(104), 'TIME', mmss(seasonClockState.ms), C.panelDim, false)}
       {statBox(px, fs, px(96), 'SHOTS', String(me ? me.shots : 0), C.panelDim, false)}
@@ -79,8 +86,9 @@ export const EndingBanner = () => {
     <UiEntity
       uiTransform={{
         positionType: 'absolute',
-        position: { top: canvas.area.top + px(22), left: canvas.area.left },
-        width: canvas.availW,
+        // Phones: under the map name, which sits top-centre there.
+        position: isMobile() ? { top: 8 + px(84), left: 0 } : { top: canvas.area.top + px(22), left: canvas.area.left },
+        width: isMobile() ? canvas.width : canvas.availW,
         justifyContent: 'center'
       }}
     >
@@ -122,7 +130,7 @@ export const LiveRanking = () => {
     <UiEntity
       uiTransform={{
         positionType: 'absolute',
-        position: { top: canvas.area.top + px(128), left: canvas.area.left + px(24) },
+        position: { top: canvas.area.top + px(128), left: hudLeft(canvas, px) },
         width: px(270),
         flexDirection: 'column',
         padding: px(10),
@@ -187,10 +195,36 @@ export const LiveRanking = () => {
 }
 
 // Shot power as 10 vertical segments: green up to 40, yellow to 70, red above.
+// Phones: a held power button acts as a held E / F (see mobile-shoot-state).
+const powerHoldButton = (label: string, size: number, dir: -1 | 1, margin: { top?: number; bottom?: number }) => (
+  <UiEntity
+    uiTransform={{ width: size, height: size, margin, borderRadius: size * 0.28, borderWidth: Math.max(2, size * 0.05), borderColor: C.dark, justifyContent: 'center', alignItems: 'center' }}
+    uiBackground={{ color: C.lilac }}
+    onMouseDown={() => {
+      mobileShootState.powerHold = dir
+    }}
+    onMouseUp={() => {
+      mobileShootState.powerHold = 0
+    }}
+    onMouseLeave={() => {
+      mobileShootState.powerHold = 0
+    }}
+  >
+    <Label value={label} fontSize={size * 0.45} color={C.dark} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: size }} />
+  </UiEntity>
+)
+
 export const PowerColumn = () => {
   if (!powerBarState.visible) return null
-  const { canvas, s } = hudScale()
+  const mobile = isMobile()
+  const hud = hudScale()
+  const canvas = hud.canvas
+  // Phones: laid out against the whole canvas (top-right corner is free
+  // there), scaled from the shorter side so it stays above the explorer's
+  // buttons, with + above and - below the bar.
+  const s = mobile ? scaler(Math.max(0.5, Math.min(1, (Math.min(canvas.width, canvas.height) / 720) * 0.72))) : hud.s
   const { px, fs } = s
+  const touch = Math.max(40, Math.min(80, Math.min(canvas.width, canvas.height) * 0.09))
   const power = Math.max(0, Math.min(100, powerBarState.power))
   const lit = Math.ceil(power / 10)
   const segments: ReactEcs.JSX.Element[] = []
@@ -205,11 +239,12 @@ export const PowerColumn = () => {
     <UiEntity
       uiTransform={{
         positionType: 'absolute',
-        position: { top: canvas.area.top + px(120), right: canvas.area.right + px(28) },
+        position: mobile ? { top: 8, right: 12 } : { top: canvas.area.top + px(120), right: canvas.area.right + px(28) },
         flexDirection: 'column',
         alignItems: 'center'
       }}
     >
+      {mobile ? powerHoldButton('+', touch, 1, { bottom: px(8) }) : null}
       <UiEntity uiTransform={{ height: px(28), padding: { left: px(12), right: px(12) }, borderRadius: px(10), justifyContent: 'center' }} uiBackground={{ color: C.dark }}>
         <Label value="POWER" fontSize={fs(16)} color={C.white} textAlign="middle-center" uiTransform={{ height: px(28) }} textWrap="nowrap" />
       </UiEntity>
@@ -219,9 +254,13 @@ export const PowerColumn = () => {
       <UiEntity uiTransform={{ height: px(40), margin: { top: px(10) }, padding: { left: px(12), right: px(12) }, borderRadius: px(12), justifyContent: 'center' }} uiBackground={{ color: C.dark }}>
         <Label value={`${Math.round(power)}%`} fontSize={fs(26)} color={C.white} textAlign="middle-center" uiTransform={{ height: px(40) }} textWrap="nowrap" />
       </UiEntity>
-      <UiEntity uiTransform={{ width: px(120), height: px(40), margin: { top: px(10) }, padding: { left: px(8), right: px(8) }, borderRadius: px(8), justifyContent: 'center' }} uiBackground={{ color: C.dark }}>
-        <Label value="Above 40% the shot can wobble" fontSize={fs(12)} color={C.white} textAlign="middle-center" uiTransform={{ width: '100%', height: px(40) }} textWrap="nowrap" />
-      </UiEntity>
+      {mobile ? (
+        powerHoldButton('-', touch, -1, { top: px(8) })
+      ) : (
+        <UiEntity uiTransform={{ width: px(120), height: px(40), margin: { top: px(10) }, padding: { left: px(8), right: px(8) }, borderRadius: px(8), justifyContent: 'center' }} uiBackground={{ color: C.dark }}>
+          <Label value="Above 40% the shot can wobble" fontSize={fs(12)} color={C.white} textAlign="middle-center" uiTransform={{ width: '100%', height: px(40) }} textWrap="nowrap" />
+        </UiEntity>
+      )}
     </UiEntity>
   )
 }
@@ -304,13 +343,17 @@ export const MapFooter = () => {
   if (!gs.playing || !name) return null
   const { canvas, s } = hudScale()
   const { px, fs } = s
+  // Phones: the bottom-right corner is the explorer's jump button; the top
+  // centre is free.
+  const mobile = isMobile()
   return (
     <UiEntity
       uiTransform={{
         positionType: 'absolute',
-        position: { bottom: canvas.area.bottom + px(24), right: canvas.area.right + px(28) },
+        position: mobile ? { top: 8, left: canvas.width * 0.5 - px(140) } : { bottom: canvas.area.bottom + px(24), right: canvas.area.right + px(28) },
+        width: mobile ? px(280) : undefined,
         flexDirection: 'column',
-        alignItems: 'flex-end',
+        alignItems: mobile ? 'center' : 'flex-end',
         padding: { top: px(8), bottom: px(8), left: px(18), right: px(18) },
         borderRadius: px(18),
         borderWidth: Math.max(2, px(4)),

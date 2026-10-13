@@ -85,7 +85,9 @@ export const LobbyMenu = () => {
   const tutorialDone = currentMission > TUTORIAL_STEPS
   const energy = r.EN || 0
   const canPlay = energy > 0 && !!lobbyMenuState.actions.playSeason
-  const friendsLabel = lobbyMenuState.actions.friendsLabel ? lobbyMenuState.actions.friendsLabel() : ''
+  const friendsAction = lobbyMenuState.actions.friendsAction ? lobbyMenuState.actions.friendsAction() : ''
+  // While in a party the button is the way out; the 3D board says the same.
+  const friendsLabel = lobbyMenuState.actions.friendsLabel ? (friendsAction === 'leave' ? 'LEAVE PARTY' : lobbyMenuState.actions.friendsLabel()) : ''
   const canFriends = canPlay && !!lobbyMenuState.actions.playWithFriends && friendsLabel !== ''
 
   const nextPrize = lobbyMenuState.prizes.find((p) => p.tierReward > tierSub) || null

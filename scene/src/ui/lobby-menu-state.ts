@@ -51,8 +51,10 @@ export const lobbyMenuState: {
   actions: {
     playSeason: (() => void) | null
     playWithFriends: (() => void) | null
-    // The party button's caption, e.g. "JOIN PARTY (2/4) 41s".
+    // The party button's caption, e.g. "JOIN PARTY (2/4) 41s", and what it
+    // does right now ('create' | 'join' | 'leave' | 'busy').
     friendsLabel: (() => string) | null
+    friendsAction: (() => string) | null
   }
 } = {
   visible: false,
@@ -64,7 +66,7 @@ export const lobbyMenuState: {
   prizesFetchedAt: 0,
   leaderboard: [],
   leaderboardFetchedAt: 0,
-  actions: { playSeason: null, playWithFriends: null, friendsLabel: null }
+  actions: { playSeason: null, playWithFriends: null, friendsLabel: null, friendsAction: null }
 }
 
 const PRIZES_TTL_MS = 60 * 1000
