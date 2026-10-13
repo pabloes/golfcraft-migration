@@ -28,7 +28,10 @@ grep -q 'export const USE_REMOTE_SERVER = false;' "$CONSTANTS" || {
 sed -i '' 's/export const USE_REMOTE_SERVER = false;/export const USE_REMOTE_SERVER = true;/' "$CONSTANTS"
 echo "USE_REMOTE_SERVER = true; building scene…"
 
-( cd "$ROOT/scene" && npx sdk-commands build )
+# --production drops the inline source map: the bundle goes from ~24 MB to a
+# fraction of that, which is what players download (slow on phones) and what
+# the Worlds content server has to swallow in one request (it timed out).
+( cd "$ROOT/scene" && npx sdk-commands build --production )
 echo "scene built against production hosts (scene/bin/index.js)"
 echo
 echo "Deploy with --skip-build, ALWAYS:"
