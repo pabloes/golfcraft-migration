@@ -80,6 +80,10 @@ export const createBallOrbitCamera = (
   let centre = Vector3.create(start.x, start.y, start.z)
   let lastPointer: { x: number; y: number } | null = null
   let touchDown = false
+  // Per touch: how many ticks the finger was seen moving, and the first move,
+  // held back until a second one proves the explorer reports a drag live.
+  let pressMoves = 0
+  let pendingMove = { x: 0, y: 0 }
 
   const camera = engine.addEntity()
   Transform.create(camera, { parent })
@@ -111,19 +115,35 @@ export const createBallOrbitCamera = (
     lastPointer = at ? { x: at.x, y: at.y } : null
     if (isMobile()) {
       // Touch: a finger landing somewhere else must not swing the camera, so
-      // only a finger that was already down counts, and one tick is capped so
-      // a flick cannot spin it. Explorers that report no touch position give
-      // zero, and the panel's arrows do the job instead.
+      // only a finger that was already down counts. The mobile explorer may
+      // not report the finger while it drags, only where it was lifted: that
+      // arrives as ONE move at the end of the touch and swung the camera
+      // after the fact. So a touch only orbits once it has moved on two ticks
+      // (a live drag); a touch with a single move does nothing, and the
+      // panel's arrows do the job. Explorers that report the drag live get it.
       const down = inputSystem.isPressed(InputAction.IA_POINTER)
       const wasDown = touchDown
       touchDown = down
-      if (!down || !wasDown || !at || !previous) return { x: 0, y: 0 }
+      if (!down || !wasDown) {
+        if (wasDown && !down) console.log('[orbit] touch ended, ticks with movement:', pressMoves)
+        pressMoves = 0
+        pendingMove = { x: 0, y: 0 }
+        return { x: 0, y: 0 }
+      }
+      if (!at || !previous || (at.x === previous.x && at.y === previous.y)) return { x: 0, y: 0 }
       // Only a guard against a glitched sample; the easing does the rest.
       const cap = 160
-      return {
+      const move = {
         x: Math.max(-cap, Math.min(cap, at.x - previous.x)),
         y: Math.max(-cap, Math.min(cap, at.y - previous.y))
       }
+      pressMoves++
+      if (pressMoves === 1) {
+        pendingMove = move
+        return { x: 0, y: 0 }
+      }
+      if (pressMoves === 2) return { x: pendingMove.x + move.x, y: pendingMove.y + move.y }
+      return move
     }
     if (at && previous && (at.x !== previous.x || at.y !== previous.y)) {
       return { x: at.x - previous.x, y: at.y - previous.y }
