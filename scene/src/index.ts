@@ -16,6 +16,7 @@ import { globalStore } from './services/globalStore/globalStore'
 import { sleep } from '../../common/utils'
 import { bootstrap } from './meta/bootstrap'
 import { setupUI } from './ui'
+import { startGameWindow } from './services/game-window'
 
 // Mission-1 production flow:
 //   1. bootstrap() -> PlayFab LoginWithCustomID, get user, realm, Colyseus client
@@ -39,6 +40,8 @@ export async function main() {
   try {
     const { colyseus, PlayFabId, user, realm } = await bootstrap()
     console.log('[main] bootstrap done')
+    // Monthly game window (services/game-window.ts) for this wallet.
+    startGameWindow(user.publicKey || user.userId)
 
     const spawnLobby = () => {
       console.log('[main] spawnLobby (building + golfclub board + NPC)')

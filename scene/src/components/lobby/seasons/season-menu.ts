@@ -28,6 +28,7 @@ import { claimSeasonReward, getSeasonActionStatus } from './season-rewards-bridg
 import { lobbyHudState } from '../../../ui/lobby-hud-state'
 import { lobbyMenuState } from '../../../ui/lobby-menu-state'
 import { showMessage } from '../server-notification'
+import { canStartGame, formatUtc, gameWindowState, guardGameStart, onGameWindowChange } from '../../../services/game-window'
 
 const SEASON_CATALOG: Record<string, { name: string }> = seasonCatalog as any
 
@@ -149,11 +150,15 @@ export const createSeasonMenu = async (
     onStarted: () => {}
   })
 
-  playButton.onClick(() => {
+  // Both entry points check the monthly game window first.
+  const playSeason = () => {
+    if (!guardGameStart()) return
     seasonGame.startGame()
-  })
+  }
+  playButton.onClick(playSeason)
   // The lobby menu dialog (ui/lobby-menu.tsx) drives the same run.
-  lobbyMenuState.actions.playSeason = () => seasonGame.startGame()
+  lobbyMenuState.actions.playSeason = playSeason
+  const stopWindowListener = onGameWindowChange(() => refresh())
 
   // The party lobby is a shared room on the server; if it can't be reached the
   // panel must still work for solo play, so the button simply stays hidden.
@@ -273,6 +278,20 @@ export const createSeasonMenu = async (
     emblem.show()
     emblem.setImage(`images/season-badges/${tier || 0}.png`)
 
+    // Outside the monthly window the board only says when it opens.
+    if (!canStartGame()) {
+      playButton.hide()
+      friendsButton.hide()
+      setFriendsLabel('')
+      hideCancelButton()
+      if (text) {
+        text.text =
+          'GOLFCRAFT IS CLOSED\n\nIt opens the first week\nof every month\n\n' +
+          (gameWindowState.opensAt ? `Next opening:\n${formatUtc(gameWindowState.opensAt)}` : 'Next opening: soon')
+      }
+      return
+    }
+
     // SDK6 read the energy from its own userData store; ours lands in the lobby
     // HUD state (bootstrap:applyCombinedInfoToHud), same as the golfclub board.
     const energy = lobbyHudState.resources.EN || 0
@@ -352,6 +371,7 @@ export const createSeasonMenu = async (
   function dispose() {
     engine.removeSystem(transactionStatusSystem)
     lobbyMenuState.actions.playSeason = null
+    stopWindowListener()
     lobbyMenuState.actions.playWithFriends = null
     lobbyMenuState.actions.friendsLabel = null
     lobbyMenuState.actions.friendsAction = null

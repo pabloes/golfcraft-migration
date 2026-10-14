@@ -5,6 +5,7 @@ import {promisify} from "util";
 import MESSAGE from "./mesages";
 import {tryFn} from "../../common/utils";
 import {createPartyToken, registerParty} from "./season-party-registry";
+import {gameClosedMessage, getGameAccessFor} from "../game-window-gate";
 
 // "Play ranked with friends" waiting room. One instance, one waiting party:
 // nobody can create another until this one is cancelled or starts.
@@ -204,6 +205,10 @@ export class SeasonPartyLobbyRoom extends Room<SeasonPartyLobbyState> {
         const user = this.users.get(client.sessionId);
         const address = user?.publicKey;
         if (!address) throw new PartyError("Connect a wallet to play ranked");
+        //monthly game window: no new party outside it, unless allow-listed. A
+        //party that already formed may still start (startParty doesn't check).
+        const access = await getGameAccessFor(address);
+        if (!access.open) throw new PartyError(gameClosedMessage(access));
         const [{PlayFabId}] = await promisify(PlayFabServer.GetPlayFabIDsFromGenericIDs)({
             GenericIDs: [{ServiceName: "address", UserId: address}]
         }).then(r => r.data.Data);

@@ -19,6 +19,7 @@ import { showMessage } from '../server-notification'
 import { getCatFromTier, getTierFromSub, getTierPercentiles } from '../../../../../common/utils'
 // @ts-ignore - season-tier-definitions has @ts-nocheck
 import { seasonTierDefinitions } from '../../../../../common/season-tier-definitions'
+import { guardGameStart } from '../../../services/game-window'
 
 const MAX_PARTY_PLAYERS = 4
 
@@ -99,6 +100,7 @@ export const createSeasonParty = async (
       notifyChange()
       return
     }
+    if (!guardGameStart()) return
     if (lobby.state.starting) {
       showMessage({ timeout: 4000, message: 'That party is already starting' })
       return

@@ -28,6 +28,7 @@ import IPlayFabError = PlayFabModule.IPlayFabError;
 import {CURRENCY} from "../../common/currency-codes";
 import {callDiscordHook} from "../../common/discord";
 import {pushChests} from "./chests-generator";
+import {gameClosedMessage, getGameAccessFor} from "../game-window-gate";
 const API_URL = process.env.PROD ? `https://golfcraftgame.com` : `http://localhost:2569`;
 const playfabServerApiKey = process.env.PLAYFAB_API_KEY;
 const NUM_PLAYERS = 4;
@@ -184,6 +185,12 @@ export class SeasonRoom extends Room<SeasonRoomState> {
         console.log("onAuth")
         try{
             const address = user.publicKey;
+            //monthly game window: no new run outside it, unless allow-listed
+            const access = await getGameAccessFor(address);
+            if (!access.open) {
+                console.log("Season onAuth: game closed for", address);
+                return false;
+            }
             const [{PlayFabId}] = await promisify(PlayFabServer.GetPlayFabIDsFromGenericIDs)({
                 "GenericIDs": [
                     {
@@ -237,6 +244,13 @@ export class SeasonRoom extends Room<SeasonRoomState> {
     async onCreate({user, groupId}) {
         console.log("onCreate", JSON.stringify(user));
         const address = user.publicKey;
+        //monthly game window, checked BEFORE picking courses and ghosts: this
+        //room does all that work in onCreate, ahead of onAuth
+        const access = await getGameAccessFor(address);
+        if (!access.open) {
+            console.log("Season onCreate: game closed for", address);
+            throw new Error(gameClosedMessage(access));
+        }
         const [{PlayFabId}] = await promisify(PlayFabServer.GetPlayFabIDsFromGenericIDs)({
             "GenericIDs": [
                 {

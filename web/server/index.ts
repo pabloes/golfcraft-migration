@@ -12,6 +12,8 @@ import {dailyMissionsApi} from "./daily-missions";
 import {raffle} from "./raffle/raffle";
 import {promisify} from "util";
 import {deserializeRecipe, getCatFromTier, getPointsToTier, getTierFromSub} from "../../common/utils";
+import {getGameAccess, GameWindowConfig} from "../../common/game-window";
+const GAME_WINDOW_KEY = "gameWindow";
 import {textImageApi} from "./text-image/text-image";
 import {seasonsApi} from "./seasons";
 import {runChecks} from "../../chain-playfab/security/securityChecks";
@@ -270,13 +272,35 @@ console.log("set-affiliate-code",code, playerAddress, PlayFabId, displayName)
     router.get("/api/config", async (req, res) => {
         try{
             const configRows = await prisma.config.findMany();
-            return res.send(configRows.reduce((acc, {ID, key, value})=> (acc[key] = JSON.parse(value), acc),{}));
+            //gameWindow carries the allow-listed wallets: served by /api/game-window only
+            return res.send(configRows.filter(({key}) => key !== GAME_WINDOW_KEY).reduce((acc, {ID, key, value})=> (acc[key] = JSON.parse(value), acc),{}));
         }catch(error:any){
             console.log("/api/config/ error",error, error?.mesage);
             return res.status(500).send({error, message:error?.message});
         }
 
     })
+    //When the game can be played (common/game-window.ts) for one wallet. The
+    //config row is edited in the admin; a missing or unreadable row means open.
+    router.get("/api/game-window", async (req, res) => {
+        try{
+            const address = typeof req.query.address === "string" ? req.query.address : null;
+            return res.send(getGameAccess(await readGameWindowConfig(), address));
+        }catch(error:any){
+            console.log("/api/game-window error", error?.message);
+            return res.send(getGameAccess(null, null));
+        }
+    });
+    async function readGameWindowConfig(): Promise<GameWindowConfig | null> {
+        const row = await prisma.config.findFirst({where:{key:GAME_WINDOW_KEY}});
+        if (!row?.value) return null;
+        try{
+            return JSON.parse(row.value);
+        }catch(error){
+            console.log("gameWindow config is not valid JSON, ignoring it", row.value);
+            return null;
+        }
+    }
     router.post("/api/report-claimed-wearable", async (req, res)=>{
         const {ID, claimed} = req.body;
         await prisma.wearables_catalog.update({

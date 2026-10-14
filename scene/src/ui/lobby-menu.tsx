@@ -28,6 +28,7 @@ import { TIER_CATEGORIES } from '../../../common/constants'
 // @ts-ignore - season-tier-definitions has @ts-nocheck
 import { seasonTierDefinitions } from '../../../common/season-tier-definitions'
 import { isMobile } from '../services/platform'
+import { canStartGame, opensInText } from '../services/game-window'
 
 const MARGIN = 16 // keeps the border off the interactable area's edges
 const HINT_H = 40 // the "Press E or F to close" line under the panel
@@ -84,7 +85,9 @@ export const LobbyMenu = () => {
   const currentMission = Number(userData['statistic_current_mission'] || 1)
   const tutorialDone = currentMission > TUTORIAL_STEPS
   const energy = r.EN || 0
-  const canPlay = energy > 0 && !!lobbyMenuState.actions.playSeason
+  // Outside the monthly game window nothing can start (services/game-window.ts).
+  const gameOpen = canStartGame()
+  const canPlay = gameOpen && energy > 0 && !!lobbyMenuState.actions.playSeason
   const friendsAction = lobbyMenuState.actions.friendsAction ? lobbyMenuState.actions.friendsAction() : ''
   // While in a party the button is the way out; the 3D board says the same.
   const friendsLabel = lobbyMenuState.actions.friendsLabel ? (friendsAction === 'leave' ? 'LEAVE PARTY' : lobbyMenuState.actions.friendsLabel()) : ''
@@ -182,9 +185,13 @@ export const LobbyMenu = () => {
               </UiEntity>
             </UiEntity>
             <Label
-              value="Race 3 ghost players over 4 holes. Win to climb."
+              value={
+                gameOpen
+                  ? 'Race 3 players over 4 holes. Win to climb.'
+                  : `Closed until the first week of the month. ${opensInText()}.`
+              }
               fontSize={fs(18)}
-              color={C.lilac}
+              color={gameOpen ? C.lilac : C.yellow}
               textAlign="middle-left"
               uiTransform={{ width: '100%', height: px(28), margin: { top: px(6) } }} textWrap="nowrap"
             />
@@ -287,7 +294,7 @@ export const LobbyMenu = () => {
                 <Label value="PLAY" fontSize={fs(36)} color={C.dark} textAlign="middle-center" uiTransform={{ height: px(72) }} textWrap="nowrap" />,
                 <UiEntity uiTransform={{ height: px(30), margin: { left: px(12) }, padding: { left: px(10), right: px(10) }, borderRadius: px(10), justifyContent: 'center' }} uiBackground={{ color: C.dark }}>
                   <Label
-                    value={energy > 0 ? '1 energy' : 'no energy'}
+                    value={!gameOpen ? 'closed' : energy > 0 ? '1 energy' : 'no energy'}
                     fontSize={fs(16)}
                     color={C.cyan}
                     textAlign="middle-center"

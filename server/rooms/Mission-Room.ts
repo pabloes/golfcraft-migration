@@ -14,6 +14,7 @@ import { sleep } from "../../common/utils";
 import {createFrameReproduction} from "../../common/frame-reproductor";
 import fetch from "cross-fetch";
 import MESSAGES from "./mesages";
+import {getGameAccessFor} from "../game-window-gate";
 
 const playfabServerApiKey = process.env.PLAYFAB_API_KEY;
 class TrainingRaceState extends Gameplay {
@@ -42,9 +43,15 @@ export class MissionRoom extends Room<TrainingRaceState> {
     static MAX_ROOM_DURATION_S = 60 * 60;        // 1 hour hard cap
     static MAX_IDLE_MS = 10 * 60 * 1000;         // 10 min without a shoot
 
-    async onAuth(client, {PlayFabId, gameDefinition}, request){
+    async onAuth(client, {PlayFabId, gameDefinition, user}, request){
         console.log("Test-Room onAuth", PlayFabId)
         try {
+            //monthly game window: no new mission outside it, unless allow-listed
+            const access = await getGameAccessFor(user?.publicKey || user?.userId);
+            if (!access.open) {
+                console.log("Mission onAuth: game closed for", user?.publicKey || user?.userId);
+                return false;
+            }
             const {data} = await promisify(PlayFabServer.GetPlayerStatistics)({PlayFabId, StatisticNames:["current_mission"]});
             const missionOnServer = Number(data.Statistics[0]?.Value || 1);
             if(missionOnServer !== Number(gameDefinition.courseId.replace("mission-",""))){

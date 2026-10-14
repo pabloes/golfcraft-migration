@@ -16,6 +16,7 @@ import { JoiningScreen, PartyScreen, HoleResultScreen, RunCompleteScreen } from 
 import { containLayout, scaler, isSmallCanvas } from './ui-scale'
 import { MobileShootControls } from './mobile-shoot-controls'
 import { isMobile } from '../services/platform'
+import { dismissGameClosedNotice, formatCountdown, formatUtc, gameWindowState, serverNow } from '../services/game-window'
 
 // SDK6 game.ts called initializeIntroScreen() on startup. It used UICanvas +
 // UIImage from the legacy DCL UI; here we port the same flow to ReactEcs.
@@ -33,6 +34,7 @@ const ui = () => (
     <LobbyMenu />
     <IntroScreen />
     <BootErrorDialog />
+    <GameClosedNotice />
     <NpcUtilsUi />
     <Overlay />
     {/* These three sit AFTER <Overlay /> on purpose: later siblings paint on
@@ -205,6 +207,51 @@ const BootErrorDialog = () => {
   )
 }
 
+// Shown when the player tries to start something outside the monthly game
+// window (services/game-window.ts). Same look and dismissal as the boot error.
+const GameClosedNotice = () => {
+  if (!gameWindowState.noticeVisible) return null
+  const { px, fs } = scaler(containLayout().scale)
+  const next = gameWindowState.opensAt
+    ? `Next opening: ${formatUtc(gameWindowState.opensAt)} (in ${formatCountdown(gameWindowState.opensAt - serverNow())})`
+    : 'Next opening: soon'
+  return (
+    <UiEntity
+      uiTransform={{ width: '100%', height: '100%', positionType: 'absolute', justifyContent: 'center', alignItems: 'center' }}
+      uiBackground={{ color: Color4.create(0, 0, 0, 0.85) }}
+      onMouseDown={dismissGameClosedNotice}
+    >
+      <UiEntity
+        uiTransform={{
+          width: px(640),
+          height: px(250),
+          flexDirection: 'column',
+          alignItems: 'center',
+          padding: { top: px(28), bottom: px(24), left: px(32), right: px(32) }
+        }}
+        uiBackground={{ color: Color4.create(0.08, 0.05, 0.16, 0.95) }}
+      >
+        <Label value="GolfCraft is closed" fontSize={fs(28)} color={Color4.White()} textAlign="middle-center" uiTransform={{ width: '100%', height: px(40) }} />
+        <Label
+          value="GolfCraft opens the first week of every month."
+          fontSize={fs(17)}
+          color={Color4.White()}
+          textAlign="middle-center"
+          uiTransform={{ width: '100%', height: px(30), margin: { top: px(14) } }}
+        />
+        <Label value={next} fontSize={fs(16)} color={Color4.create(1, 0.85, 0.3, 1)} textAlign="middle-center" uiTransform={{ width: '100%', height: px(30), margin: { top: px(8) } }} />
+        <Label
+          value="Press E or click to close"
+          fontSize={fs(14)}
+          color={Color4.create(0.75, 0.75, 0.8, 1)}
+          textAlign="middle-center"
+          uiTransform={{ width: '100%', height: px(24), margin: { top: px(22) } }}
+        />
+      </UiEntity>
+    </UiEntity>
+  )
+}
+
 const dismissBootError = () => {
   globalStore.game.setState({ bootErrorDismissed: true })
 }
@@ -221,6 +268,10 @@ const skipIntro = () => {
 
 const introInputSystem = () => {
   const gs = globalStore.game.getState()
+  if (gameWindowState.noticeVisible) {
+    if (inputSystem.isTriggered(InputAction.IA_PRIMARY, PointerEventType.PET_DOWN)) dismissGameClosedNotice()
+    return
+  }
   if (!gs.introScreen && !(gs.bootError && !gs.bootErrorDismissed)) return
   if (inputSystem.isTriggered(InputAction.IA_PRIMARY, PointerEventType.PET_DOWN)) {
     if (gs.introScreen) skipIntro()

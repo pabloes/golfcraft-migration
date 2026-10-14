@@ -18,6 +18,7 @@ import { hideTopBar } from '../../../ui/topbar-state'
 import MESSAGE from '../../../../../server/rooms/mesages'
 // @ts-ignore - common/utils has @ts-nocheck
 import { sleep, waitFor } from '../../../../../common/utils'
+import { guardGameStart } from '../../../services/game-window'
 
 const portraits = {
   smiling: { path: 'images/NPC/expresion1.png' },
@@ -83,6 +84,7 @@ let NPC_scientist: Entity | null = null
 // the same conversation (missions, requestStartMission...) without copying it.
 let activateNpcDialog: (() => Promise<void>) | null = null
 export const talkToNpc = async () => {
+  if (!guardGameStart()) return
   if (activateNpcDialog) await activateNpcDialog()
 }
 let container1: Entity | null = null
@@ -753,6 +755,8 @@ export const createNpcTest = (parent: Entity, opts: CreateNpcOptions): Entity | 
 
   async function requestStartMission() {
     console.log('[npc] requestStartMission: start, current_mission=', current_mission)
+    // Monthly game window: closed means no mission, before any fade.
+    if (!guardGameStart()) return
     const state = { started: false }
     // SDK6 cinematic: start the egypt map music, then fade the screen to black.
     // The course loads behind the black; golfplay-client fades back out when the
