@@ -637,6 +637,9 @@ console.log("accumulatedValue", JSON.stringify(sortedAccumulatedResult,null, "  
                 FunctionName:"completeSeasonMap",
                 FunctionParameter
             });
+            //a cloudscript failure comes back inside a 200 response, never as a throw:
+            //without this log a wrong PLAYFAB_API_KEY ("protected") silently drops every reward
+            if (data?.Error) console.log("completeSeasonMap FAILED", PlayFabId, data.Error.Error, data.Error.Message);
         }
         await handleChestRewards(this.state.chests, this.user.displayName);
         if(this.state.currentGame !== 3){
