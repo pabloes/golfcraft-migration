@@ -8,7 +8,7 @@ import { lobbyHudState } from './lobby-hud-state'
 import { overlayState } from '../components/ui/overlay'
 import { centerPanelState, BANNER_SPRITES, showBanner } from './centerpanel-state'
 import { LobbyMenu, lobbyMenuInputSystem } from './lobby-menu'
-import { lobbyMenuState, openLobbyMenu } from './lobby-menu-state'
+import { lobbyMenuState, openLobbyMenu, returnToMenuIfRequested } from './lobby-menu-state'
 import { MissionTimer, HoleStats, LiveRanking, PowerColumn, ControlsHelp, MapFooter, EndingBanner } from './game-hud'
 import { LobbyHud } from './lobby-hud'
 import { ATLAS, spriteUvs } from './sprites'
@@ -219,7 +219,7 @@ const GameClosedNotice = () => {
     <UiEntity
       uiTransform={{ width: '100%', height: '100%', positionType: 'absolute', justifyContent: 'center', alignItems: 'center' }}
       uiBackground={{ color: Color4.create(0, 0, 0, 0.85) }}
-      onMouseDown={dismissGameClosedNotice}
+      onMouseDown={closeGameClosedNotice}
     >
       <UiEntity
         uiTransform={{
@@ -252,6 +252,13 @@ const GameClosedNotice = () => {
   )
 }
 
+// A start blocked by the closed window: back to the lobby dialog if that is
+// where the player came from.
+const closeGameClosedNotice = () => {
+  dismissGameClosedNotice()
+  returnToMenuIfRequested()
+}
+
 const dismissBootError = () => {
   globalStore.game.setState({ bootErrorDismissed: true })
 }
@@ -269,7 +276,7 @@ const skipIntro = () => {
 const introInputSystem = () => {
   const gs = globalStore.game.getState()
   if (gameWindowState.noticeVisible) {
-    if (inputSystem.isTriggered(InputAction.IA_PRIMARY, PointerEventType.PET_DOWN)) dismissGameClosedNotice()
+    if (inputSystem.isTriggered(InputAction.IA_PRIMARY, PointerEventType.PET_DOWN)) closeGameClosedNotice()
     return
   }
   if (!gs.introScreen && !(gs.bootError && !gs.bootErrorDismissed)) return

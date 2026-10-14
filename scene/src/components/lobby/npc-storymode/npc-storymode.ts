@@ -19,6 +19,7 @@ import MESSAGE from '../../../../../server/rooms/mesages'
 // @ts-ignore - common/utils has @ts-nocheck
 import { sleep, waitFor } from '../../../../../common/utils'
 import { guardGameStart } from '../../../services/game-window'
+import { returnToMenuIfRequested } from '../../../ui/lobby-menu-state'
 
 const portraits = {
   smiling: { path: 'images/NPC/expresion1.png' },
@@ -817,6 +818,7 @@ export const createNpcTest = (parent: Entity, opts: CreateNpcOptions): Entity | 
         roomToLeave?.leave()
       } catch (_) {}
       await opts.onFinish()
+      returnToMenuIfRequested()
     }
 
     if (!room) {
@@ -939,6 +941,8 @@ export const createNpcTest = (parent: Entity, opts: CreateNpcOptions): Entity | 
         cameraTarget: Vector3.create(spawnCam.x, spawnCam.y, spawnCam.z)
       })
       await fadeOutOverlay(1)
+      // Started from the lobby dialog's LET'S GO: show it again.
+      returnToMenuIfRequested()
     })
 
     clientGolfPlay.onComplete(async ({ xp, GC, PT, time, shoots, materialDrops }: any) => {

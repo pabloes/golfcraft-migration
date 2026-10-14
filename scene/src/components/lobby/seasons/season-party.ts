@@ -20,6 +20,7 @@ import { getCatFromTier, getTierFromSub, getTierPercentiles } from '../../../../
 // @ts-ignore - season-tier-definitions has @ts-nocheck
 import { seasonTierDefinitions } from '../../../../../common/season-tier-definitions'
 import { guardGameStart } from '../../../services/game-window'
+import { returnToMenuIfRequested } from '../../../ui/lobby-menu-state'
 
 const MAX_PARTY_PLAYERS = 4
 
@@ -58,6 +59,8 @@ export const createSeasonParty = async (
     console.log('[season-party] error', message)
     showMessage({ timeout: 4000, message: String(message) })
     syncUi()
+    // The party never formed: back to the lobby dialog if it came from there.
+    returnToMenuIfRequested()
   })
 
   lobby.onMessage(MESSAGE.PARTY_CANCELLED, ({ reason }: any = {}) => {
@@ -65,6 +68,7 @@ export const createSeasonParty = async (
     hideWait()
     if (reason === 'timeout') showMessage({ timeout: 4000, message: 'Party cancelled: nobody joined' })
     notifyChange()
+    returnToMenuIfRequested()
   })
 
   lobby.onMessage(MESSAGE.PARTY_STARTED, ({ roomId, token }: any) => {
@@ -98,6 +102,7 @@ export const createSeasonParty = async (
       lobby.send(MESSAGE.PARTY_LEAVE)
       hideWait()
       notifyChange()
+      returnToMenuIfRequested()
       return
     }
     if (!guardGameStart()) return
@@ -123,6 +128,7 @@ export const createSeasonParty = async (
     lobby.send(isHost() ? MESSAGE.PARTY_CANCEL : MESSAGE.PARTY_LEAVE)
     hideWait()
     notifyChange()
+    returnToMenuIfRequested()
   }
 
   function getCancelLabel() {

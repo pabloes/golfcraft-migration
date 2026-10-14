@@ -17,6 +17,7 @@ import { sleep } from '../../common/utils'
 import { bootstrap } from './meta/bootstrap'
 import { setupUI } from './ui'
 import { startGameWindow } from './services/game-window'
+import { returnToMenuIfRequested } from './ui/lobby-menu-state'
 
 // Mission-1 production flow:
 //   1. bootstrap() -> PlayFab LoginWithCustomID, get user, realm, Colyseus client
@@ -86,6 +87,8 @@ export async function main() {
               cameraTarget: Vector3.create(spawnCam.x, spawnCam.y, spawnCam.z)
             })
             await fadeOutOverlay(1)
+            // Started from the lobby dialog: show it again.
+            returnToMenuIfRequested()
           }
         })
       } catch (err) {

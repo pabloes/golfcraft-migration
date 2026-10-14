@@ -43,6 +43,9 @@ export const lobbyMenuState: {
   // WORKSHOP: the MY CLUBS page being shown; null = the selected club's page.
   clubsPage: number | null
   busy: boolean
+  // Set when a match is started from this dialog (PLAY, WITH FRIENDS, the
+  // tutorial's LET'S GO): when that match ends the dialog comes back.
+  reopenAfterGame: boolean
   prizes: SeasonPrize[]
   prizesFetchedAt: number
   // PRIZES: the Season's current top 10 (empty until fetched or on failure).
@@ -62,6 +65,7 @@ export const lobbyMenuState: {
   selectedClubTokenId: undefined,
   clubsPage: null,
   busy: false,
+  reopenAfterGame: false,
   prizes: [],
   prizesFetchedAt: 0,
   leaderboard: [],
@@ -72,9 +76,23 @@ export const lobbyMenuState: {
 const PRIZES_TTL_MS = 60 * 1000
 
 export const openLobbyMenu = () => {
+  // Back in the dialog, by hand or after a match: nothing left to reopen.
+  lobbyMenuState.reopenAfterGame = false
   lobbyMenuState.visible = true
   lobbyMenuState.view = 'lobby'
   refreshLobbyMenuPrizes()
+}
+
+// The dialog's start buttons call this; the end of every match (and a start
+// that never happened: closed game, failed join, cancelled party) calls
+// returnToMenuIfRequested, which reopens the dialog only in that case.
+export const markStartedFromMenu = () => {
+  lobbyMenuState.reopenAfterGame = true
+}
+
+export const returnToMenuIfRequested = () => {
+  if (!lobbyMenuState.reopenAfterGame) return
+  openLobbyMenu()
 }
 
 export const showLobbyView = (view: LobbyMenuView) => {

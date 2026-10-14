@@ -16,7 +16,7 @@ import { getPlayer } from '@dcl/sdk/players'
 
 import { globalStore } from '../services/globalStore/globalStore'
 import { lobbyHudState } from './lobby-hud-state'
-import { lobbyMenuState, closeLobbyMenu, openLobbyMenu, closeOrBack, showLobbyView } from './lobby-menu-state'
+import { lobbyMenuState, closeLobbyMenu, openLobbyMenu, closeOrBack, showLobbyView, markStartedFromMenu } from './lobby-menu-state'
 import { TutorialView, WorkshopView, PrizesView, DailyMissionsView } from './lobby-views'
 import { C, fmt, shortName, pressable, counter, chip, materialIcon } from './ui-theme'
 import { containLayout, scaler, DESIGN_W, DESIGN_H, type Px } from './ui-scale'
@@ -87,7 +87,11 @@ export const LobbyMenu = () => {
   const energy = r.EN || 0
   // Outside the monthly game window nothing can start (services/game-window.ts).
   const gameOpen = canStartGame()
-  const canPlay = gameOpen && energy > 0 && !!lobbyMenuState.actions.playSeason
+  // Right after login the Season panel is still joining its rooms and the
+  // balances are still loading: say so instead of a bare disabled PLAY.
+  const connecting = !r.loaded || !lobbyMenuState.actions.playSeason
+  const friendsConnecting = connecting || !lobbyMenuState.actions.playWithFriends
+  const canPlay = !connecting && gameOpen && energy > 0
   const friendsAction = lobbyMenuState.actions.friendsAction ? lobbyMenuState.actions.friendsAction() : ''
   // While in a party the button is the way out; the 3D board says the same.
   const friendsLabel = lobbyMenuState.actions.friendsLabel ? (friendsAction === 'leave' ? 'LEAVE PARTY' : lobbyMenuState.actions.friendsLabel()) : ''
@@ -288,13 +292,14 @@ export const LobbyMenu = () => {
                   disabled: !canPlay,
                   onClick: () => {
                     closeLobbyMenu()
+                    markStartedFromMenu()
                     lobbyMenuState.actions.playSeason && lobbyMenuState.actions.playSeason()
                   }
                 },
                 <Label value="PLAY" fontSize={fs(36)} color={C.dark} textAlign="middle-center" uiTransform={{ height: px(72) }} textWrap="nowrap" />,
                 <UiEntity uiTransform={{ height: px(30), margin: { left: px(12) }, padding: { left: px(10), right: px(10) }, borderRadius: px(10), justifyContent: 'center' }} uiBackground={{ color: C.dark }}>
                   <Label
-                    value={!gameOpen ? 'closed' : energy > 0 ? '1 energy' : 'no energy'}
+                    value={connecting ? 'connecting...' : !gameOpen ? 'closed' : energy > 0 ? '1 energy' : 'no energy'}
                     fontSize={fs(16)}
                     color={C.cyan}
                     textAlign="middle-center"
@@ -316,11 +321,12 @@ export const LobbyMenu = () => {
                   disabled: !canFriends,
                   onClick: () => {
                     closeLobbyMenu()
+                    markStartedFromMenu()
                     lobbyMenuState.actions.playWithFriends && lobbyMenuState.actions.playWithFriends()
                   }
                 },
                 <Label
-                  value={canFriends ? friendsLabel : 'WITH FRIENDS'}
+                  value={canFriends ? friendsLabel : friendsConnecting && gameOpen ? 'CONNECTING...' : 'WITH FRIENDS'}
                   fontSize={fs(24)}
                   color={C.dark}
                   textAlign="middle-center"

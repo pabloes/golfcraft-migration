@@ -8,7 +8,7 @@ import { Color4 } from '@dcl/sdk/math'
 
 import { globalStore } from '../services/globalStore/globalStore'
 import { lobbyHudState, DailyMission } from './lobby-hud-state'
-import { lobbyMenuState, showLobbyView, closeLobbyMenu, SeasonPrize } from './lobby-menu-state'
+import { lobbyMenuState, showLobbyView, closeLobbyMenu, SeasonPrize, markStartedFromMenu } from './lobby-menu-state'
 import { C, hex, fmt, shortName, pressable, counter, materialIcon, title } from './ui-theme'
 import { containLayout, scaler, DESIGN_W, DESIGN_H, type Px, type Layout } from './ui-scale'
 import { talkToNpc } from '../components/lobby/npc-storymode/npc-storymode'
@@ -309,6 +309,7 @@ export const TutorialView = () => {
               shadow: px(7),
               onClick: () => {
                 closeLobbyMenu()
+                markStartedFromMenu()
                 talkToNpc().catch((err) => console.log('[lobby] talkToNpc failed', err))
               }
             },
