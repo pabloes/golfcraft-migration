@@ -103,7 +103,9 @@ if (isNaN(SINCE.getTime())) {
 }
 const outDir = path.join(__dirname, '.dev-logs');
 fs.mkdirSync(outDir, { recursive: true });
-const EXPORT_DIR = argAfter('--export-dir') || path.join(outDir, 'playfab-export');
+// Every player's profile (names, last-login city): kept OUT of the repo, in the
+// OS temp dir, so a `git add -A` can never pick it up.
+const EXPORT_DIR = argAfter('--export-dir') || path.join(require('os').tmpdir(), 'golfcraft-playfab-export');
 // Belt and braces: never touch these whatever the data says.
 const NEVER_DELETE = new Set(['59DB5EA948C1AE85']);
 

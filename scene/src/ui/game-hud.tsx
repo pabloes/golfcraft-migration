@@ -46,7 +46,15 @@ const statBox = (px: Px, fs: Px, w: number, caption: string, value: string, bg: 
 // Left edge of the HOLE / TIME / SHOTS row and the live ranking. On phones and
 // tablets the reported interactable area pushed them toward the centre, onto
 // the map name; there they start just right of the avatar + chat buttons.
-const hudLeft = (canvas: Canvas, px: Px) => (isMobile() ? canvas.width * 0.2 : canvas.area.left + px(24))
+// On desktop the Unity explorer reports a left inset as wide as its chat
+// column, which sits at the bottom; at the top only the minimap and its
+// buttons are there, and they end about px(90) before that inset (measured on
+// a screenshot). Explorers with a small or no inset keep the plain margin.
+const hudLeft = (canvas: Canvas, px: Px) => {
+  if (isMobile()) return canvas.width * 0.2
+  const left = canvas.area.left
+  return left > px(200) ? left - px(90) : left + px(24)
+}
 
 export const MissionTimer = () => {
   if (!topbarState.visible) return null
@@ -291,8 +299,12 @@ const helpItem = (px: Px, fs: Px, keys: ReactEcs.JSX.Element[], what: string) =>
 )
 
 export const ControlsHelp = () => {
-  // Keyboard and mouse hints: nothing to say on a phone.
-  if (!controlHintState.visible || isMobile()) return null
+  // Keyboard and mouse hints: nothing to say on a phone. Shown while the
+  // shot control is up, and also while a hole is starting (the Season's
+  // "Starting in..." countdown, or a tutorial mission loading in), so the
+  // player can read the keys before the first shot.
+  const starting = (seasonCountdownState.visible && /^starting/i.test(seasonCountdownState.text)) || !!globalStore.game.getState().starting
+  if ((!controlHintState.visible && !starting) || isMobile()) return null
   const { canvas, s } = hudScale()
   const { px, fs } = s
   const items: ReactEcs.JSX.Element[] = []

@@ -329,7 +329,7 @@ export const PartyScreen = () => {
           uiBackground={{ color: C.dark }}
         >
           <Label value={`Friends see JOIN PARTY (${w.players.length}/${SLOTS}) on their Season screen`} fontSize={fs(15)} color={C.lilac} textAlign="middle-left" uiTransform={{ height: px(22) }} textWrap="nowrap" />
-          <Label value="Same 4 holes for everyone, each player races 3 ghosts" fontSize={fs(15)} color={C.lilac} textAlign="middle-left" uiTransform={{ height: px(22) }} textWrap="nowrap" />
+          <Label value="Same 4 holes for everyone, each player races 3 rivals" fontSize={fs(15)} color={C.lilac} textAlign="middle-left" uiTransform={{ height: px(22) }} textWrap="nowrap" />
           <Label value="Starts on its own after 60 s with no one joining or leaving" fontSize={fs(15)} color={C.lilac} textAlign="middle-left" uiTransform={{ height: px(22) }} textWrap="nowrap" />
         </UiEntity>
         <UiEntity uiTransform={{ width: px(18) }} />
