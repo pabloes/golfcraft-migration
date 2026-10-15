@@ -219,7 +219,9 @@ const GameClosedNotice = () => {
     <UiEntity
       uiTransform={{ width: '100%', height: '100%', positionType: 'absolute', justifyContent: 'center', alignItems: 'center' }}
       uiBackground={{ color: Color4.create(0, 0, 0, 0.85) }}
-      onMouseDown={closeGameClosedNotice}
+      // Swallows clicks on the backdrop so they don't reach the world behind;
+      // only E or the GOT IT button close the dialog.
+      onMouseDown={() => {}}
     >
       <UiEntity
         uiTransform={{
@@ -283,7 +285,7 @@ const GameClosedNotice = () => {
           <Label value="GOT IT" fontSize={fs(24)} color={C.dark} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(56) }} />
         )}
         {mobile ? null : (
-          <Label value="Press E or click to close" fontSize={fs(14)} color={C.lilac} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(22), margin: { top: px(10) } }} />
+          <Label value="Press E or GOT IT to close" fontSize={fs(14)} color={C.lilac} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(22), margin: { top: px(10) } }} />
         )}
       </UiEntity>
     </UiEntity>
