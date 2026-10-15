@@ -9,7 +9,7 @@ import { overlayState } from '../components/ui/overlay'
 import { centerPanelState, BANNER_SPRITES, showBanner } from './centerpanel-state'
 import { LobbyMenu, lobbyMenuInputSystem } from './lobby-menu'
 import { lobbyMenuState, openLobbyMenu, returnToMenuIfRequested } from './lobby-menu-state'
-import { MissionTimer, HoleStats, LiveRanking, PowerColumn, ControlsHelp, MapFooter, EndingBanner } from './game-hud'
+import { MissionTimer, HoleStats, LiveRanking, PowerColumn, ControlsHelp, MapFooter, EndingBanner, RankPill } from './game-hud'
 import { LobbyHud } from './lobby-hud'
 import { ATLAS, spriteUvs } from './sprites'
 import { JoiningScreen, PartyScreen, HoleResultScreen, RunCompleteScreen } from './season-screens'
@@ -17,7 +17,8 @@ import { containLayout, scaler, isSmallCanvas } from './ui-scale'
 import { MobileShootControls } from './mobile-shoot-controls'
 import { isMobile } from '../services/platform'
 import { dismissGameClosedNotice, formatCountdown, formatUtc, gameWindowState, serverNow, showClosedNoticeOnce } from '../services/game-window'
-import { C, pressable, title } from './ui-theme'
+import { C, pressable } from './ui-theme'
+import { P, img, border } from './ui2'
 
 // SDK6 game.ts called initializeIntroScreen() on startup. It used UICanvas +
 // UIImage from the legacy DCL UI; here we port the same flow to ReactEcs.
@@ -27,6 +28,7 @@ const ui = () => (
     <LobbyHud />
     <MissionTimer />
     <HoleStats />
+    <RankPill />
     <LiveRanking />
     <PowerColumn />
     <ControlsHelp />
@@ -228,14 +230,14 @@ const GameClosedNotice = () => {
           width: px(720),
           flexDirection: 'column',
           alignItems: 'center',
-          padding: { top: px(30), bottom: px(28), left: px(36), right: px(36) },
-          borderRadius: px(28),
-          borderWidth: Math.max(2, px(5)),
-          borderColor: C.yellow
+          padding: { top: px(26), bottom: px(28), left: px(36), right: px(36) },
+          borderRadius: px(22),
+          borderWidth: border(px, 4),
+          borderColor: P.white
         }}
-        uiBackground={{ color: C.bg }}
+        uiBackground={{ color: P.navy }}
       >
-        {title(fs, 'GOLFCRAFT IS CLOSED', 52, px(64), C.yellow)}
+        {img(px, 'rb_closed')}
         <Label
           value="GolfCraft opens the first week of every month, from day 1 to day 7 (UTC)."
           fontSize={fs(19)}
@@ -251,10 +253,10 @@ const GameClosedNotice = () => {
             margin: { top: px(16) },
             padding: { top: px(14), bottom: px(14), left: px(36), right: px(36) },
             borderRadius: px(20),
-            borderWidth: Math.max(2, px(4)),
-            borderColor: C.dark
+            borderWidth: border(px, 4),
+            borderColor: P.white
           }}
-          uiBackground={{ color: C.purple }}
+          uiBackground={{ color: P.purple }}
         >
           <Label value="OPENS IN" fontSize={fs(16)} color={C.lilac} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(22) }} />
           <Label
@@ -275,14 +277,14 @@ const GameClosedNotice = () => {
             id: 'closed-ok',
             width: px(220),
             height: px(56),
-            color: C.yellow,
+            color: P.yellow,
             radius: px(16),
-            borderWidth: Math.max(2, px(4)),
-            borderColor: C.dark,
+            borderWidth: 0,
+            borderColor: P.yellow,
             shadow: px(6),
             onClick: closeGameClosedNotice
           },
-          <Label value="GOT IT" fontSize={fs(24)} color={C.dark} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(56) }} />
+          img(px, 'bt_got_it')
         )}
         {mobile ? null : (
           <Label value="Press E or GOT IT to close" fontSize={fs(14)} color={C.lilac} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(22), margin: { top: px(10) } }} />

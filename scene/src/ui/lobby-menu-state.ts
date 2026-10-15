@@ -9,6 +9,8 @@
 import { getSeasonRewardsStock } from '../components/lobby/seasons/season-rewards-bridge'
 import { clearPointerState } from './ui-theme'
 import { fetchDailyMissions } from '../meta/bootstrap'
+import { lobbyHudState } from './lobby-hud-state'
+import { canStartGame } from '../services/game-window'
 // @ts-ignore - common/constants has @ts-nocheck
 import { USE_REMOTE_SERVER } from '../../../common/constants'
 
@@ -21,6 +23,8 @@ export type SeasonPrize = {
   wearableId?: number
   // The collection's official thumbnail (https PNG on the content server).
   thumbnail?: string
+  // What the bridge pays instead once the wearable is sold out (FT).
+  fashionTickets?: number
 }
 
 // One row of the Season's tier-sub leaderboard (web API, page 1).
@@ -31,7 +35,7 @@ export type LeaderboardEntry = {
   points: number
 }
 
-export type LobbyMenuView = 'lobby' | 'tutorial' | 'workshop' | 'prizes' | 'daily'
+export type LobbyMenuView = 'lobby' | 'season' | 'tutorial' | 'workshop' | 'prizes' | 'daily'
 
 export const lobbyMenuState: {
   visible: boolean
@@ -74,6 +78,50 @@ export const lobbyMenuState: {
 }
 
 const PRIZES_TTL_MS = 60 * 1000
+
+// The next wearable to win: the first one above the best score reached this
+// season (prizes are awarded on tier-sub-max, so dropping back does not
+// re-award one). Once a wearable is sold out the bridge pays its
+// fashionTickets instead.
+export const nextSeasonPrize = (tierSubMax: number): SeasonPrize | null =>
+  [...lobbyMenuState.prizes].sort((a, b) => a.tierReward - b.tierReward).find((p) => p.tierReward > tierSubMax) || null
+export const prizeSoldOut = (p: SeasonPrize) => p.stock <= 0
+
+// PLAY and WITH FRIENDS, shared by the lobby and the SEASON view: whether
+// they can be pressed, their captions and what they do.
+export const seasonPlayState = () => {
+  const r = lobbyHudState.resources
+  const energy = r.EN || 0
+  // Outside the monthly game window nothing can start (services/game-window.ts).
+  const gameOpen = canStartGame()
+  // Right after login the Season panel is still joining its rooms and the
+  // balances are still loading: say so instead of a bare disabled PLAY.
+  const connecting = !r.loaded || !lobbyMenuState.actions.playSeason
+  const friendsConnecting = connecting || !lobbyMenuState.actions.playWithFriends
+  const canPlay = !connecting && gameOpen && energy > 0
+  const friendsAction = lobbyMenuState.actions.friendsAction ? lobbyMenuState.actions.friendsAction() : ''
+  // While in a party the button is the way out; the 3D board says the same.
+  const friendsLabel = lobbyMenuState.actions.friendsLabel ? (friendsAction === 'leave' ? 'LEAVE PARTY' : lobbyMenuState.actions.friendsLabel()) : ''
+  const canFriends = canPlay && !!lobbyMenuState.actions.playWithFriends && friendsLabel !== ''
+  return {
+    energy,
+    gameOpen,
+    canPlay,
+    canFriends,
+    playCaption: connecting ? 'connecting...' : !gameOpen ? 'closed' : energy > 0 ? '1 energy' : 'no energy',
+    friendsCaption: canFriends ? friendsLabel : friendsConnecting && gameOpen ? 'CONNECTING...' : 'PLAY\nWITH FRIENDS',
+    startSeason: () => {
+      closeLobbyMenu()
+      markStartedFromMenu()
+      lobbyMenuState.actions.playSeason && lobbyMenuState.actions.playSeason()
+    },
+    startFriends: () => {
+      closeLobbyMenu()
+      markStartedFromMenu()
+      lobbyMenuState.actions.playWithFriends && lobbyMenuState.actions.playWithFriends()
+    }
+  }
+}
 
 export const openLobbyMenu = () => {
   // Back in the dialog, by hand or after a match: nothing left to reopen.
@@ -132,7 +180,8 @@ export const refreshLobbyMenuPrizes = () => {
       name: String(w.name || w.itemId || ''),
       tierReward: Number(w.tierReward || 0),
       stock: (w.maxStock || 0) - (w.claimed || 0),
-      wearableId: w.wearableId === undefined || w.wearableId === null ? undefined : Number(w.wearableId)
+      wearableId: w.wearableId === undefined || w.wearableId === null ? undefined : Number(w.wearableId),
+      fashionTickets: Number(w.fashionTickets || 0)
     }))
     applyPrizeThumbnails()
   })

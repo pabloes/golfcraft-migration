@@ -1,8 +1,9 @@
-// The Season screens between the lobby and the holes, after the design canvas:
-//   - JoiningScreen   (Joining.dc.html)     solo run, waiting for the ghosts
-//   - PartyScreen     (Party.dc.html)       "play ranked with friends" room
-//   - HoleResultScreen (HoleResult.dc.html) between holes
-//   - RunCompleteScreen (RunComplete.dc.html) after the fourth hole
+// The Season screens between the lobby and the holes, after the "Escritorio ·
+// propuesta 2" page of the GolfCraft UI canvas:
+//   - JoiningScreen    (Joining2.dc.html)    solo run, waiting for the players
+//   - PartyScreen      (Party2.dc.html)      "play ranked with friends" room
+//   - HoleResultScreen (HoleResult2.dc.html) between holes
+//   - RunCompleteScreen (RunComplete2.dc.html) after the fourth hole
 // They only read seasonWaitState / seasonNextGameState, which the existing
 // flows fill; the rounds and the server messages are untouched. Each one is a
 // 1280x720 panel contained in the interactable area, like the lobby menu.
@@ -12,11 +13,13 @@ import { Color4 } from '@dcl/sdk/math'
 import { globalStore } from '../services/globalStore/globalStore'
 import { seasonWaitState, SeasonWaitPlayer } from './season-wait-state'
 import { seasonNextGameState, SeasonScoreRow } from './season-results-state'
-import { lobbyMenuState } from './lobby-menu-state'
+import { lobbyMenuState, nextSeasonPrize, prizeSoldOut } from './lobby-menu-state'
 import { lobbyHudState } from './lobby-hud-state'
 import { seasonCatalog } from '../components/lobby/seasons/season-catalog'
-import { C, hex, fmt, mmss, ordinal, shortName, pressable, title, materialIcon, MATERIAL_ICON } from './ui-theme'
-import { containLayout, scaler, DESIGN_W, DESIGN_H, type Px, type Layout } from './ui-scale'
+import { avatarFaceUrl } from '../services/avatar-face'
+import { C, hex, fmt, mmss, ordinal, shortName } from './ui-theme'
+import { containLayout, scaler, DESIGN_W, DESIGN_H, type Px } from './ui-scale'
+import { P, at, img, imgW, text, box, frame, button2, viewHeader, navyPill, resIcon, rankBadge, border, initialAvatar } from './ui2'
 // @ts-ignore - common/utils has @ts-nocheck
 import { getCatFromTier, getPointsOnCurrentTier, getTierFromSub, seasonPointsPerCategory } from '../../../common/utils'
 // @ts-ignore - season-tier-definitions has @ts-nocheck
@@ -24,144 +27,84 @@ import { seasonTierDefinitions } from '../../../common/season-tier-definitions'
 
 const MARGIN = 16
 const SLOTS = 4
-
-// ---------------------------------------------------------------------------
-// Shared pieces
-
-// Full-screen backdrop + the contained panel; children are laid out in a column.
-const screen = (L: Layout, px: Px, children: ReactEcs.JSX.Element[], padding = { top: 26, bottom: 26, left: 32, right: 32 }) => (
-  <UiEntity uiTransform={{ width: '100%', height: '100%', positionType: 'absolute' }} uiBackground={{ color: C.backdrop }}>
-    <UiEntity
-      uiTransform={{
-        positionType: 'absolute',
-        position: { left: L.left, top: L.top },
-        width: L.panelW,
-        height: L.panelH,
-        flexDirection: 'column',
-        alignItems: 'center',
-        padding: { top: px(padding.top), bottom: px(padding.bottom), left: px(padding.left), right: px(padding.right) },
-        borderRadius: px(24),
-        borderWidth: Math.max(2, px(4)),
-        borderColor: C.dark
-      }}
-      uiBackground={{ color: C.bg }}
-    >
-      {children}
-    </UiEntity>
-  </UiEntity>
-)
-
-const darkChip = (px: Px, fs: Px, text: string, size = 20, color: Color4 = C.white) => (
-  <UiEntity uiTransform={{ height: px(40), padding: { left: px(16), right: px(16) }, borderRadius: px(14), justifyContent: 'center' }} uiBackground={{ color: C.dark }}>
-    <Label value={text} fontSize={fs(size)} color={color} textAlign="middle-center" uiTransform={{ height: px(40) }} textWrap="nowrap" />
-  </UiEntity>
-)
-
-const avatarBox = (px: Px, userId: string, size: number, color: Color4) => (
-  <UiEntity
-    uiTransform={{ width: px(size), height: px(size), borderRadius: px(size * 0.26), borderWidth: Math.max(2, px(5)), borderColor: C.dark }}
-    uiBackground={userId ? { avatarTexture: { userId }, color } : { color }}
-  />
-)
+const card = { color: P.navy, radius: 20, border: 4, shadow: 10 }
+const SALMON = hex('#FFB4A6')
+const CONFESSION = hex('#FF8FE6')
 
 const seasonName = () => {
   const userData = globalStore.userData.getState()
   return (seasonCatalog as any)[String(userData?.config?.currentSeasonCollectionId ?? 4)]?.name || 'MOUNTAIN'
 }
-
-const myTierName = () => {
-  const tierSub = Number(globalStore.userData.getState()['statistic_tier-sub'] || 0)
-  return seasonTierDefinitions[Number(getTierFromSub(tierSub) || 0)]?.name || 'WOOD 5'
+const tierOf = (tierSub: number) => Number(getTierFromSub(tierSub) || 0)
+const myTierSub = () => Number(globalStore.userData.getState()['statistic_tier-sub'] || 0)
+const tierIndexByName = (name?: string) => {
+  if (!name) return -1
+  return seasonTierDefinitions.findIndex((d: any) => d?.name === name)
 }
 
-// A wide yellow pill with a bold figure: "Starting in 7", "Starts in 42s".
-const timerPill = (px: Px, fs: Px, text: string, size = 26) => (
-  <UiEntity
-    uiTransform={{
-      height: px(52),
-      padding: { left: px(22), right: px(22) },
-      borderRadius: px(18),
-      borderWidth: Math.max(2, px(4)),
-      borderColor: C.dark,
-      justifyContent: 'center',
-      alignItems: 'center'
-    }}
-    uiBackground={{ color: C.yellow }}
-  >
-    <Label value={text} fontSize={fs(size)} color={C.dark} textAlign="middle-center" uiTransform={{ height: px(52) }} textWrap="nowrap" />
-  </UiEntity>
-)
+// Rank pill: the rank's badge and its name.
+const rankPill = (px: Px, fs: Px, key: string, cx: number, y: number, tier: number, name: string) => {
+  const w = 44 + name.length * 9
+  return box(px, key, cx - w / 2, y, w, 32, { color: P.dim, radius: 12, align: 'center', padding: { left: px(6) } }, [
+    tier >= 0 ? rankBadge(px, tier, 22) : null,
+    <Label value={name} fontSize={fs(15)} color={P.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(32), margin: { left: px(6) } }} />
+  ])
+}
 
-// An empty slot with a dashed look: dim background and violet border.
-const emptySlot = (px: Px, fs: Px, key: string, caption: string, glyph: string) => (
-  <UiEntity
-    key={key}
-    uiTransform={{
-      width: '23.5%',
-      height: '100%',
-      flexDirection: 'column',
-      justifyContent: 'center',
-      alignItems: 'center',
-      borderRadius: px(26),
-      borderWidth: Math.max(2, px(4)),
-      borderColor: C.violet
-    }}
-    uiBackground={{ color: hex('#1C0A3F', 0.35) }}
-  >
+// Player card of the waiting screens: avatar, name, then whatever `extra`
+// draws under it (rank, state, eligibility).
+const playerCard = (px: Px, fs: Px, key: string, x: number, y: number, w: number, h: number, color: Color4, ring: boolean, player: SeasonWaitPlayer, avatar: number, extra: any[]) => {
+  const cx = x + w / 2
+  const face = avatarFaceUrl(player.userId)
+  return [
+    box(px, key, x, y, w, h, { color, radius: 22, border: ring ? 5 : 4, borderColor: ring ? C.yellow : P.white, shadow: 10 }),
     <UiEntity
-      uiTransform={{ width: px(100), height: px(100), borderRadius: px(28), borderWidth: Math.max(2, px(4)), borderColor: C.violet, justifyContent: 'center', alignItems: 'center' }}
+      key={`${key}-avatar`}
+      uiTransform={{ ...at(px, cx - avatar / 2, y + 26, avatar, avatar), borderRadius: px(avatar * 0.23), borderWidth: border(px, 4), borderColor: P.white }}
+      uiBackground={{ color: hex('#2D6FE0') }}
     >
-      <Label value={glyph} fontSize={fs(40)} color={C.muted} textAlign="middle-center" uiTransform={{ height: px(100) }} textWrap="nowrap" />
-    </UiEntity>
-    <Label value={caption} fontSize={fs(19)} color={C.muted} textAlign="middle-center" uiTransform={{ width: '100%', height: px(30), margin: { top: px(14) } }} textWrap="nowrap" />
-  </UiEntity>
-)
+      {face ? <UiEntity uiTransform={{ width: '100%', height: '100%', borderRadius: px(avatar * 0.2) }} uiBackground={{ texture: { src: face }, textureMode: 'stretch' }} /> : null}
+    </UiEntity>,
+    text(px, fs, player.displayName, x + 10, y + 26 + avatar + 12, w - 20, 34, 24, P.white, 'middle-center'),
+    ...extra
+  ]
+}
+
+// An empty seat: translucent card, a glyph box and a caption.
+const emptySlot = (px: Px, fs: Px, key: string, x: number, y: number, w: number, h: number, caption: string, plus: boolean) => {
+  const cx = x + w / 2
+  const cy = y + h / 2
+  return [
+    box(px, key, x, y, w, h, { color: P.dim, radius: 22, border: 4, borderColor: Color4.create(1, 1, 1, 0.55) }),
+    box(px, `${key}-glyph`, cx - 52, cy - 76, 104, 104, { color: P.clear, radius: 28, border: 4, borderColor: Color4.create(1, 1, 1, 0.55), justify: 'center', align: 'center' }, [
+      plus
+        ? img(px, 'gl_plus', undefined, undefined, 1)
+        : (
+            <UiEntity uiTransform={{ flexDirection: 'row', alignItems: 'center' }}>
+              {[1, 0.7, 0.4].map((a, i) => (
+                <UiEntity key={i} uiTransform={{ width: px(14), height: px(14), borderRadius: px(7), margin: { left: i ? px(8) : 0 } }} uiBackground={{ color: Color4.create(1, 1, 1, a) }} />
+              ))}
+            </UiEntity>
+          )
+    ]),
+    text(px, fs, caption, x + 10, cy + 42, w - 20, 30, 19, P.paler, 'middle-center')
+  ]
+}
+
+const statePill = (px: Px, fs: Px, key: string, cx: number, y: number, value: string, yellow: boolean) => {
+  const w = 30 + value.length * 10
+  return box(px, key, cx - w / 2, y, w, 34, { color: yellow ? C.yellow : hex('#1C0A3F'), radius: 12, justify: 'center', align: 'center' }, [
+    <Label value={value} fontSize={fs(17)} color={yellow ? P.ink : P.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: px(34) }} />
+  ])
+}
+
+const lavenderCancel = (px: Px, id: string, x: number, y: number, w: number, h: number, onCancel: (() => void) | null) =>
+  button2(px, { id, x, y, w, h, color: onCancel ? P.lavender : C.disabled, radius: 18, shadow: 7, shadowColor: onCancel ? P.lavenderShadow : C.dark, disabled: !onCancel, onClick: onCancel || undefined }, [
+    img(px, 'bt_cancel')
+  ])
 
 // ---------------------------------------------------------------------------
-// Solo run: waiting for the ghosts
-
-const joiningCard = (px: Px, fs: Px, player: SeasonWaitPlayer, index: number, isLast: boolean) => {
-  const me = index === 0
-  const justJoined = !me && isLast
-  return (
-    <UiEntity
-      key={player.userId + index}
-      uiTransform={{
-        width: '23.5%',
-        height: '100%',
-        flexDirection: 'column',
-        alignItems: 'center',
-        padding: { top: px(26), bottom: px(20), left: px(14), right: px(14) },
-        borderRadius: px(26),
-        borderWidth: Math.max(2, px(justJoined ? 6 : 4)),
-        borderColor: justJoined ? C.yellow : C.dark
-      }}
-      uiBackground={{ color: me ? C.hotPink : C.purple }}
-    >
-      {avatarBox(px, player.userId, 132, me ? C.teal : C.blue)}
-      <Label
-        value={player.displayName}
-        fontSize={fs(24)}
-        color={me ? C.dark : C.white}
-        textAlign="middle-center"
-        uiTransform={{ width: '100%', height: px(34), margin: { top: px(12) } }} textWrap="nowrap"
-      />
-      <UiEntity uiTransform={{ flexGrow: 1 }} />
-      <UiEntity
-        uiTransform={{ height: px(36), padding: { left: px(14), right: px(14) }, borderRadius: px(12), justifyContent: 'center' }}
-        uiBackground={{ color: justJoined ? C.yellow : C.dark }}
-      >
-        <Label
-          value={me ? 'YOU' : justJoined ? 'Just joined!' : 'Joined'}
-          fontSize={fs(18)}
-          color={justJoined ? C.dark : C.white}
-          textAlign="middle-center"
-          uiTransform={{ height: px(36) }} textWrap="nowrap"
-        />
-      </UiEntity>
-    </UiEntity>
-  )
-}
+// Solo run: waiting for the players
 
 export const JoiningScreen = () => {
   const w = seasonWaitState
@@ -169,353 +112,147 @@ export const JoiningScreen = () => {
   const L = containLayout(DESIGN_W, DESIGN_H, { margin: MARGIN })
   const { px, fs } = scaler(L.scale)
   const players = w.players
-  const cards: ReactEcs.JSX.Element[] = players.map((p, i) => joiningCard(px, fs, p, i, i === players.length - 1))
-  for (let i = players.length; i < SLOTS; i++) cards.push(emptySlot(px, fs, `empty-${i}`, 'Finding a rival', '· · ·'))
+  const cardW = (1176 - 3 * 22) / 4
+  const myTier = tierOf(myTierSub())
+  const myTierName = seasonTierDefinitions[myTier]?.name || 'WOOD 5'
 
-  return screen(L, px, [
-    title(fs, 'WAITING PLAYERS TO JOIN', 56, px(66)),
-    <UiEntity uiTransform={{ height: px(52), flexDirection: 'row', alignItems: 'center', margin: { top: px(10) } }}>
-      {darkChip(px, fs, `${seasonName()} Season · ${myTierName()}`)}
-      <UiEntity uiTransform={{ width: px(16) }} />
-      {timerPill(px, fs, w.secondsLeft > 0 ? `Starting in ${w.secondsLeft}` : 'Starting...')}
-    </UiEntity>,
-    <UiEntity uiTransform={{ width: '100%', flexGrow: 1, flexDirection: 'row', justifyContent: 'space-between', margin: { top: px(22), bottom: px(22) } }}>
-      {cards}
-    </UiEntity>,
-    <UiEntity uiTransform={{ width: '100%', height: px(78), flexDirection: 'row', alignItems: 'center' }}>
-      <UiEntity
-        uiTransform={{ flexGrow: 1, height: px(68), padding: { left: px(20), right: px(20) }, borderRadius: px(18), justifyContent: 'center' }}
-        uiBackground={{ color: C.dark }}
-      >
-        <Label
-          value={w.sub || 'Anonymous confession: nothing to confess yet'}
-          fontSize={fs(17)}
-          color={hex('#FF8FE6')}
-          textAlign="middle-left"
-          textWrap="wrap"
-          uiTransform={{ width: '100%', height: px(68) }}
-        />
-      </UiEntity>
-      <UiEntity uiTransform={{ width: px(20) }} />
-      {pressable(
-        {
-          id: 'wait-cancel',
-          width: px(210),
-          height: px(68),
-          color: C.white,
-          radius: px(20),
-          borderWidth: Math.max(2, px(4)),
-          borderColor: C.dark,
-          shadow: px(7),
-          disabled: !w.onCancel,
-          onClick: () => w.onCancel && w.onCancel()
-        },
-        <Label value="CANCEL" fontSize={fs(26)} color={hex('#B3154F')} textAlign="middle-center" uiTransform={{ width: '100%', height: px(68) }} textWrap="nowrap" />
-      )}
-    </UiEntity>
+  const seats: any[] = []
+  for (let i = 0; i < SLOTS; i++) {
+    const x = 52 + i * (cardW + 22)
+    const p = players[i]
+    if (!p) {
+      seats.push(emptySlot(px, fs, `seat-${i}`, x, 200, cardW, 392, 'Finding a rival', false))
+      continue
+    }
+    const me = i === 0
+    const justJoined = !me && i === players.length - 1
+    const cx = x + cardW / 2
+    seats.push(
+      playerCard(px, fs, `seat-${i}`, x, 200, cardW, 392, me ? P.teal : P.purple, justJoined, p, 128, [
+        me ? rankPill(px, fs, `seat-rank-${i}`, cx, 200 + 26 + 128 + 54, myTier, myTierName) : null,
+        statePill(px, fs, `seat-state-${i}`, cx, 200 + 392 - 22 - 34, me ? 'YOU' : justJoined ? 'Just joined!' : 'Joined', me || justJoined)
+      ])
+    )
+  }
+
+  const timer = w.secondsLeft > 0 ? `Starting in ${w.secondsLeft}` : 'Starting...'
+  const infoW = 300
+  const timerW = 220
+  const rowX = (1280 - infoW - 14 - timerW) / 2
+
+  return frame(L, 'view', [
+    img(px, 'rb_waiting', (1280 - imgW('rb_waiting')) / 2, 30),
+    navyPill(px, fs, 'wait-info', rowX, 128, infoW, 48, [
+      <Label value={`${seasonName()} Season ·`} fontSize={fs(17)} color={P.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(42) }} />,
+      <Label value={myTierName} fontSize={fs(17)} color={C.yellow} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(42), margin: { left: px(6) } }} />
+    ]),
+    box(px, 'wait-timer', rowX + infoW + 14, 128, timerW, 48, { color: C.yellow, radius: 14, shadow: 5, shadowColor: P.yellowShadow, justify: 'center', align: 'center' }, [
+      img(px, 'ic_timer_n', undefined, undefined, 0.55),
+      <Label value={timer} fontSize={fs(22)} color={P.ink} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(48), margin: { left: px(10) } }} />
+    ]),
+    ...seats,
+    box(px, 'confession', 52, 616, 948, 70, { color: P.navy, radius: 16, border: 3, borderColor: P.navyEdge, align: 'center', padding: { left: px(20), right: px(20) } }, [
+      <Label value="CONFESSION" fontSize={fs(12)} color={P.pale} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(64), margin: { right: px(12) }, flexShrink: 0 }} />,
+      <Label value={(w.sub || 'Anonymous confession: nothing to confess yet').replace(/^Anonymous confession:\s*/, '')} fontSize={fs(16)} color={CONFESSION} textAlign="middle-left" textWrap="wrap" uiTransform={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, height: px(64) }} />
+    ]),
+    lavenderCancel(px, 'wait-cancel', 1018, 616, 210, 68, w.onCancel)
   ])
 }
 
 // ---------------------------------------------------------------------------
 // Party room
 
-const partyCard = (px: Px, fs: Px, player: SeasonWaitPlayer, index: number) => (
-  <UiEntity
-    key={player.userId + index}
-    uiTransform={{
-      width: '23.5%',
-      height: '100%',
-      flexDirection: 'column',
-      alignItems: 'center',
-      padding: { top: px(26), bottom: px(18), left: px(14), right: px(14) },
-      borderRadius: px(26),
-      borderWidth: Math.max(2, px(player.isHost ? 5 : 4)),
-      borderColor: player.isHost ? C.yellow : C.dark
-    }}
-    uiBackground={{ color: C.purple }}
-  >
-    {player.isHost ? (
-      <UiEntity
-        uiTransform={{
-          positionType: 'absolute',
-          position: { top: px(-16) },
-          height: px(30),
-          padding: { left: px(12), right: px(12) },
-          borderRadius: px(12),
-          borderWidth: Math.max(1, px(3)),
-          borderColor: C.dark,
-          justifyContent: 'center'
-        }}
-        uiBackground={{ color: C.yellow }}
-      >
-        <Label value="HOST" fontSize={fs(16)} color={C.dark} textAlign="middle-center" uiTransform={{ height: px(30) }} textWrap="nowrap" />
-      </UiEntity>
-    ) : null}
-    {avatarBox(px, player.userId, 116, index === 0 ? C.teal : C.pink)}
-    <Label value={player.displayName} fontSize={fs(24)} color={C.white} textAlign="middle-center" uiTransform={{ width: '100%', height: px(32), margin: { top: px(10) } }} textWrap="nowrap" />
-    <UiEntity uiTransform={{ height: px(32), flexDirection: 'row', alignItems: 'center', padding: { left: px(12), right: px(12) }, margin: { top: px(6) }, borderRadius: px(12) }} uiBackground={{ color: C.dark }}>
-      <UiEntity uiTransform={{ width: px(18), height: px(18), borderRadius: px(9), borderWidth: Math.max(1, px(2)), borderColor: C.white }} uiBackground={{ color: C.orange }} />
-      <Label value={player.tierName || ''} fontSize={fs(16)} color={C.white} textAlign="middle-left" uiTransform={{ height: px(32), margin: { left: px(8) } }} textWrap="nowrap" />
-    </UiEntity>
-    <UiEntity uiTransform={{ flexGrow: 1 }} />
-    {player.eligible === false ? (
-      <UiEntity uiTransform={{ width: '100%', height: px(56), padding: { left: px(10), right: px(10) }, borderRadius: px(12), justifyContent: 'center' }} uiBackground={{ color: C.dark }}>
-        <Label
-          value="Above room level: plays for fun, no season points"
-          fontSize={fs(14)}
-          color={C.yellow}
-          textAlign="middle-center"
-          textWrap="wrap"
-          uiTransform={{ width: '100%', height: px(56) }}
-        />
-      </UiEntity>
-    ) : (
-      <Label value="Scores season points" fontSize={fs(17)} color={C.green} textAlign="middle-center" uiTransform={{ width: '100%', height: px(30) }} textWrap="nowrap" />
-    )}
-  </UiEntity>
-)
-
 export const PartyScreen = () => {
   const w = seasonWaitState
   if (!w.visible || w.mode !== 'party') return null
   const L = containLayout(DESIGN_W, DESIGN_H, { margin: MARGIN })
   const { px, fs } = scaler(L.scale)
-  const cards: ReactEcs.JSX.Element[] = w.players.map((p, i) => partyCard(px, fs, p, i))
-  for (let i = w.players.length; i < SLOTS; i++) cards.push(emptySlot(px, fs, `empty-${i}`, 'Waiting for a friend', '+'))
   const alone = w.players.length < 2
+  const cardW = (1176 - 3 * 20) / 4
 
-  return screen(
-    L,
-    px,
-    [
-      <UiEntity uiTransform={{ width: '100%', height: px(64), flexDirection: 'row', alignItems: 'center' }}>
-        {pressable(
-          {
-            id: 'party-back',
-            width: px(60),
-            height: px(60),
-            color: C.white,
-            radius: px(18),
-            borderWidth: Math.max(2, px(4)),
-            borderColor: C.dark,
-            shadow: px(6),
-            disabled: !w.onCancel,
-            onClick: () => w.onCancel && w.onCancel()
-          },
-          <Label value="<" fontSize={fs(30)} color={C.dark} textAlign="middle-center" uiTransform={{ width: px(60), height: px(60) }} textWrap="nowrap" />
-        )}
-        <UiEntity uiTransform={{ width: px(18) }} />
-        {title(fs, 'PLAY WITH FRIENDS', 48, px(64))}
-        <UiEntity uiTransform={{ flexGrow: 1 }} />
-        {darkChip(px, fs, `${w.players.length} / ${SLOTS} players`)}
-      </UiEntity>,
-      <UiEntity uiTransform={{ height: px(56), flexDirection: 'row', alignItems: 'center', margin: { top: px(12) } }}>
-        {timerPill(px, fs, alone ? `Cancels in ${w.secondsLeft}s` : `Starts in ${w.secondsLeft}s`, 30)}
-        <UiEntity uiTransform={{ width: px(18) }} />
-        <Label
-          value={alone ? 'Waiting for a friend to join' : `Playing at ${w.roomTierName} level, the lowest rank in the room`}
-          fontSize={fs(20)}
-          color={C.white}
-          textAlign="middle-left"
-          uiTransform={{ height: px(56) }} textWrap="nowrap"
-        />
-      </UiEntity>,
-      <UiEntity uiTransform={{ width: '100%', flexGrow: 1, flexDirection: 'row', justifyContent: 'space-between', margin: { top: px(26), bottom: px(20) } }}>
-        {cards}
-      </UiEntity>,
-      <UiEntity uiTransform={{ width: '100%', height: px(86), flexDirection: 'row', alignItems: 'center' }}>
-        <UiEntity
-          uiTransform={{ flexGrow: 1, height: px(86), flexDirection: 'column', justifyContent: 'center', padding: { left: px(20), right: px(20) }, borderRadius: px(18) }}
-          uiBackground={{ color: C.dark }}
-        >
-          <Label value={`Friends see JOIN PARTY (${w.players.length}/${SLOTS}) on their Season screen`} fontSize={fs(15)} color={C.lilac} textAlign="middle-left" uiTransform={{ height: px(22) }} textWrap="nowrap" />
-          <Label value="Same 4 holes for everyone, each player races 3 rivals" fontSize={fs(15)} color={C.lilac} textAlign="middle-left" uiTransform={{ height: px(22) }} textWrap="nowrap" />
-          <Label value="Starts on its own after 60 s with no one joining or leaving" fontSize={fs(15)} color={C.lilac} textAlign="middle-left" uiTransform={{ height: px(22) }} textWrap="nowrap" />
-        </UiEntity>
-        <UiEntity uiTransform={{ width: px(18) }} />
-        {pressable(
-          {
-            id: 'party-cancel',
-            width: px(210),
-            height: px(68),
-            color: C.white,
-            radius: px(20),
-            borderWidth: Math.max(2, px(4)),
-            borderColor: C.dark,
-            shadow: px(7),
-            disabled: !w.onCancel,
-            onClick: () => w.onCancel && w.onCancel()
-          },
-          <Label value="CANCEL" fontSize={fs(26)} color={hex('#B3154F')} textAlign="middle-center" uiTransform={{ width: '100%', height: px(68) }} textWrap="nowrap" />
-        )}
-        {w.onStart ? <UiEntity uiTransform={{ width: px(18) }} /> : null}
-        {w.onStart
-          ? pressable(
-              {
-                id: 'party-start',
-                width: px(260),
-                height: px(76),
-                color: C.yellow,
-                radius: px(22),
-                borderWidth: Math.max(2, px(4)),
-                borderColor: C.dark,
-                shadow: px(8),
-                onClick: () => w.onStart && w.onStart()
-              },
-              <Label value="START" fontSize={fs(38)} color={C.dark} textAlign="middle-center" uiTransform={{ width: '100%', height: px(76) }} textWrap="nowrap" />
-            )
-          : null}
-      </UiEntity>
-    ],
-    { top: 22, bottom: 28, left: 28, right: 28 }
-  )
+  const seats: any[] = []
+  for (let i = 0; i < SLOTS; i++) {
+    const x = 52 + i * (cardW + 20)
+    const p = w.players[i]
+    if (!p) {
+      seats.push(emptySlot(px, fs, `party-seat-${i}`, x, 192, cardW, 384, 'Waiting for a friend', true))
+      continue
+    }
+    const cx = x + cardW / 2
+    const tier = tierIndexByName(p.tierName)
+    seats.push(
+      playerCard(px, fs, `party-seat-${i}`, x, 192, cardW, 384, p.isHost ? P.teal : P.purple, !!p.isHost, p, 116, [
+        p.isHost
+          ? box(px, `party-host-${i}`, cx - 50, 174, 100, 30, { color: C.yellow, radius: 12, border: 3, justify: 'center', align: 'center' }, [
+              img(px, 'gl_crown', undefined, undefined, 0.6),
+              <Label value="HOST" fontSize={fs(16)} color={P.ink} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(30), margin: { left: px(6) } }} />
+            ])
+          : null,
+        p.tierName ? rankPill(px, fs, `party-rank-${i}`, cx, 192 + 26 + 116 + 52, tier, p.tierName) : null,
+        p.eligible === false
+          ? box(px, `party-elig-${i}`, x + 14, 192 + 384 - 18 - 56, cardW - 28, 56, { color: hex('#1C0A3F'), radius: 12, justify: 'center', align: 'center', padding: { left: px(8), right: px(8) } }, [
+              <Label value="Above room level: plays for fun, no season points" fontSize={fs(14)} color={C.yellow} textAlign="middle-center" textWrap="wrap" uiTransform={{ width: '100%', height: px(52) }} />
+            ])
+          : text(px, fs, 'Scores season points', x + 10, 192 + 384 - 18 - 30, cardW - 20, 30, 16, C.yellow, 'middle-center')
+      ])
+    )
+  }
+
+  return frame(L, 'view', [
+    ...viewHeader(px, 'rb_friends', w.onCancel),
+    navyPill(px, fs, 'party-count', 1030, 44, 198, 46, [
+      img(px, 'ic_people_w', undefined, undefined, 0.6),
+      <Label value={`${w.players.length} / ${SLOTS} players`} fontSize={fs(18)} color={P.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(40), margin: { left: px(10) } }} />
+    ]),
+    box(px, 'party-timer', 300, 116, 230, 52, { color: C.yellow, radius: 14, shadow: 5, shadowColor: P.yellowShadow, justify: 'center', align: 'center' }, [
+      img(px, 'ic_timer_n', undefined, undefined, 0.6),
+      <Label value={alone ? `Cancels in ${w.secondsLeft}s` : `Starts in ${w.secondsLeft}s`} fontSize={fs(23)} color={P.ink} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(52), margin: { left: px(10) } }} />
+    ]),
+    text(px, fs, alone ? 'Waiting for a friend to join' : `Playing at ${w.roomTierName} level, the lowest rank in the room`, 548, 116, 680, 52, 17),
+    ...seats,
+    box(px, 'party-rules', 52, 598, 690, 92, { color: P.navy, radius: 16, border: 3, borderColor: P.navyEdge, column: true, justify: 'center', padding: { left: px(20), right: px(20) } }, [
+      <Label value={`Friends see JOIN PARTY (${w.players.length}/${SLOTS}) on their Season screen`} fontSize={fs(15)} color={P.paler} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(24) }} />,
+      <Label value="Same 4 holes for everyone, each player races 3 rivals" fontSize={fs(15)} color={P.paler} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(24) }} />,
+      <Label value="Starts on its own after 60 s with no one joining or leaving" fontSize={fs(15)} color={P.paler} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(24) }} />
+    ]),
+    lavenderCancel(px, 'party-cancel', w.onStart ? 758 : 1038, 606, 190, 70, w.onCancel),
+    w.onStart
+      ? button2(px, { id: 'party-start', x: 968, y: 598, w: 260, h: 84, color: P.yellow, radius: 20, shadow: 8, shadowColor: P.yellowShadow, onClick: () => w.onStart && w.onStart() }, [
+          img(px, 'bt_start'),
+          <UiEntity uiTransform={{ width: px(14) }} />,
+          img(px, 'ic_play_n', undefined, undefined, 0.85)
+        ])
+      : null
+  ])
 }
 
 // ---------------------------------------------------------------------------
 // Results
 
-const REWARD_STYLE: Record<string, { color: Color4; label: string }> = {
-  GC: { color: C.yellow, label: 'GC' },
-  WD: { color: C.wood, label: 'WD' },
-  ST: { color: C.stone, label: 'ST' },
-  IR: { color: C.iron, label: 'IR' },
-  GD: { color: C.gold, label: 'GD' },
-  DM: { color: C.diamond, label: 'DM' },
-  FT: { color: C.ticket, label: 'FT' },
-  PT: { color: C.cyan, label: 'PT' },
-  XP: { color: C.green, label: 'XP' }
-}
-
-const rewardTile = (px: Px, fs: Px, code: string, amount: number, size: number) => {
-  const style = REWARD_STYLE[code.toUpperCase()] || { color: C.lilac, label: code }
-  return (
-    <UiEntity
-      key={code}
-      uiTransform={{
-        width: '48%',
-        height: px(size),
-        flexDirection: 'row',
-        alignItems: 'center',
-        margin: { bottom: px(10) },
-        padding: { left: px(10), right: px(10) },
-        borderRadius: px(14),
-        borderWidth: Math.max(1, px(3)),
-        borderColor: C.dark
-      }}
-      uiBackground={{ color: C.tealDark }}
-    >
-      {MATERIAL_ICON[code.toUpperCase()] ? (
-        materialIcon(px, code, 32)
-      ) : (
-        <UiEntity uiTransform={{ width: px(30), height: px(30), borderRadius: px(9), borderWidth: Math.max(1, px(3)), borderColor: C.darker, justifyContent: 'center', alignItems: 'center' }} uiBackground={{ color: style.color }}>
-          <Label value={style.label} fontSize={fs(10)} color={C.dark} textAlign="middle-center" uiTransform={{ height: px(30) }} textWrap="nowrap" />
-        </UiEntity>
-      )}
-      <Label value={`+${fmt(amount)}`} fontSize={fs(21)} color={C.white} textAlign="middle-left" uiTransform={{ height: px(size), margin: { left: px(8) } }} textWrap="nowrap" />
-    </UiEntity>
-  )
-}
-
-const rewardsPanel = (px: Px, fs: Px, heading: string, rewards: { code: string; amount: number }[], grow: boolean) => (
-  <UiEntity
-    uiTransform={{
-      width: '100%',
-      flexGrow: grow ? 1 : undefined,
-      flexDirection: 'column',
-      padding: { top: px(16), bottom: px(8), left: px(20), right: px(20) },
-      borderRadius: px(24),
-      borderWidth: Math.max(2, px(4)),
-      borderColor: C.dark
-    }}
-    uiBackground={{ color: C.teal }}
-  >
-    <Label value={heading} fontSize={fs(22)} color={C.white} textAlign="middle-left" uiTransform={{ height: px(30), margin: { bottom: px(10) } }} textWrap="nowrap" />
-    <UiEntity uiTransform={{ width: '100%', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-      {rewards.length ? rewards.slice(0, 6).map((r) => rewardTile(px, fs, r.code, r.amount, 48)) : null}
-      {!rewards.length ? <Label value="Nothing this time" fontSize={fs(16)} color={C.lilac} textAlign="middle-left" uiTransform={{ height: px(30) }} textWrap="nowrap" /> : null}
-    </UiEntity>
-  </UiEntity>
-)
-
 const pointsSign = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : '0')
+const pointsColor = (n: number) => (n > 0 ? P.green : n < 0 ? SALMON : P.paler)
 
-const resultRow = (px: Px, fs: Px, row: SeasonScoreRow, cols: [number, number, number, number], run: boolean) => {
-  const [rankW, shotsW, timeW, ptsW] = cols
-  const fg = row.isMe ? C.dark : C.white
-  return (
-    <UiEntity
-      key={row.rank + row.name}
-      uiTransform={{
-        width: '100%',
-        flexGrow: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        margin: { bottom: px(10) },
-        padding: { left: px(14), right: px(14) },
-        borderRadius: px(18),
-        borderWidth: Math.max(1, px(row.isMe ? 4 : 3)),
-        borderColor: C.dark
-      }}
-      uiBackground={{ color: row.isMe ? C.hotPink : C.purpleCard }}
-    >
-      <UiEntity uiTransform={{ width: px(rankW), height: px(46), justifyContent: 'flex-start', alignItems: 'center' }}>
-        <UiEntity
-          uiTransform={{ width: px(46), height: px(46), borderRadius: px(23), borderWidth: Math.max(1, px(3)), borderColor: C.dark, justifyContent: 'center', alignItems: 'center' }}
-          uiBackground={{ color: row.isMe ? C.white : row.rank === 1 ? C.yellow : C.muted }}
-        >
-          <Label value={String(row.rank)} fontSize={fs(22)} color={C.dark} textAlign="middle-center" uiTransform={{ height: px(46) }} textWrap="nowrap" />
-        </UiEntity>
+// Reward tile: the game's icon (a green XP square for xp) and the amount.
+const rewardTile = (px: Px, fs: Px, key: string, x: number, y: number, w: number, h: number, code: string, amount: number) =>
+  box(px, key, x, y, w, h, { color: P.dim, radius: 14, align: 'center', padding: { left: px(10) } }, [
+    code.toUpperCase() === 'XP' ? (
+      <UiEntity uiTransform={{ width: px(32), height: px(32), borderRadius: px(9), justifyContent: 'center', alignItems: 'center', flexShrink: 0 }} uiBackground={{ color: P.green }}>
+        <Label value="XP" fontSize={fs(12)} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(32) }} />
       </UiEntity>
-      <UiEntity uiTransform={{ flexGrow: 1, height: px(46), flexDirection: 'row', alignItems: 'center' }}>
-        <UiEntity
-          uiTransform={{ width: px(24), height: px(24), borderRadius: row.isGhost ? px(7) : px(12), borderWidth: Math.max(1, px(3)), borderColor: C.dark }}
-          uiBackground={{ color: row.isGhost ? C.lilac : C.white }}
-        />
-        <Label value={row.isMe ? `${row.name} · you` : row.name} fontSize={fs(21)} color={fg} textAlign="middle-left" uiTransform={{ height: px(46), margin: { left: px(10) } }} textWrap="nowrap" />
-      </UiEntity>
-      <Label value={String(row.shots)} fontSize={fs(22)} color={fg} textAlign="middle-center" uiTransform={{ width: px(shotsW), height: px(46) }} textWrap="nowrap" />
-      <Label
-        value={row.timeUp && !run ? 'time up' : mmss(row.timeMs)}
-        fontSize={fs(row.timeUp && !run ? 16 : 22)}
-        color={row.timeUp && !run ? C.salmon : fg}
-        textAlign="middle-center"
-        uiTransform={{ width: px(timeW), height: px(46) }} textWrap="nowrap"
-      />
-      <Label value={pointsSign(row.points)} fontSize={fs(row.isMe ? 26 : 22)} color={row.isMe ? C.dark : C.lilac} textAlign="middle-right" uiTransform={{ width: px(ptsW), height: px(46) }} textWrap="nowrap" />
-    </UiEntity>
-  )
-}
+    ) : (
+      resIcon(px, code, 32)
+    ),
+    <Label value={`+${fmt(amount)}`} fontSize={fs(22)} color={P.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(h), margin: { left: px(10) } }} />
+  ])
 
-const rankingPanel = (px: Px, fs: Px, rows: SeasonScoreRow[], run: boolean) => {
-  const cols: [number, number, number, number] = [56, 90, 90, 80]
-  return (
-    <UiEntity
-      uiTransform={{
-        width: '66%',
-        height: '100%',
-        flexDirection: 'column',
-        padding: { top: px(18), bottom: px(10), left: px(24), right: px(24) },
-        borderRadius: px(28),
-        borderWidth: Math.max(2, px(5)),
-        borderColor: C.yellow
-      }}
-      uiBackground={{ color: C.purple }}
-    >
-      <UiEntity uiTransform={{ width: '100%', height: px(24), flexDirection: 'row', alignItems: 'center', padding: { left: px(14), right: px(14) }, margin: { bottom: px(10) } }}>
-        <UiEntity uiTransform={{ width: px(cols[0]) }} />
-        <Label value="PLAYER" fontSize={fs(15)} color={C.lilac} textAlign="middle-left" uiTransform={{ flexGrow: 1, height: px(24) }} textWrap="nowrap" />
-        <Label value={run ? 'SHOTS' : 'SHOTS'} fontSize={fs(15)} color={C.lilac} textAlign="middle-center" uiTransform={{ width: px(cols[1]), height: px(24) }} textWrap="nowrap" />
-        <Label value="TIME" fontSize={fs(15)} color={C.lilac} textAlign="middle-center" uiTransform={{ width: px(cols[2]), height: px(24) }} textWrap="nowrap" />
-        <Label value="PTS" fontSize={fs(15)} color={C.lilac} textAlign="middle-right" uiTransform={{ width: px(cols[3]), height: px(24) }} textWrap="nowrap" />
-      </UiEntity>
-      {rows.map((row) => resultRow(px, fs, row, cols, run))}
-    </UiEntity>
-  )
-}
+const rewardTiles = (px: Px, fs: Px, prefix: string, rewards: { code: string; amount: number }[], x: number, y: number, tileW: number, tileH: number) =>
+  rewards.length
+    ? rewards.slice(0, 6).map((r, k) => rewardTile(px, fs, `${prefix}-${r.code}`, x + (k % 2) * (tileW + 10), y + Math.floor(k / 2) * (tileH + 10), tileW, tileH, r.code, r.amount))
+    : [text(px, fs, 'Nothing this time', x, y, 300, 30, 16, P.paler)]
 
 // Rank maths shared by both result screens.
 const tierInfo = (tierSub: number) => {
-  const tier = Number(getTierFromSub(tierSub) || 0)
+  const tier = tierOf(tierSub)
   const cat = getCatFromTier(tier)
   return {
     tier,
@@ -533,83 +270,78 @@ export const HoleResultScreen = () => {
   if (!n.visible || n.kind !== 'hole') return null
   const L = containLayout(DESIGN_W, DESIGN_H, { margin: MARGIN })
   const { px, fs } = scaler(L.scale)
-  const before = tierInfo(n.tierSub)
   const after = tierInfo(n.newTierSub)
   const gained = n.newTierSub - n.tierSub
-  // Bar on the rank AFTER the hole: what you had in green, what you gained in yellow.
+  // Bar on the rank AFTER the hole: what you had in yellow, what you gained in green.
   const hadPct = Math.max(0, Math.min(100, ((after.onTier - Math.max(0, gained)) * 100) / after.perTier))
   const gainPct = Math.max(0, Math.min(100 - hadPct, (Math.max(0, gained) * 100) / after.perTier))
 
-  return screen(L, px, [
-    <UiEntity uiTransform={{ height: px(70), flexDirection: 'row', alignItems: 'center' }}>
-      {title(fs, 'HOLE DONE!', 60, px(70))}
-      <UiEntity uiTransform={{ width: px(22) }} />
-      {darkChip(px, fs, `Hole ${n.hole} / ${n.holes}`)}
-      <UiEntity uiTransform={{ width: px(22) }} />
-      <UiEntity
-        uiTransform={{ height: px(46), padding: { left: px(16), right: px(16) }, borderRadius: px(16), borderWidth: Math.max(2, px(4)), borderColor: C.dark, justifyContent: 'center' }}
-        uiBackground={{ color: C.green }}
-      >
-        <Label value={`${n.myRank ? ordinal(n.myRank) : '-'} · ${pointsSign(n.myPoints)} pt`} fontSize={fs(22)} color={C.dark} textAlign="middle-center" uiTransform={{ height: px(46) }} textWrap="nowrap" />
-      </UiEntity>
+  const rows = n.rows
+  const rowsTop = 184
+  const rowH = Math.min(114, (680 - rowsTop - (rows.length - 1) * 10) / Math.max(1, rows.length))
+  const rowEls = rows.map((row: SeasonScoreRow, i: number) => {
+    const y = rowsTop + i * (rowH + 10)
+    const fg = row.isMe ? P.ink : P.white
+    return [
+      box(px, `hole-row-${i}`, 76, y, 740, rowH, row.isMe ? { color: P.yellow, radius: 16, border: 3, shadow: 6, shadowColor: P.yellowShadow } : { color: P.glass, radius: 16, border: 2, borderColor: P.glassEdge }),
+      box(px, `hole-pos-${i}`, 92, y + rowH / 2 - 22, 44, 44, { color: row.isMe ? P.ink : row.rank === 1 ? C.yellow : Color4.create(1, 1, 1, 0.2), radius: 22, border: 3, justify: 'center', align: 'center' }, [
+        <Label value={String(row.rank)} fontSize={fs(22)} color={row.isMe ? C.yellow : row.rank === 1 ? P.ink : P.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />
+      ]),
+      <UiEntity key={`hole-av-${i}`} uiTransform={at(px, 158, y + rowH / 2 - 14)}>
+        {initialAvatar(px, fs, row.name, 28, i)}
+      </UiEntity>,
+      text(px, fs, row.isMe ? `${row.name} · you` : row.name, 196, y + rowH / 2 - 16, 300, 32, 21, fg),
+      text(px, fs, String(row.shots), 520, y + rowH / 2 - 16, 90, 32, 24, fg, 'middle-center'),
+      text(px, fs, row.timeUp ? 'time up' : mmss(row.timeMs), 630, y + rowH / 2 - 16, 90, 32, row.timeUp ? 15 : 24, row.timeUp ? SALMON : fg, 'middle-center'),
+      text(px, fs, pointsSign(row.points), 722, y + rowH / 2 - 16, 80, 32, row.isMe ? 28 : 24, row.isMe ? P.ink : pointsColor(row.points), 'middle-right')
+    ]
+  })
+
+  const ribbonW = imgW('rb_hole_done')
+  const groupX = (1280 - (ribbonW + 22 + 124 + 22 + 150)) / 2
+
+  return frame(L, 'result', [
+    img(px, 'rb_hole_done', groupX, 22),
+    navyPill(px, fs, 'hole-of', groupX + ribbonW + 22, 46, 124, 46, [
+      <Label value="Hole" fontSize={fs(17)} color={P.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(40) }} />,
+      <Label value={`${n.hole} / ${n.holes}`} fontSize={fs(17)} color={C.yellow} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(40), margin: { left: px(6) } }} />
+    ]),
+    box(px, 'hole-me', groupX + ribbonW + 22 + 124 + 22, 46, 150, 46, { color: P.green, radius: 14, border: 3, justify: 'center', align: 'center' }, [
+      <Label value={`${n.myRank ? ordinal(n.myRank) : '-'} · ${pointsSign(n.myPoints)} pt`} fontSize={fs(21)} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: px(46) }} />
+    ]),
+
+    box(px, 'hole-table', 52, 132, 788, 558, card),
+    text(px, fs, 'PLAYER', 158, 150, 200, 22, 13, P.pale),
+    text(px, fs, 'SHOTS', 520, 150, 90, 22, 13, P.pale, 'middle-center'),
+    text(px, fs, 'TIME', 630, 150, 90, 22, 13, P.pale, 'middle-center'),
+    text(px, fs, 'PTS', 722, 150, 80, 22, 13, P.pale, 'middle-right'),
+    ...rowEls,
+
+    box(px, 'hole-points', 860, 132, 368, 150, card),
+    text(px, fs, 'SEASON POINTS', 882, 150, 180, 22, 13, P.pale),
+    <UiEntity key="hole-points-value" uiTransform={{ ...at(px, 1006, 146, 200, 30), flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' }}>
+      <Label value={`${n.tierSub} → `} fontSize={fs(24)} color={P.white} textAlign="middle-right" textWrap="nowrap" uiTransform={{ height: px(30) }} />
+      <Label value={String(n.newTierSub)} fontSize={fs(24)} color={gained >= 0 ? P.green : SALMON} textAlign="middle-right" textWrap="nowrap" uiTransform={{ height: px(30) }} />
     </UiEntity>,
-    <UiEntity uiTransform={{ width: '100%', flexGrow: 1, flexDirection: 'row', justifyContent: 'space-between', margin: { top: px(20) } }}>
-      {rankingPanel(px, fs, n.rows, false)}
-      <UiEntity uiTransform={{ width: '32%', height: '100%', flexDirection: 'column', justifyContent: 'space-between' }}>
-        <UiEntity
-          uiTransform={{ width: '100%', flexDirection: 'column', padding: { top: px(16), bottom: px(16), left: px(20), right: px(20) }, borderRadius: px(24), borderWidth: Math.max(2, px(4)), borderColor: C.dark }}
-          uiBackground={{ color: C.white }}
-        >
-          <UiEntity uiTransform={{ width: '100%', height: px(26), flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Label value="SEASON POINTS" fontSize={fs(16)} color={C.dark} textAlign="middle-left" uiTransform={{ height: px(26) }} textWrap="nowrap" />
-            <UiEntity uiTransform={{ height: px(26), flexDirection: 'row', alignItems: 'center' }}>
-              <Label value={`${n.tierSub} → `} fontSize={fs(20)} color={C.dark} textAlign="middle-right" uiTransform={{ height: px(26) }} textWrap="nowrap" />
-              <Label value={String(n.newTierSub)} fontSize={fs(20)} color={gained >= 0 ? C.greenDark : C.red} textAlign="middle-right" uiTransform={{ height: px(26) }} />
-            </UiEntity>
-          </UiEntity>
-          <UiEntity
-            uiTransform={{ width: '100%', height: px(22), flexDirection: 'row', margin: { top: px(10) }, borderRadius: px(12), borderWidth: Math.max(1, px(3)), borderColor: C.dark }}
-            uiBackground={{ color: hex('#EDE7F7') }}
-          >
-            <UiEntity uiTransform={{ width: `${hadPct}%`, height: '100%' }} uiBackground={{ color: C.green }} />
-            <UiEntity uiTransform={{ width: `${gainPct}%`, height: '100%' }} uiBackground={{ color: C.yellow }} />
-          </UiEntity>
-          <Label
-            value={after.nextName ? `${after.name} · ${after.perTier - after.onTier} pts to ${after.nextName}` : `${after.name} · top rank`}
-            fontSize={fs(16)}
-            color={hex('#5A4A7A')}
-            textAlign="middle-left"
-            uiTransform={{ width: '100%', height: px(24), margin: { top: px(8) } }} textWrap="nowrap"
-          />
-        </UiEntity>
-        {rewardsPanel(px, fs, 'YOU FOUND', n.rewards, false)}
-        <UiEntity uiTransform={{ flexGrow: 1 }} />
-        {pressable(
-          {
-            id: 'next-hole',
-            width: '100%',
-            height: px(76),
-            color: C.yellow,
-            radius: px(22),
-            borderWidth: Math.max(2, px(4)),
-            borderColor: C.dark,
-            shadow: px(8),
-            margin: { top: px(18) },
-            onClick: () => n.onSkip && n.onSkip()
-          },
-          <Label value="NEXT HOLE" fontSize={fs(30)} color={C.dark} textAlign="middle-center" uiTransform={{ height: px(76) }} textWrap="nowrap" />,
-          <UiEntity uiTransform={{ width: px(46), height: px(46), margin: { left: px(12) }, borderRadius: px(23), justifyContent: 'center', alignItems: 'center' }} uiBackground={{ color: C.dark }}>
-            <Label value={String(secondsLeft(n.until))} fontSize={fs(22)} color={C.yellow} textAlign="middle-center" uiTransform={{ height: px(46) }} textWrap="nowrap" />
-          </UiEntity>
-        )}
-      </UiEntity>
-    </UiEntity>
+    box(px, 'hole-points-bar', 882, 188, 324, 18, { color: P.dim, radius: 9 }, [
+      <UiEntity uiTransform={{ width: `${hadPct}%`, height: '100%' }} uiBackground={{ color: C.yellow }} />,
+      <UiEntity uiTransform={{ width: `${gainPct}%`, height: '100%' }} uiBackground={{ color: P.green }} />
+    ]),
+    rankBadge(px, after.tier, 24, 882, 222),
+    text(px, fs, after.nextName ? `${after.name} · ${after.perTier - after.onTier} pts to ${after.nextName}` : `${after.name} · top rank`, 914, 222, 300, 24, 14, P.paler),
+
+    box(px, 'hole-found', 860, 300, 368, 280, { ...card, color: P.teal }),
+    img(px, 'tt_you_found', 882, 318),
+    ...rewardTiles(px, fs, 'hole-reward', n.rewards, 882, 356, 157, 64),
+
+    button2(px, { id: 'next-hole', x: 860, y: 598, w: 368, h: 92, color: P.yellow, radius: 20, shadow: 8, shadowColor: P.yellowShadow, onClick: () => n.onSkip && n.onSkip() }, [
+      img(px, 'bt_next_hole'),
+      box(px, 'next-hole-count', 280, 23, 46, 46, { color: P.ink, radius: 23, justify: 'center', align: 'center' }, [
+        <Label value={String(secondsLeft(n.until))} fontSize={fs(22)} color={C.yellow} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />
+      ])
+    ])
   ])
 }
-
-const badge = (px: Px, tier: number, size: number) => (
-  <UiEntity uiTransform={{ width: px(size), height: px(size), borderRadius: px(size / 2) }} uiBackground={{ texture: { src: `images/season-badges/${tier}.png` }, textureMode: 'stretch' }} />
-)
 
 export const RunCompleteScreen = () => {
   const n = seasonNextGameState
@@ -620,135 +352,86 @@ export const RunCompleteScreen = () => {
   const after = tierInfo(n.newTierSub)
   const rankUp = after.tier > before.tier
   const rankDown = after.tier < before.tier
+  const changed = after.tier !== before.tier
   const unlocked = lobbyMenuState.prizes.find((p) => p.tierReward > n.tierSub && p.tierReward <= n.newTierSub) || null
-  const nextPrize = lobbyMenuState.prizes.find((p) => p.tierReward > n.newTierSub) || null
+  const storedMax = Number(globalStore.userData.getState()['statistic_tier-sub-max'] || 0)
+  const nextPrize = nextSeasonPrize(Math.max(n.newTierSub, storedMax))
+  const prize = unlocked || nextPrize
+  const sold = !!prize && prizeSoldOut(prize)
   const energy = lobbyHudState.resources.EN || 0
+  const pillKey = rankUp ? 'bt_rank_up' : rankDown ? 'bt_rank_down' : 'bt_rank_kept'
+  const pillW = imgW(pillKey) + 40
 
-  return screen(L, px, [
-    title(fs, 'RUN COMPLETE!', 64, px(74)),
-    <UiEntity uiTransform={{ width: '100%', flexGrow: 1, flexDirection: 'row', justifyContent: 'space-between', margin: { top: px(16) } }}>
-      <UiEntity
-        uiTransform={{
-          width: '51%',
-          height: '100%',
-          flexDirection: 'column',
-          alignItems: 'center',
-          padding: { top: px(20), bottom: px(20), left: px(28), right: px(28) },
-          borderRadius: px(28),
-          borderWidth: Math.max(2, px(5)),
-          borderColor: C.yellow
-        }}
-        uiBackground={{ color: C.purple }}
-      >
-        <UiEntity
-          uiTransform={{ height: px(50), padding: { left: px(18), right: px(18) }, borderRadius: px(16), borderWidth: Math.max(2, px(4)), borderColor: C.dark, justifyContent: 'center' }}
-          uiBackground={{ color: rankUp ? C.green : rankDown ? C.salmon : C.lilac }}
-        >
-          <Label value={rankUp ? 'RANK UP!' : rankDown ? 'RANK DOWN' : 'RANK KEPT'} fontSize={fs(32)} color={C.dark} textAlign="middle-center" uiTransform={{ height: px(50) }} textWrap="nowrap" />
-        </UiEntity>
-        <UiEntity uiTransform={{ height: px(170), flexDirection: 'row', alignItems: 'center', margin: { top: px(16) } }}>
-          {after.tier !== before.tier ? (
-            <UiEntity uiTransform={{ flexDirection: 'column', alignItems: 'center', margin: { right: px(26) } }}>
-              {badge(px, before.tier, 104)}
-              <Label value={before.name} fontSize={fs(19)} color={C.lilac} textAlign="middle-center" uiTransform={{ height: px(26), margin: { top: px(6) } }} textWrap="nowrap" />
-            </UiEntity>
-          ) : null}
-          {after.tier !== before.tier ? <Label value="→" fontSize={fs(44)} color={C.yellow} textAlign="middle-center" uiTransform={{ width: px(60), height: px(60), margin: { right: px(26) } }} textWrap="nowrap" /> : null}
-          <UiEntity uiTransform={{ flexDirection: 'column', alignItems: 'center' }}>
-            {badge(px, after.tier, 136)}
-            <Label value={after.name} fontSize={fs(26)} color={C.white} textAlign="middle-center" uiTransform={{ height: px(32), margin: { top: px(6) } }} textWrap="nowrap" />
-          </UiEntity>
-        </UiEntity>
-        <UiEntity uiTransform={{ height: px(30), flexDirection: 'row', alignItems: 'center', margin: { top: px(10) } }}>
-          <Label value={`${n.tierSub} → `} fontSize={fs(22)} color={C.lilac} textAlign="middle-center" uiTransform={{ height: px(30) }} textWrap="nowrap" />
-          <Label value={`${n.newTierSub} season points`} fontSize={fs(22)} color={n.newTierSub >= n.tierSub ? C.green : C.salmon} textAlign="middle-center" uiTransform={{ height: px(30) }} />
-        </UiEntity>
-        <UiEntity uiTransform={{ flexGrow: 1 }} />
-        <UiEntity uiTransform={{ width: '100%', height: px(70), flexDirection: 'row', justifyContent: 'space-between' }}>
-          {n.holeScores.map((h) => (
-            <UiEntity
-              key={h.hole}
-              uiTransform={{
-                width: '23.5%',
-                height: px(70),
-                flexDirection: 'column',
-                justifyContent: 'center',
-                alignItems: 'center',
-                borderRadius: px(16),
-                borderWidth: Math.max(1, px(3)),
-                borderColor: C.dark
-              }}
-              uiBackground={{ color: h.rank === 1 ? C.yellow : C.purpleCard }}
-            >
-              <Label value={`HOLE ${h.hole} · ${h.rank ? ordinal(h.rank) : '-'}`} fontSize={fs(14)} color={h.rank === 1 ? C.dark : C.lilac} textAlign="middle-center" uiTransform={{ height: px(22) }} textWrap="nowrap" />
-              <Label value={pointsSign(h.points)} fontSize={fs(23)} color={h.rank === 1 ? C.dark : C.white} textAlign="middle-center" uiTransform={{ height: px(30) }} textWrap="nowrap" />
-            </UiEntity>
-          ))}
-        </UiEntity>
-        {n.note ? (
-          <Label value={n.note} fontSize={fs(14)} color={C.lilac} textAlign="middle-center" textWrap="wrap" uiTransform={{ width: '100%', height: px(44), margin: { top: px(10) } }} />
-        ) : null}
-      </UiEntity>
-      <UiEntity uiTransform={{ width: '47%', height: '100%', flexDirection: 'column', justifyContent: 'space-between' }}>
-        <UiEntity
-          uiTransform={{ width: '100%', height: px(140), flexDirection: 'row', alignItems: 'center', padding: { left: px(20), right: px(20) }, borderRadius: px(24), borderWidth: Math.max(2, px(4)), borderColor: C.dark }}
-          uiBackground={{ color: C.pink }}
-        >
-          <UiEntity uiTransform={{ width: px(104), height: px(104), borderRadius: px(24), borderWidth: Math.max(1, px(3)), borderColor: C.dark }} uiBackground={{ color: C.pinkDark }} />
-          <UiEntity uiTransform={{ flexGrow: 1, flexDirection: 'column', justifyContent: 'center', margin: { left: px(18) } }}>
-            <Label value={unlocked ? 'NEW PRIZE UNLOCKED' : 'NEXT PRIZE'} fontSize={fs(15)} color={hex('#FFD6F1')} textAlign="middle-left" uiTransform={{ height: px(22) }} textWrap="nowrap" />
-            <Label
-              value={unlocked ? shortName(unlocked.name) : nextPrize ? shortName(nextPrize.name) : 'All prizes reached'}
-              fontSize={fs(26)}
-              color={C.white}
-              textAlign="middle-left"
-              uiTransform={{ height: px(32) }} textWrap="nowrap"
-            />
-            <Label
-              value={unlocked ? `Wearable NFT · ${unlocked.stock} left` : nextPrize ? `at ${seasonTierDefinitions[Number(getTierFromSub(nextPrize.tierReward) || 0)]?.name || ''} · ${nextPrize.stock} left` : ''}
-              fontSize={fs(15)}
-              color={C.white}
-              textAlign="middle-left"
-              uiTransform={{ height: px(22) }} textWrap="nowrap"
-            />
-            {unlocked ? (
-              <UiEntity uiTransform={{ height: px(24), padding: { left: px(10), right: px(10) }, margin: { top: px(4) }, borderRadius: px(10), justifyContent: 'center', alignSelf: 'flex-start' }} uiBackground={{ color: C.dark }}>
-                <Label value="On its way to your backpack" fontSize={fs(14)} color={C.green} textAlign="middle-center" uiTransform={{ height: px(24) }} textWrap="nowrap" />
-              </UiEntity>
-            ) : null}
-          </UiEntity>
-        </UiEntity>
-        {rewardsPanel(px, fs, 'THIS RUN', n.rewards, true)}
-        <UiEntity uiTransform={{ width: '100%', height: px(82), flexDirection: 'row', margin: { top: px(16) } }}>
-          {pressable(
-            {
-              id: 'run-lobby',
-              width: '38%',
-              height: px(72),
-              color: C.white,
-              radius: px(20),
-              borderWidth: Math.max(2, px(4)),
-              borderColor: C.dark,
-              shadow: px(8),
-              onClick: () => n.onSkip && n.onSkip()
-            },
-            <Label value="LOBBY" fontSize={fs(28)} color={C.dark} textAlign="middle-center" uiTransform={{ height: px(72) }} textWrap="nowrap" />,
-            <UiEntity uiTransform={{ width: px(40), height: px(40), margin: { left: px(10) }, borderRadius: px(20), justifyContent: 'center', alignItems: 'center' }} uiBackground={{ color: C.dark }}>
-              <Label value={String(secondsLeft(n.until))} fontSize={fs(18)} color={C.yellow} textAlign="middle-center" uiTransform={{ height: px(40) }} textWrap="nowrap" />
-            </UiEntity>
-          )}
-          <UiEntity uiTransform={{ width: '4%' }} />
-          <UiEntity
-            uiTransform={{ width: '58%', height: px(72), flexDirection: 'row', justifyContent: 'center', alignItems: 'center', borderRadius: px(20), borderWidth: Math.max(2, px(4)), borderColor: C.dark }}
-            uiBackground={{ color: C.disabled }}
-          >
-            <Label value="PLAY AGAIN" fontSize={fs(26)} color={C.dark} textAlign="middle-center" uiTransform={{ height: px(72) }} textWrap="nowrap" />
-            <UiEntity uiTransform={{ height: px(28), margin: { left: px(12) }, padding: { left: px(10), right: px(10) }, borderRadius: px(10), justifyContent: 'center' }} uiBackground={{ color: C.dark }}>
-              <Label value={`from the lobby · ${energy} energy`} fontSize={fs(13)} color={C.cyan} textAlign="middle-center" uiTransform={{ height: px(28) }} textWrap="nowrap" />
-            </UiEntity>
-          </UiEntity>
-        </UiEntity>
-      </UiEntity>
-    </UiEntity>
+  const prizeName = !prize ? 'All prizes reached' : sold ? `${prize.fashionTickets ? fmt(prize.fashionTickets) + ' ' : ''}Fashion Tickets` : shortName(prize.name)
+  const prizeSub = !prize
+    ? ''
+    : unlocked
+      ? sold
+        ? `${shortName(prize.name)} sold out: Fashion Tickets instead`
+        : 'Wearable NFT'
+      : `at ${seasonTierDefinitions[tierOf(prize.tierReward)]?.name || ''} · ${Math.max(0, prize.tierReward - n.newTierSub)} season points to go`
+  const pic = !prize ? null : sold ? 'images/icons/ft.png' : prize.thumbnail
+
+  const badgeRow = changed
+    ? [
+        rankBadge(px, before.tier, 110, 140, 260),
+        text(px, fs, before.name, 110, 376, 170, 26, 20, Color4.create(1, 1, 1, 0.75), 'middle-center'),
+        img(px, 'gl_arrow', 290, 296),
+        box(px, 'run-ring', 400, 236, 160, 160, { color: Color4.create(1, 0.82, 0.12, 0.2), radius: 80, border: 5, borderColor: C.yellow }),
+        rankBadge(px, after.tier, 140, 410, 246),
+        text(px, fs, after.name, 380, 404, 200, 30, 26, C.yellow, 'middle-center')
+      ]
+    : [rankBadge(px, after.tier, 150, 297, 236), text(px, fs, after.name, 272, 396, 200, 30, 26, C.yellow, 'middle-center')]
+
+  const holeTiles = n.holeScores.map((h, k) =>
+    box(px, `run-hole-${k}`, 76 + k * 152, 600, 142, 72, h.rank === 1 ? { color: C.yellow, radius: 14, border: 2, column: true, justify: 'center', align: 'center' } : { color: P.glass, radius: 14, border: 2, borderColor: P.glassEdge, column: true, justify: 'center', align: 'center' }, [
+      <Label value={`HOLE ${h.hole} · ${h.rank ? ordinal(h.rank) : '-'}`} fontSize={fs(12)} color={h.rank === 1 ? P.ink : P.paler} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(20) }} />,
+      <Label value={pointsSign(h.points)} fontSize={fs(24)} color={h.rank === 1 ? P.ink : P.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(32) }} />
+    ])
+  )
+
+  return frame(L, 'result', [
+    img(px, 'rb_run_complete', (1280 - imgW('rb_run_complete')) / 2, 18),
+
+    box(px, 'run-rank', 52, 136, 640, 554, card),
+    box(px, 'run-pill', 372 - pillW / 2, 158, pillW, 52, { color: rankUp ? P.green : rankDown ? SALMON : P.lavender, radius: 16, border: 3, shadow: 6, shadowColor: rankUp ? P.greenShadow : C.dark, justify: 'center', align: 'center' }, [img(px, pillKey)]),
+    ...badgeRow,
+    <UiEntity key="run-points" uiTransform={{ ...at(px, 72, 452, 600, 32), flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }}>
+      <Label value={`${n.tierSub} → `} fontSize={fs(24)} color={P.white} textAlign="middle-right" textWrap="nowrap" uiTransform={{ height: px(32) }} />
+      <Label value={`${n.newTierSub}`} fontSize={fs(24)} color={n.newTierSub >= n.tierSub ? C.yellow : SALMON} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(32) }} />
+      <Label value=" season points" fontSize={fs(24)} color={P.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(32) }} />
+    </UiEntity>,
+    n.note ? text(px, fs, n.note, 82, 492, 580, 90, 14, P.paler, 'middle-center', true) : null,
+    ...holeTiles,
+
+    box(px, 'run-prize', 712, 136, 516, 170, { ...card, color: P.pink }),
+    <UiEntity key="run-prize-pic" uiTransform={{ ...at(px, 728, 157, 128, 128), borderRadius: px(18), borderWidth: border(px, 3), borderColor: P.white }} uiBackground={{ color: Color4.create(1, 1, 1, 0.2) }}>
+      {pic ? <UiEntity uiTransform={{ width: '100%', height: '100%' }} uiBackground={{ texture: { src: pic }, textureMode: 'stretch' }} /> : null}
+    </UiEntity>,
+    text(px, fs, unlocked ? 'NEW PRIZE UNLOCKED' : 'NEXT PRIZE', 872, 160, 340, 20, 13, hex('#FFD6F1')),
+    text(px, fs, prizeName, 872, 182, 340, 34, 26),
+    text(px, fs, prizeSub, 872, 218, 340, 22, 14),
+    unlocked
+      ? box(px, 'run-prize-chip', 872, 248, 230, 26, { color: hex('#1C0A3F'), radius: 10, justify: 'center', align: 'center' }, [
+          <Label value={sold ? 'Added to your balance' : 'On its way to your backpack'} fontSize={fs(13)} color={P.green} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: px(26) }} />
+        ])
+      : null,
+
+    box(px, 'run-rewards', 712, 324, 516, 258, { ...card, color: P.teal }),
+    img(px, 'tt_this_run', 734, 342),
+    ...rewardTiles(px, fs, 'run-reward', n.rewards, 734, 380, 231, 54),
+
+    button2(px, { id: 'run-lobby', x: 712, y: 600, w: 190, h: 90, color: P.lavender, radius: 20, shadow: 7, shadowColor: P.lavenderShadow, onClick: () => n.onSkip && n.onSkip() }, [
+      img(px, 'bt_lobby'),
+      box(px, 'run-lobby-count', 138, 27, 36, 36, { color: P.ink, radius: 18, justify: 'center', align: 'center' }, [
+        <Label value={String(secondsLeft(n.until))} fontSize={fs(16)} color={C.yellow} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />
+      ])
+    ]),
+    // PLAY AGAIN starts from the lobby for now: the button explains it.
+    box(px, 'run-again', 918, 600, 310, 90, { color: C.disabled, radius: 20, column: true, justify: 'center', align: 'center' }, [
+      <Label value="PLAY AGAIN" fontSize={fs(26)} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(34) }} />,
+      <Label value={`from the lobby · ${energy} energy`} fontSize={fs(13)} color={P.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(20) }} />
+    ])
   ])
 }
+

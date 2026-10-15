@@ -220,50 +220,6 @@ export const materialIcon = (px: Px, code: string, size: number, margin?: { left
   )
 }
 
-// A dark pill with a resource icon and a number: resources in headers and HUDs.
-export const counter = (px: Px, fs: Px, code: string, value: string, label?: string) => (
-  <UiEntity
-    uiTransform={{
-      height: px(50),
-      flexDirection: 'row',
-      alignItems: 'center',
-      margin: { left: px(10) },
-      padding: { left: px(7), right: px(16) },
-      borderRadius: px(16)
-    }}
-    uiBackground={{ color: C.dark }}
-  >
-    {materialIcon(px, code, 30)}
-    {label ? (
-      <Label value={label} fontSize={fs(12)} color={C.muted} textAlign="middle-left" uiTransform={{ height: px(50), margin: { left: px(6) } }} textWrap="nowrap" />
-    ) : null}
-    <Label value={value} fontSize={fs(21)} color={C.white} textAlign="middle-left" uiTransform={{ height: px(50), margin: { left: px(8) } }} textWrap="nowrap" />
-  </UiEntity>
-)
-
-// Small dark tag with coloured text.
-export const chip = (px: Px, fs: Px, text: string, color: Color4, bg: Color4 = C.dark) => (
-  <UiEntity
-    uiTransform={{
-      height: px(26),
-      padding: { left: px(10), right: px(10) },
-      margin: { top: px(6) },
-      borderRadius: px(10),
-      justifyContent: 'center',
-      alignSelf: 'flex-start'
-    }}
-    uiBackground={{ color: bg }}
-  >
-    <Label value={text} fontSize={fs(14)} color={color} textAlign="middle-center" uiTransform={{ height: px(26) }} textWrap="nowrap" />
-  </UiEntity>
-)
-
-// Big outlined title stand-in: the canvas uses an outlined display font, which
-// the UI cannot render, so titles are large yellow sans-serif for now.
-export const title = (fs: Px, text: string, size: number, height: number, color: Color4 = C.yellow) => (
-  <Label value={text} fontSize={fs(size)} color={color} textAlign="middle-center" uiTransform={{ height }} textWrap="nowrap" />
-)
-
 // The "expand" glyph: four L-shaped corners drawn with thin bars, since the
 // UI has no vector icons. `size` is the glyph's side in px.
 export const ExpandIcon = ({ size, color }: { size: number; color: Color4 }) => {

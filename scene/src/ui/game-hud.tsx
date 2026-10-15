@@ -12,7 +12,12 @@ import { globalStore } from '../services/globalStore/globalStore'
 import { topbarState, formatTopBarTime } from './topbar-state'
 import { powerBarState, controlHintState } from './shoot-hud-state'
 import { seasonClockState, seasonResultsState, seasonCountdownState, seasonHoleState, SeasonResultRow } from './season-hud-state'
-import { C, hex, fmt, mmss } from './ui-theme'
+import { C, hex, mmss } from './ui-theme'
+import { P, border, initialAvatar, rankBadge } from './ui2'
+// @ts-ignore - common/utils has @ts-nocheck
+import { getTierFromSub } from '../../../common/utils'
+// @ts-ignore - season-tier-definitions has @ts-nocheck
+import { seasonTierDefinitions } from '../../../common/season-tier-definitions'
 import { hudScale, type Canvas, type Px } from './ui-scale'
 import { CAMERA_AIM_MODE } from '../config/controls'
 import { isMobile } from '../services/platform'
@@ -21,22 +26,22 @@ import { scaler } from './ui-scale'
 
 // ---------------------------------------------------------------------------
 // A labelled stat box: small caption on top, big value under it.
-const statBox = (px: Px, fs: Px, w: number, caption: string, value: string, bg: Color4, border: boolean) => (
+const statBox = (px: Px, fs: Px, w: number, caption: string, value: string, bg: Color4) => (
   <UiEntity
     uiTransform={{
       width: w,
-      height: px(76),
+      height: px(72),
       flexDirection: 'column',
       justifyContent: 'center',
       alignItems: 'center',
       margin: { right: px(10) },
       borderRadius: px(18),
-      borderWidth: border ? Math.max(2, px(4)) : 0,
-      borderColor: C.dark
+      borderWidth: border(px, 4),
+      borderColor: P.white
     }}
     uiBackground={{ color: bg }}
   >
-    <Label value={caption} fontSize={fs(14)} color={C.lilac} textAlign="middle-center" uiTransform={{ height: px(20) }} textWrap="nowrap" />
+    <Label value={caption} fontSize={fs(12)} color={P.pale} textAlign="middle-center" uiTransform={{ height: px(18) }} textWrap="nowrap" />
     <Label value={value} fontSize={fs(28)} color={C.white} textAlign="middle-center" uiTransform={{ height: px(34) }} textWrap="nowrap" />
   </UiEntity>
 )
@@ -62,7 +67,7 @@ export const MissionTimer = () => {
   const { px, fs } = s
   return (
     <UiEntity uiTransform={{ positionType: 'absolute', position: { top: canvas.area.top + px(22), left: hudLeft(canvas, px) }, flexDirection: 'row' }}>
-      {statBox(px, fs, px(104), 'TIME', formatTopBarTime(topbarState.ms), C.panelDim, false)}
+      {statBox(px, fs, px(104), 'TIME', formatTopBarTime(topbarState.ms), P.navy)}
     </UiEntity>
   )
 }
@@ -74,9 +79,9 @@ export const HoleStats = () => {
   const me = seasonResultsState.rows.find((row) => row.isMe)
   return (
     <UiEntity uiTransform={{ positionType: 'absolute', position: { top: canvas.area.top + px(22), left: hudLeft(canvas, px) }, flexDirection: 'row' }}>
-      {statBox(px, fs, px(112), 'HOLE', `${seasonHoleState.current} / ${seasonHoleState.total}`, C.purple, true)}
-      {statBox(px, fs, px(104), 'TIME', mmss(seasonClockState.ms), C.panelDim, false)}
-      {statBox(px, fs, px(96), 'SHOTS', String(me ? me.shots : 0), C.panelDim, false)}
+      {statBox(px, fs, px(104), 'HOLE', `${seasonHoleState.current} / ${seasonHoleState.total}`, P.purple)}
+      {statBox(px, fs, px(104), 'TIME', mmss(seasonClockState.ms), P.navy)}
+      {statBox(px, fs, px(104), 'SHOTS', String(me ? me.shots : 0), P.navy)}
     </UiEntity>
   )
 }
@@ -102,19 +107,19 @@ export const EndingBanner = () => {
     >
       <UiEntity
         uiTransform={{
-          height: px(54),
+          height: px(72),
           flexDirection: 'row',
           alignItems: 'center',
           padding: { left: px(22), right: px(22) },
-          borderRadius: px(22),
-          borderWidth: Math.max(2, px(4)),
-          borderColor: C.dark
+          borderRadius: px(18),
+          borderWidth: border(px, 4),
+          borderColor: P.white
         }}
-        uiBackground={{ color: ending ? C.red : C.purple }}
+        uiBackground={{ color: ending ? P.pink : P.purple }}
       >
-        <Label value={label} fontSize={fs(17)} color={C.white} textAlign="middle-center" uiTransform={{ height: px(54) }} textWrap="nowrap" />
+        <Label value={label} fontSize={fs(16)} color={C.white} textAlign="middle-center" uiTransform={{ height: px(64) }} textWrap="nowrap" />
         {second ? (
-          <Label value={second} fontSize={fs(28)} color={C.white} textAlign="middle-center" uiTransform={{ height: px(54), margin: { left: px(12) } }} textWrap="nowrap" />
+          <Label value={second} fontSize={fs(28)} color={C.white} textAlign="middle-center" uiTransform={{ height: px(64), margin: { left: px(14) } }} textWrap="nowrap" />
         ) : null}
       </UiEntity>
     </UiEntity>
@@ -139,62 +144,50 @@ export const LiveRanking = () => {
       uiTransform={{
         positionType: 'absolute',
         position: { top: canvas.area.top + px(128), left: hudLeft(canvas, px) },
-        width: px(270),
+        width: px(272),
         flexDirection: 'column',
         padding: px(10),
-        borderRadius: px(22),
-        borderWidth: Math.max(2, px(4)),
-        borderColor: C.dark
+        borderRadius: px(18),
+        borderWidth: border(px, 4),
+        borderColor: P.white
       }}
-      uiBackground={{ color: C.panelDim }}
+      uiBackground={{ color: P.navy }}
     >
       {rows.map((row, i) => (
         <UiEntity
           key={i}
           uiTransform={{
             width: '100%',
-            height: px(44),
+            height: px(40),
             flexDirection: 'row',
             alignItems: 'center',
             margin: { bottom: i === rows.length - 1 ? 0 : px(6) },
             padding: { left: px(10), right: px(10) },
-            borderRadius: px(14),
-            borderWidth: row.isMe ? Math.max(1, px(3)) : 0,
-            borderColor: C.dark
+            borderRadius: px(12)
           }}
-          uiBackground={{ color: row.isMe ? C.hotPink : C.bg }}
+          uiBackground={{ color: row.isMe ? P.yellow : P.glass }}
         >
           <Label
             value={String(i + 1)}
             fontSize={fs(20)}
-            color={row.isMe ? C.dark : i === 0 ? C.yellow : C.muted}
+            color={row.isMe ? P.ink : i === 0 ? C.yellow : P.pale}
             textAlign="middle-left"
-            uiTransform={{ width: px(22), height: px(44) }} textWrap="nowrap"
+            uiTransform={{ width: px(22), height: px(40) }} textWrap="nowrap"
           />
-          <UiEntity
-            uiTransform={{
-              width: px(20),
-              height: px(20),
-              margin: { left: px(6) },
-              borderRadius: row.isGhost ? px(6) : px(10),
-              borderWidth: Math.max(1, px(2)),
-              borderColor: C.dark
-            }}
-            uiBackground={{ color: row.isGhost ? C.lilac : C.white }}
-          />
+          <UiEntity uiTransform={{ margin: { left: px(4) } }}>{initialAvatar(px, fs, row.name, 24, i)}</UiEntity>
           <Label
             value={row.isMe ? `${row.name} · you` : row.name}
             fontSize={fs(16)}
-            color={row.isMe ? C.dark : C.white}
+            color={row.isMe ? P.ink : C.white}
             textAlign="middle-left"
-            uiTransform={{ flexGrow: 1, height: px(44), margin: { left: px(8) } }} textWrap="nowrap"
+            uiTransform={{ flexGrow: 1, height: px(40), margin: { left: px(8) } }} textWrap="nowrap"
           />
           {row.holed ? (
-            <UiEntity uiTransform={{ height: px(24), padding: { left: px(8), right: px(8) }, borderRadius: px(8), justifyContent: 'center' }} uiBackground={{ color: C.green }}>
-              <Label value={`IN · ${row.shots}`} fontSize={fs(13)} color={C.dark} textAlign="middle-center" uiTransform={{ height: px(24) }} textWrap="nowrap" />
+            <UiEntity uiTransform={{ height: px(22), padding: { left: px(8), right: px(8) }, borderRadius: px(8), justifyContent: 'center' }} uiBackground={{ color: P.green }}>
+              <Label value={`IN · ${row.shots}`} fontSize={fs(12)} color={P.ink} textAlign="middle-center" uiTransform={{ height: px(22) }} textWrap="nowrap" />
             </UiEntity>
           ) : (
-            <Label value={String(row.shots)} fontSize={fs(18)} color={row.isMe ? C.dark : C.white} textAlign="middle-right" uiTransform={{ width: px(30), height: px(44) }} textWrap="nowrap" />
+            <Label value={String(row.shots)} fontSize={fs(18)} color={row.isMe ? P.ink : C.white} textAlign="middle-right" uiTransform={{ width: px(30), height: px(40) }} textWrap="nowrap" />
           )}
         </UiEntity>
       ))}
@@ -206,8 +199,8 @@ export const LiveRanking = () => {
 // Phones: a held power button acts as a held E / F (see mobile-shoot-state).
 const powerHoldButton = (label: string, size: number, dir: -1 | 1, margin: { top?: number; bottom?: number }) => (
   <UiEntity
-    uiTransform={{ width: size, height: size, margin, borderRadius: size * 0.28, borderWidth: Math.max(2, size * 0.05), borderColor: C.dark, justifyContent: 'center', alignItems: 'center' }}
-    uiBackground={{ color: C.lilac }}
+    uiTransform={{ width: size, height: size, margin, borderRadius: size * 0.28, borderWidth: Math.max(2, size * 0.05), borderColor: P.white, justifyContent: 'center', alignItems: 'center' }}
+    uiBackground={{ color: P.lavender }}
     onMouseDown={() => {
       mobileShootState.powerHold = dir
     }}
@@ -218,7 +211,7 @@ const powerHoldButton = (label: string, size: number, dir: -1 | 1, margin: { top
       mobileShootState.powerHold = 0
     }}
   >
-    <Label value={label} fontSize={size * 0.45} color={C.dark} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: size }} />
+    <Label value={label} fontSize={size * 0.45} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: size }} />
   </UiEntity>
 )
 
@@ -238,9 +231,9 @@ export const PowerColumn = () => {
   const segments: ReactEcs.JSX.Element[] = []
   for (let i = 10; i >= 1; i--) {
     const level = i * 10
-    const color = i > lit ? C.purpleTrack : level <= 40 ? C.green : level <= 70 ? C.yellow : hex('#FF5A3C')
+    const color = i > lit ? Color4.create(1, 1, 1, 0.12) : level <= 40 ? C.green : level <= 70 ? C.yellow : hex('#FF5A3C')
     segments.push(
-      <UiEntity key={i} uiTransform={{ width: px(54), height: px(28), borderRadius: px(8), margin: { bottom: i === 1 ? 0 : px(5) } }} uiBackground={{ color }} />
+      <UiEntity key={i} uiTransform={{ width: px(60), height: px(24), borderRadius: px(6), margin: { bottom: i === 1 ? 0 : px(4) } }} uiBackground={{ color }} />
     )
   }
   return (
@@ -249,25 +242,24 @@ export const PowerColumn = () => {
         positionType: 'absolute',
         position: mobile ? { top: 8, right: 12 } : { top: canvas.area.top + px(120), right: canvas.area.right + px(28) },
         flexDirection: 'column',
-        alignItems: 'center'
+        alignItems: 'center',
+        padding: { top: px(10), bottom: px(12), left: px(10), right: px(10) },
+        borderRadius: px(18),
+        borderWidth: border(px, 4),
+        borderColor: P.white
       }}
+      uiBackground={{ color: P.navy }}
     >
       {mobile ? powerHoldButton('+', touch, 1, { bottom: px(8) }) : null}
-      <UiEntity uiTransform={{ height: px(28), padding: { left: px(12), right: px(12) }, borderRadius: px(10), justifyContent: 'center' }} uiBackground={{ color: C.dark }}>
-        <Label value="POWER" fontSize={fs(16)} color={C.white} textAlign="middle-center" uiTransform={{ height: px(28) }} textWrap="nowrap" />
-      </UiEntity>
-      <UiEntity uiTransform={{ flexDirection: 'column', padding: px(8), margin: { top: px(10) }, borderRadius: px(18) }} uiBackground={{ color: C.dark }}>
+      <Label value="POWER" fontSize={fs(12)} color={P.pale} textAlign="middle-center" uiTransform={{ height: px(18) }} textWrap="nowrap" />
+      <UiEntity uiTransform={{ flexDirection: 'column', padding: px(6), margin: { top: px(6) }, borderRadius: px(12) }} uiBackground={{ color: P.dim }}>
         {segments}
       </UiEntity>
-      <UiEntity uiTransform={{ height: px(40), margin: { top: px(10) }, padding: { left: px(12), right: px(12) }, borderRadius: px(12), justifyContent: 'center' }} uiBackground={{ color: C.dark }}>
-        <Label value={`${Math.round(power)}%`} fontSize={fs(26)} color={C.white} textAlign="middle-center" uiTransform={{ height: px(40) }} textWrap="nowrap" />
-      </UiEntity>
+      <Label value={`${Math.round(power)}%`} fontSize={fs(26)} color={C.white} textAlign="middle-center" uiTransform={{ height: px(36), margin: { top: px(8) } }} textWrap="nowrap" />
       {mobile ? (
         powerHoldButton('-', touch, -1, { top: px(8) })
       ) : (
-        <UiEntity uiTransform={{ width: px(120), height: px(40), margin: { top: px(10) }, padding: { left: px(8), right: px(8) }, borderRadius: px(8), justifyContent: 'center' }} uiBackground={{ color: C.dark }}>
-          <Label value="Above 40% the shot can wobble" fontSize={fs(12)} color={C.white} textAlign="middle-center" uiTransform={{ width: '100%', height: px(40) }} textWrap="nowrap" />
-        </UiEntity>
+        <Label value={'Above 40% the\nshot can wobble'} fontSize={fs(11)} color={P.pale} textAlign="middle-center" uiTransform={{ width: px(90), height: px(30) }} textWrap="nowrap" />
       )}
     </UiEntity>
   )
@@ -281,13 +273,15 @@ const keyCap = (px: Px, fs: Px, text: string, wide: boolean, accent = false) => 
       height: px(34),
       padding: wide ? { left: px(10), right: px(10) } : undefined,
       margin: { right: px(4) },
-      borderRadius: px(9),
+      borderRadius: px(8),
+      borderWidth: border(px, 2),
+      borderColor: accent ? P.yellowShadow : P.lavenderShadow,
       justifyContent: 'center',
       alignItems: 'center'
     }}
     uiBackground={{ color: accent ? C.yellow : C.white }}
   >
-    <Label value={text} fontSize={fs(wide ? 14 : 18)} color={C.dark} textAlign="middle-center" uiTransform={{ height: px(34) }} textWrap="nowrap" />
+    <Label value={text} fontSize={fs(wide ? 14 : 17)} color={P.ink} textAlign="middle-center" uiTransform={{ height: px(30) }} textWrap="nowrap" />
   </UiEntity>
 )
 
@@ -332,15 +326,15 @@ export const ControlsHelp = () => {
     >
       <UiEntity
         uiTransform={{
-          height: px(58),
+          height: px(60),
           flexDirection: 'row',
           alignItems: 'center',
           padding: { left: px(20), right: px(2) },
-          borderRadius: px(22),
-          borderWidth: Math.max(2, px(4)),
-          borderColor: C.dark
+          borderRadius: px(18),
+          borderWidth: border(px, 4),
+          borderColor: P.white
         }}
-        uiBackground={{ color: C.panelDim }}
+        uiBackground={{ color: P.navy }}
       >
         {items}
       </UiEntity>
@@ -368,15 +362,45 @@ export const MapFooter = () => {
         alignItems: mobile ? 'center' : 'flex-end',
         padding: { top: px(8), bottom: px(8), left: px(18), right: px(18) },
         borderRadius: px(18),
-        borderWidth: Math.max(2, px(4)),
-        borderColor: C.dark
+        borderWidth: border(px, 4),
+        borderColor: P.white
       }}
-      uiBackground={{ color: C.panelDim }}
+      uiBackground={{ color: P.navy }}
     >
       <Label value={String(name)} fontSize={fs(19)} color={C.white} textAlign="middle-right" uiTransform={{ height: px(26) }} textWrap="nowrap" />
       {gs.courseAuthor ? (
-        <Label value={`by ${gs.courseAuthor}`} fontSize={fs(14)} color={C.muted} textAlign="middle-right" uiTransform={{ height: px(20) }} textWrap="nowrap" />
+        <Label value={`by ${gs.courseAuthor}`} fontSize={fs(13)} color={P.pale} textAlign="middle-right" uiTransform={{ height: px(20) }} textWrap="nowrap" />
       ) : null}
+    </UiEntity>
+  )
+}
+
+// Your Season rank, top right, during a Season run (HUD2). Phones keep that
+// corner for the power column.
+export const RankPill = () => {
+  if (!seasonClockState.visible || isMobile()) return null
+  const { canvas, s } = hudScale()
+  const { px, fs } = s
+  const tierSub = Number(globalStore.userData.getState()['statistic_tier-sub'] || 0)
+  const tier = Number(getTierFromSub(tierSub) || 0)
+  return (
+    <UiEntity
+      uiTransform={{
+        positionType: 'absolute',
+        position: { top: canvas.area.top + px(22), right: canvas.area.right + px(28) },
+        height: px(46),
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: { left: px(8), right: px(14) },
+        borderRadius: px(14),
+        borderWidth: border(px, 3),
+        borderColor: P.navyEdge
+      }}
+      uiBackground={{ color: P.navyDeep }}
+    >
+      {rankBadge(px, tier, 26)}
+      <Label value={`${seasonTierDefinitions[tier]?.name || 'WOOD 5'} ·`} fontSize={fs(15)} color={C.white} textAlign="middle-left" uiTransform={{ height: px(40), margin: { left: px(8) } }} textWrap="nowrap" />
+      <Label value={`${tierSub} pts`} fontSize={fs(15)} color={C.yellow} textAlign="middle-left" uiTransform={{ height: px(40), margin: { left: px(6) } }} textWrap="nowrap" />
     </UiEntity>
   )
 }
