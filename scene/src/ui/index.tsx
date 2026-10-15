@@ -16,7 +16,8 @@ import { JoiningScreen, PartyScreen, HoleResultScreen, RunCompleteScreen } from 
 import { containLayout, scaler, isSmallCanvas } from './ui-scale'
 import { MobileShootControls } from './mobile-shoot-controls'
 import { isMobile } from '../services/platform'
-import { dismissGameClosedNotice, formatCountdown, formatUtc, gameWindowState, serverNow } from '../services/game-window'
+import { dismissGameClosedNotice, formatCountdown, formatUtc, gameWindowState, serverNow, showClosedNoticeOnce } from '../services/game-window'
+import { C, pressable, title } from './ui-theme'
 
 // SDK6 game.ts called initializeIntroScreen() on startup. It used UICanvas +
 // UIImage from the legacy DCL UI; here we port the same flow to ReactEcs.
@@ -212,9 +213,8 @@ const BootErrorDialog = () => {
 const GameClosedNotice = () => {
   if (!gameWindowState.noticeVisible) return null
   const { px, fs } = scaler(containLayout().scale)
-  const next = gameWindowState.opensAt
-    ? `Next opening: ${formatUtc(gameWindowState.opensAt)} (in ${formatCountdown(gameWindowState.opensAt - serverNow())})`
-    : 'Next opening: soon'
+  const opensAt = gameWindowState.opensAt
+  const mobile = isMobile()
   return (
     <UiEntity
       uiTransform={{ width: '100%', height: '100%', positionType: 'absolute', justifyContent: 'center', alignItems: 'center' }}
@@ -223,30 +223,68 @@ const GameClosedNotice = () => {
     >
       <UiEntity
         uiTransform={{
-          width: px(640),
-          height: px(250),
+          width: px(720),
           flexDirection: 'column',
           alignItems: 'center',
-          padding: { top: px(28), bottom: px(24), left: px(32), right: px(32) }
+          padding: { top: px(30), bottom: px(28), left: px(36), right: px(36) },
+          borderRadius: px(28),
+          borderWidth: Math.max(2, px(5)),
+          borderColor: C.yellow
         }}
-        uiBackground={{ color: Color4.create(0.08, 0.05, 0.16, 0.95) }}
+        uiBackground={{ color: C.bg }}
       >
-        <Label value="GolfCraft is closed" fontSize={fs(28)} color={Color4.White()} textAlign="middle-center" uiTransform={{ width: '100%', height: px(40) }} />
+        {title(fs, 'GOLFCRAFT IS CLOSED', 52, px(64), C.yellow)}
         <Label
-          value="GolfCraft opens the first week of every month."
-          fontSize={fs(17)}
-          color={Color4.White()}
+          value="GolfCraft opens the first week of every month, from day 1 to day 7 (UTC)."
+          fontSize={fs(19)}
+          color={C.white}
           textAlign="middle-center"
-          uiTransform={{ width: '100%', height: px(30), margin: { top: px(14) } }}
+          textWrap="wrap"
+          uiTransform={{ width: '100%', height: px(56), margin: { top: px(10) } }}
         />
-        <Label value={next} fontSize={fs(16)} color={Color4.create(1, 0.85, 0.3, 1)} textAlign="middle-center" uiTransform={{ width: '100%', height: px(30), margin: { top: px(8) } }} />
-        <Label
-          value="Press E or click to close"
-          fontSize={fs(14)}
-          color={Color4.create(0.75, 0.75, 0.8, 1)}
-          textAlign="middle-center"
-          uiTransform={{ width: '100%', height: px(24), margin: { top: px(22) } }}
-        />
+        <UiEntity
+          uiTransform={{
+            flexDirection: 'column',
+            alignItems: 'center',
+            margin: { top: px(16) },
+            padding: { top: px(14), bottom: px(14), left: px(36), right: px(36) },
+            borderRadius: px(20),
+            borderWidth: Math.max(2, px(4)),
+            borderColor: C.dark
+          }}
+          uiBackground={{ color: C.purple }}
+        >
+          <Label value="OPENS IN" fontSize={fs(16)} color={C.lilac} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(22) }} />
+          <Label
+            value={opensAt ? formatCountdown(opensAt - serverNow()) : 'soon'}
+            fontSize={fs(48)}
+            color={C.yellow}
+            textAlign="middle-center"
+            textWrap="nowrap"
+            uiTransform={{ height: px(60) }}
+          />
+          {opensAt ? (
+            <Label value={formatUtc(opensAt)} fontSize={fs(17)} color={C.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(24) }} />
+          ) : null}
+        </UiEntity>
+        <UiEntity uiTransform={{ height: px(22) }} />
+        {pressable(
+          {
+            id: 'closed-ok',
+            width: px(220),
+            height: px(56),
+            color: C.yellow,
+            radius: px(16),
+            borderWidth: Math.max(2, px(4)),
+            borderColor: C.dark,
+            shadow: px(6),
+            onClick: closeGameClosedNotice
+          },
+          <Label value="GOT IT" fontSize={fs(24)} color={C.dark} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(56) }} />
+        )}
+        {mobile ? null : (
+          <Label value="Press E or click to close" fontSize={fs(14)} color={C.lilac} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(22), margin: { top: px(10) } }} />
+        )}
       </UiEntity>
     </UiEntity>
   )
@@ -269,8 +307,10 @@ const skipIntro = () => {
   console.log('[ui] skip intro')
   globalStore.game.setState({ introScreen: false })
   // The lobby menu takes over from the intro image. Not when bootstrap
-  // failed: that screen is the error dialog's.
-  if (!globalStore.game.getState().bootError) openLobbyMenu()
+  // failed: that screen is the error dialog's. Outside the monthly window
+  // the "closed" dialog comes first, so nobody misses it.
+  if (globalStore.game.getState().bootError) return
+  if (!showClosedNoticeOnce()) openLobbyMenu()
 }
 
 const introInputSystem = () => {

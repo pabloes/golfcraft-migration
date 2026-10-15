@@ -76,7 +76,9 @@ export const createSeasonMenu = async (
   const textWrapper = engine.addEntity()
   // SDK6 had this at y 3.6; nudged up so the last line ("Energy: ...") clears
   // the buttons.
-  Transform.create(textWrapper, { parent: entity, position: Vector3.create(0, 3.69, -0.05) })
+  // z -0.15 (not the badge's -0.05): at the same depth as the board graphic the
+  // text z-fought with it and flickered in and out as the camera turned.
+  Transform.create(textWrapper, { parent: entity, position: Vector3.create(0, 3.69, -0.15) })
   TextShape.create(textWrapper, { text: '', fontSize: 2, textAlign: TextAlignMode.TAM_TOP_CENTER })
 
   const playButton = createImageButton(entity, {
@@ -278,8 +280,10 @@ export const createSeasonMenu = async (
     emblem.show()
     emblem.setImage(`images/season-badges/${tier || 0}.png`)
 
-    // Outside the monthly window the board only says when it opens.
+    // Outside the monthly window the board only says when it opens: no badge
+    // (it sat on top of the text) and no buttons.
     if (!canStartGame()) {
+      emblem.hide()
       playButton.hide()
       friendsButton.hide()
       setFriendsLabel('')
@@ -316,6 +320,16 @@ export const createSeasonMenu = async (
   // place while the player is committed to a party.
   function refreshFriendsButton() {
     const energy = lobbyHudState.resources.EN || 0
+
+    // The party lobby repaints this on every state change; outside the
+    // monthly window it must not bring PLAY / CREATE back.
+    if (!canStartGame()) {
+      friendsButton.hide()
+      setFriendsLabel('')
+      hideCancelButton()
+      playButton.hide()
+      return
+    }
 
     if (!energy || !seasonParty) {
       friendsButton.hide()

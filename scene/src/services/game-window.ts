@@ -22,7 +22,13 @@ export const gameWindowState = {
   noticeVisible: false
 }
 
+import { globalStore } from './globalStore/globalStore'
+
 const REFRESH_MS = 10 * 60 * 1000
+// The closed dialog pops up by itself once per session: after the intro if
+// the game is already known to be closed, or as soon as the first answer says
+// so when the intro is already gone.
+let closedNoticeShown = false
 let wallet = ''
 let lastFetch = 0
 let fetching = false
@@ -47,6 +53,14 @@ export const guardGameStart = (): boolean => {
   if (canStartGame()) return true
   gameWindowState.noticeVisible = true
   return false
+}
+
+// True when it opened the dialog (the caller then skips the lobby dialog).
+export const showClosedNoticeOnce = (): boolean => {
+  if (closedNoticeShown || canStartGame()) return false
+  closedNoticeShown = true
+  gameWindowState.noticeVisible = true
+  return true
 }
 
 export const dismissGameClosedNotice = () => {
@@ -93,6 +107,10 @@ export const refreshGameWindow = async () => {
     gameWindowState.closesAt = data.closesAt ?? null
     if (typeof data.now === 'number') gameWindowState.offsetMs = data.now - Date.now()
     if (gameWindowState.open) gameWindowState.noticeVisible = false
+    else {
+      const gs = globalStore.game.getState()
+      if (!gs.introScreen && !gs.bootError && !gs.playing) showClosedNoticeOnce()
+    }
     console.log('[game-window]', JSON.stringify({ open: data.open, allowed: data.allowed, opensAt: data.opensAt, closesAt: data.closesAt }))
     if (before !== gameWindowState.open) listeners.forEach((fn) => fn())
   } catch (err) {
