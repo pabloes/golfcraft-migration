@@ -657,7 +657,7 @@ const PRIZE_GRID_H = 2 * (PRIZE_BORDER + PRIZE_GRID_PAD) + PRIZE_ROWS * PRIZE_CE
 const PRIZE_SIDE_W = DESIGN_W - 2 * 28 - PRIZE_GRID_W - 24
 const PRIZE_THUMB = 74
 // Diamonds for the Season's top 10, by position.
-const TOP10_PRIZES = [3000, 2000, 1000, 500, 500, 500, 500, 500, 500, 500]
+const TOP10_PRIZES = [500, 300, 200, 100, 100, 100, 100, 100, 100, 100]
 
 const prizeTier = (p: SeasonPrize) => Number(getTierFromSub(p.tierReward) || 0)
 // "Golfcraft x COCOBAY Cap" -> "Cap": the header already names the collection.
