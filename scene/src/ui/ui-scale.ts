@@ -99,6 +99,26 @@ export const containLayout = (
   }
 }
 
+// The full-screen lobby dialog (canvas page "Móvil · propuesta 2"), the same
+// on phones and desktop: a 667x375 design (an iPhone SE in points) contained
+// in the whole canvas on a phone and in the interactable area on desktop. The
+// design keeps its corners free for the explorer's own controls (avatar and
+// chat top-left, joystick and emotes bottom-left, E / F / + / jump
+// bottom-right); on a screen of another proportion the box shrinks in one
+// direction, which only moves the content further from those corners.
+export const FULL_W = 667
+export const FULL_H = 375
+export const fullLayout = (): Layout => {
+  const canvas = readCanvas()
+  const box = isMobile()
+    ? { left: 0, top: 0, w: canvas.width, h: canvas.height }
+    : { left: canvas.area.left, top: canvas.area.top, w: canvas.availW, h: canvas.availH }
+  const scale = Math.max(0.1, Math.min(box.w / FULL_W, box.h / FULL_H))
+  const panelW = FULL_W * scale
+  const panelH = FULL_H * scale
+  return { canvas, scale, panelW, panelH, left: box.left + (box.w - panelW) / 2, top: box.top + (box.h - panelH) / 2 }
+}
+
 // A canvas where the 1280x720 design has to shrink below 80 %: phones in
 // landscape (and very small desktop windows). Layouts move up and the intro
 // card grows there.

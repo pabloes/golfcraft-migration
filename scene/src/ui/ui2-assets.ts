@@ -2,14 +2,8 @@
 // display-font titles, ribbons, button captions, icons and art rendered from
 // the "propuesta 2" designs of the GolfCraft UI canvas (2x PNGs).
 export const UI2: Record<string, [number, number]> = {
-  art_prizes: [137, 109],
-  art_tutorial_1: [137, 109],
-  art_tutorial_3: [137, 109],
-  art_workshop: [137, 109],
-  bg_lobby: [1280, 720],
   bg_result: [1280, 720],
   bg_view: [1280, 720],
-  workshop_bust: [150, 150],
   bt_cancel: [94, 21.5],
   bt_got_it: [83, 21.5],
   bt_lets_go: [129.5, 24.5],
@@ -81,7 +75,6 @@ export const UI2: Record<string, [number, number]> = {
   rb_tutorial: [201.5, 69],
   rb_waiting: [537.5, 79],
   rb_workshop: [231.5, 69],
-  season_card: [705, 431],
   tt_attributes: [132.5, 21.5],
   tt_card_prizes: [117.5, 30],
   tt_card_tutorial: [156.5, 30],

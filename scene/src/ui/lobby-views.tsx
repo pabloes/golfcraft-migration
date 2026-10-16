@@ -11,9 +11,9 @@ import { globalStore } from '../services/globalStore/globalStore'
 import { lobbyHudState, DailyMission } from './lobby-hud-state'
 import { lobbyMenuState, showLobbyView, closeLobbyMenu, SeasonPrize, markStartedFromMenu, nextSeasonPrize, prizeSoldOut, seasonPlayState } from './lobby-menu-state'
 import { C, hex, fmt, shortName, materialIcon } from './ui-theme'
-import { containLayout, scaler, DESIGN_W, DESIGN_H, type Px } from './ui-scale'
+import { containLayout, fullLayout, scaler, DESIGN_W, DESIGN_H, type Px } from './ui-scale'
 import {
-  P, at, img, imgW, text, box, frame, button2, viewHeader, headerRight, yellowTag, navyPill, resIcon, rankBadge, border, nextPrizeBar, energyChip
+  P, at, img, imgW, text, box, frame, fullFrame, button2, squareButton, viewHeader, headerRight, yellowTag, navyPill, resIcon, rankBadge, border, nextPrizeBar, energyChip
 } from './ui2'
 import { talkToNpc } from '../components/lobby/npc-storymode/npc-storymode'
 import { getGolfclubCollection, selectGolfclub, upgradeGolfclubAttribute } from '../components/lobby/lobby-training'
@@ -311,13 +311,8 @@ const PIP_EMPTY = Color4.create(8 / 255, 18 / 255, 40 / 255, 0.45)
 const MATERIAL_NAMES: Record<string, string> = { IR: 'iron', ST: 'stone', WD: 'wood' }
 const SHORT = hex('#FF9A8A')
 
-// MY CLUBS: cards from y 160 down to the note box, 110 px a slot (92 card +
-// its 6 px shadow + gap); paged when the clubs do not all fit.
-const CLUBS_TOP = 160
-const CLUBS_BOTTOM = 612
-const CLUB_SLOT = 110
-const CLUB_H = 92
-const PAGER_H = 52
+// MY CLUBS: two cards a page in the left column, with a pager under them.
+const CLUBS_PER_PAGE = 2
 
 const clubName = (club: BoardGolfclub) => club.DisplayName || GOLF_CLUB_NAMES[Number(club.golfclubId)] || 'Golf club'
 const clubLevel = (club: BoardGolfclub) => 1 + club.attributes.power + club.attributes.control + club.attributes.aim
@@ -334,8 +329,11 @@ const effectText = (attribute: string, value: number) => {
   return `Longer aim line: ${aimLengths[value]} → ${aimLengths[value + 1]}`
 }
 
+// Full screen, like the lobby (canvas page "Móvil · propuesta 2",
+// M2Workshop.dc.html): the clubs on the left, the three attributes in the
+// centre and the selected club on the right.
 export const WorkshopView = () => {
-  const L = containLayout(DESIGN_W, DESIGN_H, { margin: MARGIN })
+  const L = fullLayout()
   const { px, fs } = scaler(L.scale)
   const r = lobbyHudState.resources
   const num = (value: number) => (r.loaded ? fmt(value) : '-')
@@ -351,53 +349,47 @@ export const WorkshopView = () => {
   const level = club ? clubLevel(club) : 1
   const xpLevel = club ? getLevelInfo(club.xp).currentLevel : 1
   const upgradeAvailable = !!club && !!club.xp && xpLevel > level && level < 16 && isBasic(club)
-  const upgradesNow = upgradeAvailable ? Math.min(16, xpLevel) - level : 0
   const equipped = !!club && club.tokenId === activeTokenId
   const busy = lobbyMenuState.busy
 
-  const fitAll = Math.max(1, Math.floor((CLUBS_BOTTOM - CLUBS_TOP) / CLUB_SLOT))
-  const paged = clubs.length > fitAll
-  const perPage = paged ? Math.max(1, Math.floor((CLUBS_BOTTOM - CLUBS_TOP - PAGER_H) / CLUB_SLOT)) : fitAll
-  const pages = Math.max(1, Math.ceil(clubs.length / perPage))
-  const page = Math.max(0, Math.min(pages - 1, lobbyMenuState.clubsPage ?? Math.floor(selectedIndex / perPage)))
-  const pageClubs = clubs.slice(page * perPage, (page + 1) * perPage)
+  const pages = Math.max(1, Math.ceil(clubs.length / CLUBS_PER_PAGE))
+  const page = Math.max(0, Math.min(pages - 1, lobbyMenuState.clubsPage ?? Math.floor(selectedIndex / CLUBS_PER_PAGE)))
+  const pageClubs = clubs.slice(page * CLUBS_PER_PAGE, (page + 1) * CLUBS_PER_PAGE)
 
   const clubCard = (c: BoardGolfclub, i: number, slot: number) => {
     const selected = i === selectedIndex
-    const fg = selected ? P.ink : P.white
-    const y = CLUBS_TOP + slot * CLUB_SLOT
+    const isEquipped = c.tokenId === activeTokenId
+    const n = clubName(c)
     return button2(
       px,
       {
-        id: `club-${i}`, x: 52, y, w: 290, h: CLUB_H, color: selected ? P.yellow : P.navy, radius: 20, border: 4, shadow: 6,
-        justify: 'flex-start', padding: { left: px(8), right: px(8) },
+        id: `club-${i}`, x: 6, y: 78 + slot * 60, w: 140, h: 54, color: selected ? P.yellow : P.navy, radius: 12, border: 2,
+        borderColor: selected ? P.white : P.navyEdge,
         onClick: () => {
           lobbyMenuState.selectedClubTokenId = c.tokenId
         }
       },
       [
-        <UiEntity uiTransform={{ width: px(70), height: px(70), borderRadius: px(14), flexShrink: 0 }} uiBackground={{ texture: { src: `images/${c.golfclubId}.png` }, textureMode: 'stretch' }} />,
-        <UiEntity uiTransform={{ flexGrow: 1, flexDirection: 'column', justifyContent: 'center', margin: { left: px(12) } }}>
-          <Label value={clubName(c)} fontSize={fs(19)} color={fg} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(24) }} />
-          <Label value={isBasic(c) ? `Level ${clubLevel(c)} / 16` : 'NFT · max 5 / 5 / 5'} fontSize={fs(14)} color={selected ? P.ink : P.pale} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(20) }} />
-          {selected || c.tokenId === activeTokenId ? (
-            <UiEntity uiTransform={{ height: px(18), padding: { left: px(8), right: px(8) }, margin: { top: px(3) }, borderRadius: px(8), justifyContent: 'center', alignSelf: 'flex-start' }} uiBackground={{ color: c.tokenId === activeTokenId ? P.green : P.ink }}>
-              <Label value={c.tokenId === activeTokenId ? 'EQUIPPED' : 'SELECTED'} fontSize={fs(11)} color={c.tokenId === activeTokenId ? P.ink : C.yellow} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(18) }} />
-            </UiEntity>
-          ) : null}
-        </UiEntity>
+        <UiEntity uiTransform={{ ...at(px, 4, 5, 40, 40), borderRadius: px(9) }} uiBackground={{ texture: { src: `images/${c.golfclubId}.png` }, textureMode: 'stretch' }} />,
+        text(px, fs, n.length > 14 ? `${n.slice(0, 13)}…` : n, 50, 4, 86, 16, 13, selected ? P.ink : P.white),
+        text(px, fs, isBasic(c) ? `Lv ${clubLevel(c)} / 16` : 'NFT · 5 / 5 / 5', 50, 21, 86, 14, 11, selected ? P.ink : P.pale),
+        selected || isEquipped
+          ? box(px, `club-tag-${i}`, 50, 36, 54, 13, { color: isEquipped ? P.green : P.ink, radius: 6, justify: 'center', align: 'center' }, [
+              <Label value={isEquipped ? 'EQUIPPED' : 'SELECTED'} fontSize={fs(9)} color={isEquipped ? P.ink : C.yellow} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />
+            ])
+          : null
       ]
     )
   }
 
   const pageButton = (id: string, icon: string, enabled: boolean, target: number, x: number) =>
-    button2(px, { id, x, y: CLUBS_TOP + perPage * CLUB_SLOT + 4, w: 44, h: 40, color: enabled ? P.navy : C.disabled, radius: 12, border: 3, borderColor: P.navyEdge, shadow: 4, disabled: !enabled, onClick: () => (lobbyMenuState.clubsPage = target) }, [
-      img(px, icon, undefined, undefined, 0.7)
+    button2(px, { id, x, y: 200, w: 44, h: 44, color: enabled ? P.navy : C.disabled, radius: 12, border: 2, borderColor: P.navyEdge, disabled: !enabled, onClick: () => (lobbyMenuState.clubsPage = target) }, [
+      img(px, icon, undefined, undefined, 0.8)
     ])
 
-  // One attribute: icon, name, effect of the next level and five pips, then on
-  // the right what the next upgrade costs (the material's icon, the amount and
-  // what the player has) with the +1 button under it.
+  // One attribute: icon, name, effect of the next level, five pips and the
+  // level; on the right what the next upgrade costs (the material's icon, the
+  // amount and what the player has) with the +1 button under it.
   const attributeRow = (attribute: 'power' | 'control' | 'aim', y: number) => {
     const value = club ? club.attributes[attribute] : 0
     const material = UPGRADE_MATERIALS[attribute]
@@ -409,36 +401,36 @@ export const WorkshopView = () => {
     const [glyph, glyphScale] = ATTR_GLYPHS[attribute]
     const why = !upgradeAvailable ? 'Needs more club XP' : !enough ? `Not enough ${MATERIAL_NAMES[material]}` : ''
     return [
-      box(px, `attr-${attribute}`, 762, y, 466, 124, card),
-      box(px, `attr-icon-${attribute}`, 782, y + 33, 58, 58, { color: ATTR_COLORS[attribute], radius: 14, justify: 'center', align: 'center' }, [img(px, glyph, undefined, undefined, glyphScale)]),
-      text(px, fs, attribute.toUpperCase(), 856, y + 22, 200, 30, 24),
-      text(px, fs, effectText(attribute, value), 856, y + 52, 200, 20, 13, P.pale),
+      box(px, `attr-${attribute}`, 152, y, 340, 96, { color: P.navy, radius: 14, border: 2 }),
+      box(px, `attr-icon-${attribute}`, 162, y + 12, 40, 40, { color: ATTR_COLORS[attribute], radius: 10, justify: 'center', align: 'center' }, [
+        img(px, glyph, undefined, undefined, glyphScale * 0.69)
+      ]),
+      text(px, fs, attribute.toUpperCase(), 210, y + 9, 150, 22, 18),
+      text(px, fs, effectText(attribute, value), 210, y + 33, 160, 14, 11, P.pale),
       ...[0, 1, 2, 3, 4].map((k) => (
         <UiEntity
           key={`pip-${attribute}-${k}`}
-          uiTransform={{ ...at(px, 856 + k * 41, y + 80, 36, 16), borderRadius: px(6), borderWidth: border(px, 2), borderColor: Color4.create(1, 1, 1, 0.5) }}
+          uiTransform={{ ...at(px, 210 + k * 26, y + 54, 22, 10), borderRadius: px(4), borderWidth: border(px, 1.5), borderColor: Color4.create(1, 1, 1, 0.4) }}
           uiBackground={{ color: k < value ? ATTR_COLORS[attribute] : PIP_EMPTY }}
         />
       )),
+      text(px, fs, maxed ? 'Level 5 of 5' : `Level ${value} of 5`, 210, y + 70, 150, 14, 11, P.pale),
       maxed
-        ? box(px, `attr-max-${attribute}`, 1066, y + 38, 144, 48, { color: P.green, radius: 14, border: 3, justify: 'center', align: 'center' }, [
-            <Label value="MAXED" fontSize={fs(20)} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />
+        ? box(px, `attr-max-${attribute}`, 376, y + 28, 108, 40, { color: P.green, radius: 12, border: 2, justify: 'center', align: 'center' }, [
+            <Label value="MAXED" fontSize={fs(16)} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />
           ])
         : [
-            box(px, `attr-cost-${attribute}`, 1066, y + 12, 144, 58, { color: P.navyDeep, radius: 12, border: 2, borderColor: Color4.create(1, 1, 1, 0.35), column: true, justify: 'center', align: 'center' }, [
-              <Label value="NEXT UPGRADE" fontSize={fs(10)} color={P.pale} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(14) }} />,
-              <UiEntity uiTransform={{ height: px(28), flexDirection: 'row', alignItems: 'center' }}>
-                {materialIcon(px, material, 26)}
-                <Label value={String(cost)} fontSize={fs(21)} color={P.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(28), margin: { left: px(6) } }} />
-                <Label value={MATERIAL_NAMES[material]} fontSize={fs(13)} color={P.pale} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(28), margin: { left: px(5) } }} />
-              </UiEntity>,
-              <Label value={`you have ${fmt(balance)}`} fontSize={fs(11)} color={enough ? P.green : SHORT} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(14) }} />
-            ]),
+            <UiEntity key={`attr-cost-${attribute}`} uiTransform={{ ...at(px, 378, y + 7, 108, 22), flexDirection: 'row', alignItems: 'center' }}>
+              {materialIcon(px, material, 20)}
+              <Label value={String(cost)} fontSize={fs(19)} color={P.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(22), margin: { left: px(4) } }} />
+              <Label value={MATERIAL_NAMES[material]} fontSize={fs(11)} color={P.pale} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(22), margin: { left: px(4) } }} />
+            </UiEntity>,
+            text(px, fs, `you have ${fmt(balance)}`, 378, y + 31, 108, 12, 10, enough ? P.green : SHORT),
             upgradeAvailable && enough
               ? button2(
                   px,
                   {
-                    id: `upgrade-${attribute}`, x: 1066, y: y + 76, w: 144, h: 36, color: canUpgrade ? P.yellow : C.disabled, radius: 12, shadow: 4,
+                    id: `upgrade-${attribute}`, x: 376, y: y + 47, w: 108, h: 40, color: canUpgrade ? P.yellow : C.disabled, radius: 12, shadow: 3,
                     shadowColor: canUpgrade ? P.yellowShadow : C.dark, disabled: !canUpgrade,
                     onClick: () => {
                       if (!club) return
@@ -448,60 +440,54 @@ export const WorkshopView = () => {
                       })
                     }
                   },
-                  [<Label value="+1 UPGRADE" fontSize={fs(15)} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: px(36) }} />]
+                  [<Label value="+1 UPGRADE" fontSize={fs(16)} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />]
                 )
-              : text(px, fs, why, 1066, y + 78, 144, 30, 12, enough ? P.pale : SHORT, 'middle-center')
+              : text(px, fs, why, 376, y + 50, 108, 34, 11, enough ? P.pale : SHORT, 'middle-center', true)
           ]
     ]
   }
 
-  const materialPill = (code: string, x: number) =>
-    navyPill(px, fs, `ws-${code}`, x, 44, 120, 46, [
-      materialIcon(px, code, 28),
-      <Label value={num((r as any)[code] || 0)} fontSize={fs(17)} color={P.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(40), margin: { left: px(8) } }} />
+  const materialPill = (code: string, x: number, w: number) =>
+    box(px, `ws-${code}`, x, 10, w, 36, { color: P.navyDeep, radius: 10, border: 2, borderColor: P.navyEdge, align: 'center', padding: { left: px(5) } }, [
+      materialIcon(px, code, 20),
+      <Label value={num((r as any)[code] || 0)} fontSize={fs(13)} color={P.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(32), margin: { left: px(4) } }} />
     ])
 
-  return frame(L, 'view', [
-    ...viewHeader(px, 'rb_workshop', back),
-    materialPill('WD', 724),
-    materialPill('ST', 852),
-    materialPill('IR', 980),
-    materialPill('DM', 1108),
+  const nft = !!club && !isBasic(club)
+  return fullFrame(L, [
+    squareButton(px, 'view-back', 140, 6, 'ic_chev_left_w', 0.8, back),
+    img(px, 'rb_workshop', 194, 9, 0.55),
+    materialPill('WD', 365, 86),
+    materialPill('ST', 455, 80),
+    materialPill('IR', 539, 72),
+    squareButton(px, 'view-close', 617, 6, 'ic_close_w', 0.67, closeLobbyMenu),
 
-    img(px, 'tt_my_clubs', 52, 126),
-    ...pageClubs.map((c, j) => clubCard(c, page * perPage + j, j)),
-    paged ? pageButton('clubs-prev', 'ic_chev_left_w', page > 0, page - 1, 52) : null,
-    paged ? text(px, fs, `${page + 1} / ${pages}`, 100, CLUBS_TOP + perPage * CLUB_SLOT + 4, 194, 40, 18, P.white, 'middle-center') : null,
-    paged ? pageButton('clubs-next', 'ic_chev_right_w', page < pages - 1, page + 1, 298) : null,
-    box(px, 'clubs-note', 52, 622, 290, 68, { color: P.navyDeep, radius: 16, border: 3, borderColor: P.navyEdge, align: 'center', padding: { left: px(14), right: px(12) } }, [
-      <Label value="NFT clubs come maxed out. Your basic club levels up with materials." fontSize={fs(13)} color={P.pale} textAlign="middle-left" textWrap="wrap" uiTransform={{ width: '100%', height: px(56) }} />
-    ]),
+    img(px, 'tt_my_clubs', 8, 58, 0.64),
+    ...pageClubs.map((c, j) => clubCard(c, page * CLUBS_PER_PAGE + j, j)),
+    pages > 1 ? pageButton('clubs-prev', 'ic_chev_left_w', page > 0, page - 1, 6) : null,
+    pages > 1 ? text(px, fs, `${page + 1} / ${pages}`, 50, 214, 52, 16, 13, P.white, 'middle-center') : null,
+    pages > 1 ? pageButton('clubs-next', 'ic_chev_right_w', page < pages - 1, page + 1, 102) : null,
 
-    box(px, 'club', 362, 122, 380, 568, { ...card, color: P.purple }),
-    text(px, fs, club ? clubName(club) : '-', 380, 140, 344, 36, 28, P.white, 'middle-center'),
+    ...attributeRow('power', 58),
+    ...attributeRow('control', 158),
+    ...attributeRow('aim', 258),
+
+    box(px, 'club', 498, 58, 163, 168, { color: P.purple, radius: 14, border: 2, shadow: 4 }),
+    text(px, fs, club ? clubName(club) : '-', 508, 64, 145, 18, 15),
     <UiEntity
       key="club-thumb"
-      uiTransform={{ ...at(px, 437, 186, 230, 230), borderRadius: px(24), borderWidth: border(px, 4), borderColor: P.white }}
+      uiTransform={{ ...at(px, 507, 87, 52, 52), borderRadius: px(10), borderWidth: border(px, 2), borderColor: P.white }}
       uiBackground={club ? { texture: { src: `images/${club.golfclubId}.png` }, textureMode: 'stretch' } : { color: P.dim }}
     />,
-    text(px, fs, 'CLUB LEVEL', 388, 430, 200, 24, 16),
-    text(px, fs, club && !isBasic(club) ? 'MAX' : `${level} / 16`, 516, 430, 200, 24, 16, C.yellow, 'middle-right'),
-    box(px, 'club-bar', 388, 460, 328, 18, { color: P.dim, radius: 9 }, [
-      <UiEntity uiTransform={{ width: `${club && !isBasic(club) ? 100 : Math.round((100 * level) / 16)}%`, height: '100%', borderRadius: px(9) }} uiBackground={{ color: C.yellow }} />
+    text(px, fs, 'CLUB LEVEL', 567, 89, 84, 12, 10, hex('#E6DAFF')),
+    text(px, fs, nft ? 'MAX' : `${level} / 16`, 567, 101, 84, 22, 19, C.yellow),
+    box(px, 'club-bar', 567, 127, 84, 7, { color: P.dim, radius: 4 }, [
+      <UiEntity uiTransform={{ width: `${nft ? 100 : Math.round((100 * level) / 16)}%`, height: '100%', borderRadius: px(4) }} uiBackground={{ color: C.yellow }} />
     ]),
-    text(
-      px, fs,
-      club && isBasic(club)
-        ? club.xp
-          ? `Club XP level ${xpLevel}: ${upgradesNow} upgrade${upgradesNow === 1 ? '' : 's'} available now`
-          : 'Play holes with this club to earn club XP'
-        : 'NFT club: all attributes at their maximum',
-      388, 484, 328, 40, 14, hex('#F1E6FF'), 'middle-left', true
-    ),
     button2(
       px,
       {
-        id: 'club-equip', x: 388, y: 546, w: 328, h: 56, color: equipped || busy ? C.disabled : P.lavender, radius: 16, shadow: 6,
+        id: 'club-equip', x: 506, y: 146, w: 147, h: 40, color: equipped || busy ? C.disabled : P.lavender, radius: 12, shadow: 3,
         shadowColor: equipped || busy ? C.dark : P.lavenderShadow, disabled: equipped || busy || !club,
         onClick: () => {
           if (!club) return
@@ -511,25 +497,12 @@ export const WorkshopView = () => {
           })
         }
       },
-      [<Label value={equipped ? 'EQUIPPED' : 'EQUIP'} fontSize={fs(22)} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: px(56) }} />]
+      [<Label value={equipped ? 'EQUIPPED' : 'EQUIP'} fontSize={fs(17)} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />]
     ),
-    box(px, 'club-mint', 388, 616, 328, 58, { color: P.dim, radius: 16, border: 3, borderColor: Color4.create(1, 1, 1, 0.5), column: true, justify: 'center', align: 'center' }, [
-      <Label value="MINT AS NFT" fontSize={fs(17)} color={hex('#D9D2FF')} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(22) }} />,
-      <Label value="level 16 + 120 diamonds" fontSize={fs(12)} color={hex('#D9D2FF')} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(16) }} />
-    ]),
-
-    img(px, 'tt_attributes', 762, 126),
-    ...attributeRow('power', 158),
-    ...attributeRow('control', 294),
-    ...attributeRow('aim', 430),
-    box(px, 'ws-tip', 762, 572, 466, 118, { ...card, color: P.teal }),
-    // The workshop's craftsman, popping out of the tip card.
-    img(px, 'workshop_bust', 770, 536),
-    text(
-      px, fs,
-      'Upgrade costs grow with each level: 10, 20, 30, 60 then 120 materials. Power eats iron, control eats stone, aim eats wood.',
-      930, 584, 284, 94, 14, hex('#E8FFFB'), 'middle-left', true
-    )
+    box(px, 'club-mint', 506, 193, 147, 26, { color: P.dim, radius: 10, border: 2, borderColor: Color4.create(1, 1, 1, 0.5), justify: 'center', align: 'center' }, [
+      <Label value="MINT AS NFT · Lv 16 + 120" fontSize={fs(10)} color={hex('#E6DAFF')} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(22) }} />,
+      materialIcon(px, 'DM', 13, { left: px(3) })
+    ])
   ])
 }
 

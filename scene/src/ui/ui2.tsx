@@ -7,8 +7,10 @@
 // so: gradients are their middle colour, soft shadows are a translucent block
 // under the box, and everything drawn in a display font (ribbons, titles,
 // button captions) or as a vector (icons) is a 2x PNG in images/ui2, sized
-// from ui2-assets.ts. Every screen is laid out in design px (1280x720) and
-// scaled by the contain ratio, like the rest of the new UI.
+// from ui2-assets.ts. Every screen is laid out in design px and scaled by the
+// contain ratio: 1280x720 for the dialogs, 667x375 for the full-screen lobby
+// and workshop (fullFrame), where an image's manifest size times `scale` is
+// still what lands on screen.
 import ReactEcs, { Label, UiEntity } from '@dcl/sdk/react-ecs'
 import { Color4 } from '@dcl/sdk/math'
 import { C, hex, lighten, pointerState, materialIcon, fmt, shortName } from './ui-theme'
@@ -145,7 +147,7 @@ export const box = (
 
 // The dialog: a dark backdrop over the world and the 1280x720 panel with the
 // blurred course behind everything.
-export const frame = (L: Layout, bg: 'lobby' | 'view' | 'result', children: Kids, after: any = null) => (
+export const frame = (L: Layout, bg: 'view' | 'result', children: Kids, after: any = null) => (
   <UiEntity uiTransform={{ width: '100%', height: '100%', positionType: 'absolute' }} uiBackground={{ color: C.backdrop }}>
     <UiEntity
       uiTransform={{ positionType: 'absolute', position: { left: L.left, top: L.top }, width: L.panelW, height: L.panelH }}
@@ -155,6 +157,32 @@ export const frame = (L: Layout, bg: 'lobby' | 'view' | 'result', children: Kids
     </UiEntity>
     {after}
   </UiEntity>
+)
+
+// The full-screen version of the dialog (lobby and workshop, page "Móvil ·
+// propuesta 2"): a navy background over the whole canvas, cropped to cover
+// it, and the 667x375 design box of fullLayout on top.
+export const fullFrame = (L: Layout, children: Kids, after: any = null) => {
+  const aspect = L.canvas.width / Math.max(1, L.canvas.height)
+  const f = Math.min(1, aspect / (16 / 9))
+  const g = Math.min(1, 16 / 9 / aspect)
+  const uL = (1 - f) / 2
+  const vB = (1 - g) / 2
+  return (
+    <UiEntity
+      uiTransform={{ width: '100%', height: '100%', positionType: 'absolute' }}
+      uiBackground={{ texture: { src: src('bg_full') }, textureMode: 'stretch', uvs: [uL, vB, uL, 1 - vB, 1 - uL, 1 - vB, 1 - uL, vB] }}
+    >
+      <UiEntity uiTransform={{ positionType: 'absolute', position: { left: L.left, top: L.top }, width: L.panelW, height: L.panelH }}>{children}</UiEntity>
+      {after}
+    </UiEntity>
+  )
+}
+
+// An image of images/ui2 at an explicit absolute box (for the full-screen
+// screens, whose sizes are not the 1280x720 ones of ui2-assets.ts).
+export const imgBox = (px: Px, key: string, x: number, y: number, w: number, h: number, tint?: Color4) => (
+  <UiEntity key={`imgbox-${key}-${x}-${y}`} uiTransform={at(px, x, y, w, h)} uiBackground={{ texture: { src: src(key) }, textureMode: 'stretch', color: tint }} />
 )
 
 export type Button2 = {
@@ -225,13 +253,13 @@ export const button2 = (px: Px, o: Button2, children: Kids): any => {
 }
 
 // An image (a ribbon) that acts as a button: it lifts 2 px on hover.
-export const imageButton = (px: Px, id: string, key: string, x: number, y: number, onClick: () => void) => {
+export const imageButton = (px: Px, id: string, key: string, x: number, y: number, onClick: () => void, scale = 1) => {
   const hovered = pointerState.hovered === id
   const [w, h] = UI2[key] || [10, 10]
   return (
     <UiEntity
       key={id}
-      uiTransform={at(px, x, y - (hovered ? 2 : 0), w, h)}
+      uiTransform={at(px, x, y - (hovered ? 2 : 0), w * scale, h * scale)}
       uiBackground={{ texture: { src: src(key) }, textureMode: 'stretch' }}
       onMouseEnter={() => {
         pointerState.hovered = id
@@ -251,6 +279,10 @@ export const navyIconButton = (px: Px, id: string, icon: string, x: number, y: n
     { id, x, y, w: size, h: size, color: P.navy, radius: 16, border: 3, borderColor: P.navyEdge, shadow: 6, disabled: !onClick, onClick: onClick || undefined },
     [img(px, icon, undefined, undefined, iconScale)]
   )
+
+// The 44x44 navy button of the full-screen screens (close, back).
+export const squareButton = (px: Px, id: string, x: number, y: number, icon: string, iconScale: number, onClick: () => void) =>
+  button2(px, { id, x, y, w: 44, h: 44, color: P.navy, radius: 12, border: 2, borderColor: P.navyEdge, onClick }, [img(px, icon, undefined, undefined, iconScale)])
 
 // Header of a sub-view: back button, the screen's ribbon, then `rest` on the
 // right side of the row (absolute, laid out by the caller).
@@ -332,8 +364,8 @@ export const nextPrizeBar = (
 
 // Blue chip under the PLAY buttons: the energy bolt and the caption
 // ("1 energy", "no energy", "closed", "connecting...").
-export const energyChip = (px: Px, fs: Px, key: string, x: number, y: number, w: number, h: number, caption: string) =>
+export const energyChip = (px: Px, fs: Px, key: string, x: number, y: number, w: number, h: number, caption: string, size = 13) =>
   box(px, key, x, y, w, h, { color: P.blueChip, radius: h / 2, border: 2, justify: 'center', align: 'center' }, [
     img(px, 'ic_bolt_w', undefined, undefined, (h - 8) / 42),
-    <Label value={caption} fontSize={fs(13)} color={P.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(h - 4), margin: { left: px(5) } }} />
+    <Label value={caption} fontSize={fs(size)} color={P.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(h - 4), margin: { left: px(h * 0.2) } }} />
   ])
