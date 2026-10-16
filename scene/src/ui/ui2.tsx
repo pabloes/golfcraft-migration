@@ -8,9 +8,10 @@
 // under the box, and everything drawn in a display font (ribbons, titles,
 // button captions) or as a vector (icons) is a 2x PNG in images/ui2, sized
 // from ui2-assets.ts. Every screen is laid out in design px and scaled by the
-// contain ratio: 1280x720 for the dialogs, 667x375 for the full-screen lobby
-// and workshop (fullFrame), where an image's manifest size times `scale` is
-// still what lands on screen.
+// contain ratio: 667x375 for the full-screen lobby dialog, Season screens and
+// in-hole HUD (fullFrame, placeAt), 1280x720 for the intro, boot-error and
+// closed dialogs. An image's manifest size (1280 px) times `scale` is what
+// lands on screen.
 import ReactEcs, { Label, UiEntity } from '@dcl/sdk/react-ecs'
 import { Color4 } from '@dcl/sdk/math'
 import { C, hex, lighten, pointerState, materialIcon, fmt, shortName } from './ui-theme'
@@ -27,6 +28,7 @@ export const P = {
   pink: hex('#E84198'),
   pinkBar: hex('#DD378F'),
   pinkEdge: hex('#FF8BD0'),
+  prizeText: hex('#FFE1F1'),
   gold: hex('#F0A010'),
   yellow: hex('#FFD32F'),
   yellowShadow: hex('#B88600'),
@@ -145,20 +147,6 @@ export const box = (
   </UiEntity>
 ]
 
-// The dialog: a dark backdrop over the world and the 1280x720 panel with the
-// blurred course behind everything.
-export const frame = (L: Layout, bg: 'view' | 'result', children: Kids, after: any = null) => (
-  <UiEntity uiTransform={{ width: '100%', height: '100%', positionType: 'absolute' }} uiBackground={{ color: C.backdrop }}>
-    <UiEntity
-      uiTransform={{ positionType: 'absolute', position: { left: L.left, top: L.top }, width: L.panelW, height: L.panelH }}
-      uiBackground={{ texture: { src: src(`bg_${bg}`) }, textureMode: 'stretch' }}
-    >
-      {children}
-    </UiEntity>
-    {after}
-  </UiEntity>
-)
-
 // The full-screen version of the dialog (lobby and workshop, page "Móvil ·
 // propuesta 2"): a navy background over the whole canvas, cropped to cover
 // it, and the 667x375 design box of fullLayout on top.
@@ -178,6 +166,15 @@ export const fullFrame = (L: Layout, children: Kids, after: any = null) => {
     </UiEntity>
   )
 }
+
+// An absolute box on the full-screen grid for pieces that are not children of
+// fullFrame (the in-hole HUD): design px offset by the layout's own origin.
+export const placeAt = (L: Layout, px: Px, x: number, y: number, w?: number, h?: number) => ({
+  positionType: 'absolute' as const,
+  position: { left: L.left + px(x), top: L.top + px(y) },
+  width: w === undefined ? undefined : px(w),
+  height: h === undefined ? undefined : px(h)
+})
 
 // An image of images/ui2 at an explicit absolute box (for the full-screen
 // screens, whose sizes are not the 1280x720 ones of ui2-assets.ts).
@@ -272,36 +269,15 @@ export const imageButton = (px: Px, id: string, key: string, x: number, y: numbe
   )
 }
 
-// Navy square button with a white glyph (back, close).
-export const navyIconButton = (px: Px, id: string, icon: string, x: number, y: number, size: number, onClick: (() => void) | null, iconScale = 0.75) =>
-  button2(
-    px,
-    { id, x, y, w: size, h: size, color: P.navy, radius: 16, border: 3, borderColor: P.navyEdge, shadow: 6, disabled: !onClick, onClick: onClick || undefined },
-    [img(px, icon, undefined, undefined, iconScale)]
-  )
-
 // The 44x44 navy button of the full-screen screens (close, back).
 export const squareButton = (px: Px, id: string, x: number, y: number, icon: string, iconScale: number, onClick: () => void) =>
   button2(px, { id, x, y, w: 44, h: 44, color: P.navy, radius: 12, border: 2, borderColor: P.navyEdge, onClick }, [img(px, icon, undefined, undefined, iconScale)])
-
-// Header of a sub-view: back button, the screen's ribbon, then `rest` on the
-// right side of the row (absolute, laid out by the caller).
-export const viewHeader = (px: Px, ribbonKey: string, onBack: (() => void) | null) => [
-  navyIconButton(px, 'view-back', 'ic_chev_left_w', 52, 34, 66, onBack, 1),
-  img(px, ribbonKey, 52 + 66 + 22, 31)
-]
-export const headerRight = (px: Px, ribbonKey: string) => 52 + 66 + 22 + imgW(ribbonKey) + 14
 
 // Yellow tag (MOUNTAIN Season, Ancient Egypt...).
 export const yellowTag = (px: Px, fs: Px, value: string, x: number, y: number, w: number, h = 32, size = 15) =>
   box(px, `ytag-${value}`, x, y, w, h, { color: C.yellow, radius: 12, justify: 'center', align: 'center' }, [
     <Label value={value} fontSize={fs(size)} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: px(h) }} />
   ])
-
-// Navy pill with an icon and a value, right-aligned at `right` (design px
-// from the panel's left edge to the pill's right edge).
-export const navyPill = (px: Px, fs: Px, key: string, x: number, y: number, w: number, h: number, children: Kids) =>
-  box(px, key, x, y, w, h, { color: P.navyDeep, radius: 14, border: 3, borderColor: P.navyEdge, align: 'center', justify: 'center', padding: { left: px(10), right: px(12) } }, children)
 
 // Resource icon of the game (energy has its own glyph here).
 export const resIcon = (px: Px, code: string, size: number, margin?: { left?: number; right?: number }) =>
@@ -330,37 +306,48 @@ export const rankBadge = (px: Px, tier: number, size: number, x?: number, y?: nu
   />
 )
 
-// "Next prize" bar: the wearable's thumbnail, its name and the season points
-// still needed. A sold-out wearable pays Fashion Tickets instead, so then the
-// bar shows the FT icon and that amount. No stock counts.
-export const nextPrizeBar = (
+// The full-screen "next prize" strip: the wearable's thumbnail (the FT icon
+// once sold out), "NEXT PRIZE · <tier> · N pts to go" and its name.
+export const nextPrizeStrip = (
   px: Px,
   fs: Px,
+  key: string,
   x: number,
   y: number,
+  w: number,
+  h: number,
   prize: { name: string; stock: number; thumbnail?: string; fashionTickets?: number } | null,
   tierName: string,
   toGo: number,
-  loaded: boolean,
-  w = 420
+  loaded: boolean
 ) => {
   const sold = !!prize && prize.stock <= 0
   const pic = sold ? 'images/icons/ft.png' : prize?.thumbnail
   const name = !prize ? (loaded ? 'Every prize reached!' : 'Loading prizes...') : sold ? `${prize.fashionTickets ? fmt(prize.fashionTickets) + ' ' : ''}Fashion Tickets` : shortName(prize.name)
-  const pillW = 150
-  return box(px, `next-prize-${x}-${y}`, x, y, w, 50, { color: P.pinkBar, radius: 12, border: 2, borderColor: P.pinkEdge }, [
-    <UiEntity key="np-thumb" uiTransform={{ ...at(px, 5, 4, 38, 38), borderRadius: px(9) }} uiBackground={{ color: Color4.create(1, 1, 1, 0.25) }}>
-      {pic ? <UiEntity uiTransform={{ width: '100%', height: '100%' }} uiBackground={{ texture: { src: pic }, textureMode: 'stretch' }} /> : null}
+  const t = h - 10
+  return [
+    box(px, key, x, y, w, h, { color: P.pinkBar, radius: 10, border: 2, borderColor: P.pinkEdge }),
+    <UiEntity key={`${key}-thumb`} uiTransform={{ ...at(px, x + 6, y + 5, t, t), borderRadius: px(7) }} uiBackground={{ color: Color4.create(1, 1, 1, 0.25) }}>
+      {pic ? <UiEntity uiTransform={{ width: '100%', height: '100%', borderRadius: px(7) }} uiBackground={{ texture: { src: pic }, textureMode: 'stretch' }} /> : null}
     </UiEntity>,
-    text(px, fs, prize ? `NEXT PRIZE · ${tierName}${sold ? ' · SOLD OUT' : ''}` : 'NEXT PRIZE', 52, 4, w - 52 - pillW - 12, 16, 11, hex('#FFD6EC')),
-    text(px, fs, name, 52, 20, w - 52 - pillW - 12, 22, 15),
-    prize
-      ? box(px, 'np-pill', w - 4 - pillW - 8, 9, pillW, 28, { color: hex('#1C0A3F'), radius: 9, justify: 'center', align: 'center' }, [
-          <Label value={`${toGo} season point${toGo === 1 ? '' : 's'} to go`} fontSize={fs(12)} color={P.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: px(28) }} />
-        ])
-      : null
-  ])
+    <UiEntity key={`${key}-line`} uiTransform={{ ...at(px, x + t + 13, y + 4, w - t - 20, 14), flexDirection: 'row', alignItems: 'center' }}>
+      <Label value={prize && tierName ? `NEXT PRIZE · ${tierName}` : 'NEXT PRIZE'} fontSize={fs(10)} color={P.prizeText} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(14) }} />
+      {prize ? <Label value={`· ${toGo} pts to go`} fontSize={fs(10)} color={C.yellow} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(14), margin: { left: px(4) } }} /> : null}
+    </UiEntity>,
+    text(px, fs, name, x + t + 13, y + h - 23, w - t - 20, 18, 14)
+  ]
 }
+
+// One of the 163x52 cards of the full-screen right column (TUTORIAL,
+// WORKSHOP, PRIZES): square art, display title, one line and a chevron. The
+// whole card is the button.
+export const sideCard = (px: Px, id: string, y: number, color: Color4, art: string, titleKey: string, onClick: () => void, content: any[]) =>
+  button2(px, { id, x: 498, y, w: 163, h: 52, color, radius: 14, border: 2, shadow: 4, onClick }, [
+    imgBox(px, art, 3, 3, 42, 42),
+    img(px, titleKey, 51, 4, 0.5),
+    ...content,
+    img(px, 'ic_chev_right_w', 147, 18, 0.42)
+  ])
 
 // Blue chip under the PLAY buttons: the energy bolt and the caption
 // ("1 energy", "no energy", "closed", "connecting...").

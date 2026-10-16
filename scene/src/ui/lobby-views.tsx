@@ -1,8 +1,8 @@
-// The lobby dialog's sub-views, after the "Escritorio · propuesta 2" page of
-// the GolfCraft UI canvas: SEASON (Season2.dc.html), TUTORIAL (Story2),
-// WORKSHOP (Workshop2), PRIZES (Prizes2) and DAILY MISSIONS (DailyMissions2).
-// Same 1280x720 contained panel as the lobby view, with the back button and
-// the screen's ribbon on top. They only read the scene's state and call the
+// The lobby dialog's sub-views, after the "Móvil · propuesta 2" page of the
+// GolfCraft UI canvas, on phones and desktop alike: SEASON (M2Season.dc.html),
+// TUTORIAL (M2Story), WORKSHOP (M2Workshop), PRIZES (M2Prizes) and DAILY
+// MISSIONS (M2Daily). Full screen like the lobby view, with back, the screen's
+// ribbon and close on top. They only read the scene's state and call the
 // handlers the 3D lobby already uses.
 import ReactEcs, { Label, UiEntity } from '@dcl/sdk/react-ecs'
 import { Color4 } from '@dcl/sdk/math'
@@ -11,9 +11,9 @@ import { globalStore } from '../services/globalStore/globalStore'
 import { lobbyHudState, DailyMission } from './lobby-hud-state'
 import { lobbyMenuState, showLobbyView, closeLobbyMenu, SeasonPrize, markStartedFromMenu, nextSeasonPrize, prizeSoldOut, seasonPlayState } from './lobby-menu-state'
 import { C, hex, fmt, shortName, materialIcon } from './ui-theme'
-import { containLayout, fullLayout, scaler, DESIGN_W, DESIGN_H, type Px } from './ui-scale'
+import { fullLayout, scaler, type Px } from './ui-scale'
 import {
-  P, at, img, imgW, text, box, frame, fullFrame, button2, squareButton, viewHeader, headerRight, yellowTag, navyPill, resIcon, rankBadge, border, nextPrizeBar, energyChip
+  P, at, img, imgW, text, box, fullFrame, button2, squareButton, sideCard, nextPrizeStrip, yellowTag, resIcon, rankBadge, border, energyChip
 } from './ui2'
 import { talkToNpc } from '../components/lobby/npc-storymode/npc-storymode'
 import { getGolfclubCollection, selectGolfclub, upgradeGolfclubAttribute } from '../components/lobby/lobby-training'
@@ -33,23 +33,77 @@ import { TIER_CATEGORIES, TIER_COLORS } from '../../../common/constants'
 // @ts-ignore - season-tier-definitions has @ts-nocheck
 import { seasonTierDefinitions } from '../../../common/season-tier-definitions'
 
-const MARGIN = 16
 const back = () => showLobbyView('lobby')
-const card = { color: P.navy, radius: 20, border: 4, shadow: 10 }
 const tierOf = (tierSub: number) => Number(getTierFromSub(tierSub) || 0)
 const seasonNameNow = () =>
   (seasonCatalog as any)[String(globalStore.userData.getState()?.config?.currentSeasonCollectionId ?? 4)]?.name || 'MOUNTAIN'
 
 // ---------------------------------------------------------------------------
-// SEASON (Season2.dc.html)
+// The sub-views are full screen, like the lobby (canvas page "Móvil ·
+// propuesta 2"): a 667x375 design with the explorer's corners left free.
+
+const RIBBON_SCALE = 0.55
+// Top bar of every sub-view: back, the screen's ribbon, close.
+const fullHeader = (px: Px, ribbonKey: string) => [
+  squareButton(px, 'view-back', 140, 6, 'ic_chev_left_w', 0.8, back),
+  img(px, ribbonKey, 194, 9, RIBBON_SCALE),
+  squareButton(px, 'view-close', 617, 6, 'ic_close_w', 0.67, closeLobbyMenu)
+]
+const afterRibbon = (ribbonKey: string) => 194 + imgW(ribbonKey, RIBBON_SCALE) + 8
+const topTag = (px: Px, fs: Px, value: string, x: number, w: number) => yellowTag(px, fs, value, x, 17, w, 22, 11)
+
+// Diamonds for the Season's top 10, by position.
+const TOP10_PRIZES = [500, 300, 200, 100, 100, 100, 100, 100, 100, 100]
+const GOLD_ROW = Color4.create(8 / 255, 18 / 255, 40 / 255, 0.3)
+
+// The Season's TOP 10 like the original panel, in the right column: position,
+// player, season points and the diamonds that place wins, with no rank per
+// line. Mine is pink; without data the names and points read "—". It is only
+// information, so it may run under the explorer's buttons.
+const top10Card = (px: Px, fs: Px, y: number, h: number, rowH: number, subtitle: string) => {
+  const board = lobbyMenuState.leaderboard
+  const myPlayFabId = getPlayFabId()
+  const rowsTop = y + 54
+  return [
+    box(px, 'top10', 498, y, 163, h, { color: P.gold, radius: 14, border: 3, shadow: 4 }),
+    img(px, 'tt_top10', 507, y + 7, 0.62),
+    text(px, fs, subtitle, 507, y + 26, 147, 13, 10, hex('#FFF4DD')),
+    text(px, fs, '#', 509, y + 41, 14, 12, 9, hex('#FFF0CC')),
+    text(px, fs, 'PLAYER', 524, y + 41, 60, 12, 9, hex('#FFF0CC')),
+    text(px, fs, 'PTS', 584, y + 41, 28, 12, 9, hex('#FFF0CC'), 'middle-right'),
+    text(px, fs, 'PRIZE', 613, y + 41, 40, 12, 9, hex('#FFF0CC'), 'middle-right'),
+    ...Array.from({ length: 10 }, (_, i) => {
+      const entry = board[i]
+      const mine = !!entry && !!myPlayFabId && entry.playFabId === myPlayFabId
+      const ry = rowsTop + i * (rowH + 2)
+      return [
+        box(px, `top-${i}`, 504, ry, 151, rowH, { color: mine ? P.pink : GOLD_ROW, radius: 6 }),
+        text(px, fs, String(i + 1), 509, ry, 14, rowH, 11),
+        <UiEntity key={`top-name-${i}`} uiTransform={{ ...at(px, 524, ry, 60, rowH), overflow: 'hidden' }}>
+          <Label value={entry ? entry.name : '—'} fontSize={fs(11)} color={P.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />
+        </UiEntity>,
+        text(px, fs, entry ? String(entry.points) : '—', 584, ry, 28, rowH, 11, P.white, 'middle-right'),
+        text(px, fs, String(TOP10_PRIZES[i]), 613, ry, 28, rowH, 11, P.white, 'middle-right'),
+        <UiEntity key={`top-dm-${i}`} uiTransform={at(px, 643, ry + (rowH - 10) / 2, 10, 10)}>
+          {materialIcon(px, 'DM', 10)}
+        </UiEntity>
+      ]
+    })
+  ]
+}
+
+// ---------------------------------------------------------------------------
+// SEASON (M2Season.dc.html)
 
 // Time the other players get once someone holes, by tier category
 // (server/rooms/Season-Room.ts countdownByTierCat).
 const ENDING_SECONDS = [30, 28, 25, 20, 15, 15, 15, 15, 15, 15]
 const NUMERALS = ['V', 'IV', 'III', 'II', 'I']
+const RANK_TEXT = hex('#E8DFFF')
+const BAR_TRACK = hex('#150A33')
 
 export const SeasonView = () => {
-  const L = containLayout(DESIGN_W, DESIGN_H, { margin: MARGIN })
+  const L = fullLayout()
   const { px, fs } = scaler(L.scale)
   const userData = globalStore.userData.getState()
   const tierSub = Number(userData['statistic_tier-sub'] || 0)
@@ -59,119 +113,114 @@ export const SeasonView = () => {
   const step = Math.max(0, Math.min(4, tier - cat * 5))
   const ptsOnTier = Number(getPointsOnCurrentTier(tierSub) || 0)
   const ptsPerTier = Number(seasonPointsPerCategory[cat] || 5)
+  const nextTierName = seasonTierDefinitions[tier + 1]?.name || null
+  const nextCat = Math.min(cat + 1, TIER_CATEGORIES.length - 1)
+  const nextCatAt = Number(getPointsToTier(nextCat * 5) || 0)
   const prize = nextSeasonPrize(tierSubMax)
   const prizeTier = prize ? seasonTierDefinitions[tierOf(prize.tierReward)]?.name || '' : ''
   const st = seasonPlayState()
-  const hx = headerRight(px, 'rb_season')
+  const hx = afterRibbon('rb_season')
 
-  const segW = (542 - 4 * 6) / 5
   const segments = NUMERALS.map((numeral, k) => {
-    const x = 258 + k * (segW + 6)
+    const x = 226 + k * 51
     const fill = k < step ? 100 : k === step ? Math.max(0, Math.min(100, (100 * ptsOnTier) / ptsPerTier)) : 0
     return [
-      box(px, `seg-${k}`, x, 222, segW, 18, { color: P.glass, radius: 8, border: 3, borderColor: Color4.create(1, 1, 1, 0.35) }, [
-        <UiEntity uiTransform={{ width: `${fill}%`, height: '100%', borderRadius: px(5) }} uiBackground={{ color: C.yellow }} />
+      box(px, `seg-${k}`, x, 118, 46, 14, { color: k < step ? P.green : BAR_TRACK, radius: 5, border: k === step ? 2 : 0, borderColor: C.yellow }, [
+        k === step ? <UiEntity uiTransform={{ width: `${fill}%`, height: '100%', borderRadius: px(3) }} uiBackground={{ color: C.yellow }} /> : null
       ]),
-      text(px, fs, numeral, x, 244, segW, 18, 14, k === step ? C.yellow : P.white, 'middle-center')
+      text(px, fs, numeral, x, 134, 46, 12, 10, k === step ? C.yellow : RANK_TEXT, 'middle-center')
     ]
   })
 
-  const medals = TIER_CATEGORIES.map((name: string, c: number) => {
-    const col = c % 5
-    const row = Math.floor(c / 5)
-    const x = 78 + col * 145
-    const y = 436 + row * 120
+  const medals = TIER_CATEGORIES.map((_: string, c: number) => {
+    const x = 163 + c * 32.5
     const mine = c === cat
     return [
-      mine ? box(px, `medal-ring-${c}`, x + (145 - 84) / 2, y - 6, 84, 84, { color: Color4.create(1, 0.82, 0.12, 0.25), radius: 42, border: 4, borderColor: C.yellow }) : null,
-      img(px, `medal_${c}`, x + (145 - 72) / 2, y, 1.2, mine ? undefined : Color4.create(1, 1, 1, 0.6)),
-      text(px, fs, name.charAt(0) + name.slice(1).toLowerCase().replace('master', 'Master'), x, y + 82, 145, 18, 13, mine ? C.yellow : Color4.create(1, 1, 1, 0.75), 'middle-center')
+      mine ? box(px, `medal-ring-${c}`, x - 2, 263, 26, 26, { color: Color4.create(1, 0.82, 0.12, 0.25), radius: 13, border: 2, borderColor: C.yellow }) : null,
+      img(px, `medal_${c}`, x, 265, 22 / 60, mine ? undefined : Color4.create(1, 1, 1, 0.6))
     ]
   })
 
-  const holeTiles = [
-    ['1st', '+2'],
-    ['2nd', '+1'],
-    ['3rd', '0'],
-    ['4th', '−1']
-  ].map(([place, pts], k) =>
-    box(px, `pts-${k}`, 874 + k * 86, 258, 80, 60, { color: k === 0 ? C.yellow : P.glass, radius: 12, column: true, justify: 'center', align: 'center' }, [
-      <Label value={place} fontSize={fs(15)} color={k === 0 ? P.ink : P.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(20) }} />,
-      <Label value={pts} fontSize={fs(24)} color={k === 0 ? P.ink : P.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(30) }} />
-    ])
-  )
+  const holePoints = [
+    ['1st', '+2', P.green],
+    ['2nd', '+1', P.green],
+    ['3rd', '0', P.white],
+    ['4th', '−1', SHORT]
+  ].map(([place, pts, color], k) => [
+    text(px, fs, place as string, 16, 133 + k * 17, 60, 15, 12),
+    text(px, fs, pts as string, 90, 133 + k * 17, 46, 15, 12, color as Color4, 'middle-right')
+  ])
 
-  return frame(L, 'view', [
-    ...viewHeader(px, 'rb_season', back),
-    yellowTag(px, fs, `${seasonNameNow()} Season`, hx, 51, 170),
-    navyPill(px, fs, 'energy', 1068, 44, 160, 46, [
-      resIcon(px, 'EN', 30),
-      <Label value={fmt(st.energy)} fontSize={fs(19)} color={P.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(40), margin: { left: px(8) } }} />,
-      <Label value="energy" fontSize={fs(14)} color={P.pale} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(40), margin: { left: px(6) } }} />
+  const friendsSub = st.friendsCaption.indexOf('\n') >= 0 ? 'Play together' : st.friendsCaption
+  return fullFrame(L, [
+    ...fullHeader(px, 'rb_season'),
+    topTag(px, fs, `${seasonNameNow()} Season`, hx, 116),
+    box(px, 'energy', 521, 10, 90, 36, { color: P.navyDeep, radius: 10, border: 2, borderColor: P.navyEdge, align: 'center', justify: 'center' }, [
+      resIcon(px, 'EN', 20),
+      <Label value={`${fmt(st.energy)} energy`} fontSize={fs(13)} color={P.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(32), margin: { left: px(5) } }} />
     ]),
 
-    box(px, 'your-rank', 52, 122, 778, 236, card),
-    rankBadge(px, tier, 150, 82, 165),
-    text(px, fs, 'YOUR RANK', 258, 140, 200, 20, 14),
-    <UiEntity key="rank-name" uiTransform={{ ...at(px, 258, 160, 540, 52), flexDirection: 'row', alignItems: 'center' }}>
-      <Label value={seasonTierDefinitions[tier]?.name || 'WOOD 5'} fontSize={fs(44)} color={P.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(52) }} />
-      <Label value={`${tierSub} pts`} fontSize={fs(24)} color={C.yellow} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(52), margin: { left: px(16) } }} />
-    </UiEntity>,
+    box(px, 'how', 6, 58, 140, 188, { color: P.navy, radius: 14, border: 2, borderColor: P.navyEdge }),
+    text(px, fs, 'HOW A RUN WORKS', 16, 64, 124, 16, 13),
+    text(px, fs, '4 holes against 3 players at your rank', 16, 82, 124, 30, 11, P.white, 'middle-left', true),
+    text(px, fs, 'SEASON POINTS PER HOLE', 16, 116, 124, 13, 10, P.pale),
+    ...holePoints,
+    text(px, fs, `Once someone holes, the rest get ${ENDING_SECONDS[cat] || 15} s`, 16, 206, 124, 30, 10, P.pale, 'middle-left', true),
+
+    box(px, 'your-rank', 152, 58, 340, 132, { color: P.rankBox, radius: 14, border: 2, borderColor: P.rankEdge, shadow: 4, shadowColor: P.rankShadow }),
+    rankBadge(px, tier, 52, 162, 70),
+    text(px, fs, 'YOUR RANK', 226, 67, 120, 13, 10, RANK_TEXT),
+    text(px, fs, seasonTierDefinitions[tier]?.name || 'WOOD 5', 226, 79, 180, 30, 24),
+    text(px, fs, `${tierSub} pts`, 400, 86, 82, 16, 13, P.white, 'middle-right'),
     ...segments,
-    nextPrizeBar(px, fs, 258, 294, prize, prizeTier, prize ? Math.max(0, prize.tierReward - tierSub) : 0, lobbyMenuState.prizes.length > 0, 542),
+    text(px, fs, nextTierName ? `${ptsPerTier - ptsOnTier} pts to ${nextTierName}` : 'Top rank reached', 226, 158, 140, 14, 11, RANK_TEXT),
+    nextCat > cat ? text(px, fs, `${TIER_CATEGORIES[nextCat]} at ${nextCatAt} pts`, 360, 158, 122, 14, 11, RANK_TEXT, 'middle-right') : null,
 
-    box(px, 'ranks', 52, 376, 778, 314, card),
-    img(px, 'tt_ranks', 78, 394),
+    ...nextPrizeStrip(px, fs, 'season-prize', 152, 196, 340, 44, prize, prizeTier, prize ? Math.max(0, prize.tierReward - tierSub) : 0, lobbyMenuState.prizes.length > 0),
+
+    box(px, 'ranks', 152, 246, 340, 48, { color: P.navyDeep, radius: 12, border: 2, borderColor: P.navyEdge }),
+    text(px, fs, '10 RANKS · 5 STEPS EACH', 163, 249, 200, 12, 10, P.pale),
     ...medals,
-
-    box(px, 'how', 850, 122, 378, 376, card),
-    img(px, 'tt_how_a_run', 874, 142),
-    box(px, 'four', 874, 182, 40, 40, { color: C.yellow, radius: 12, justify: 'center', align: 'center' }, [
-      <Label value="4" fontSize={fs(22)} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />
-    ]),
-    text(px, fs, 'holes against 3 other players at your rank', 926, 180, 280, 44, 15, P.white, 'middle-left', true),
-    text(px, fs, 'SEASON POINTS PER HOLE', 874, 234, 300, 18, 13, P.pale),
-    ...holeTiles,
-    img(px, 'gl_energy', 874, 340, 0.68),
-    text(px, fs, 'Each run costs 1 energy', 916, 340, 290, 32, 15),
-    img(px, 'ic_timer_w', 878, 386, 0.7),
-    text(px, fs, `Once someone holes, the rest get ${ENDING_SECONDS[cat] || 15} s`, 916, 388, 290, 32, 15),
 
     button2(
       px,
-      { id: 'season-play', x: 850, y: 516, w: 378, h: 84, color: st.canPlay ? P.yellow : C.disabled, radius: 18, shadow: 7, shadowColor: st.canPlay ? P.yellowShadow : C.dark, disabled: !st.canPlay, onClick: st.startSeason },
+      {
+        id: 'season-play', x: 152, y: 302, w: 222, h: 52, color: st.canPlay ? P.yellow : C.disabled, radius: 15, shadow: 5, shadowColor: st.canPlay ? P.yellowShadow : C.dark,
+        disabled: !st.canPlay, onClick: st.startSeason, padding: { bottom: px(12) }
+      },
       [
-        img(px, 'bt_play_m'),
-        <UiEntity uiTransform={{ width: px(16) }} />,
-        img(px, 'ic_play_n', undefined, undefined, 0.9),
-        energyChip(px, fs, 'season-play-energy', (378 - 116) / 2, 58, 116, 22, st.playCaption)
+        img(px, 'bt_play', undefined, undefined, 0.5),
+        <UiEntity uiTransform={{ width: px(8) }} />,
+        img(px, 'ic_play_n', undefined, undefined, 0.5),
+        energyChip(px, fs, 'season-play-energy', 63, 32, 96, 16, st.playCaption, 10)
       ]
     ),
     button2(
       px,
       {
-        id: 'season-friends', x: 850, y: 620, w: 214, h: 70, color: st.canFriends ? P.lavender : C.disabled, radius: 18, shadow: 7,
-        shadowColor: st.canFriends ? P.lavenderShadow : C.dark, disabled: !st.canFriends, onClick: st.startFriends,
-        justify: 'flex-start', padding: { left: px(12), right: px(8) }
+        id: 'season-friends', x: 380, y: 302, w: 112, h: 52, color: st.canFriends ? P.lavender : C.disabled, radius: 15, shadow: 5,
+        shadowColor: st.canFriends ? P.lavenderShadow : C.dark, disabled: !st.canFriends, onClick: st.startFriends, row: false
       },
       [
-        img(px, 'ic_people_n', undefined, undefined, 0.7),
-        <Label value={st.friendsCaption.replace('PLAY\n', '')} fontSize={fs(15)} color={P.ink} textAlign="middle-left" textWrap="wrap" uiTransform={{ width: px(150), height: px(60), margin: { left: px(10) } }} />
+        img(px, 'ic_people_n', undefined, undefined, 0.42),
+        <Label value="FRIENDS" fontSize={fs(14)} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(16) }} />,
+        <Label value={friendsSub} fontSize={fs(10)} color={P.ink} textAlign="middle-center" textWrap="wrap" uiTransform={{ width: px(106), height: px(14) }} />
       ]
     ),
-    button2(px, { id: 'season-prizes', x: 1078, y: 620, w: 150, h: 70, color: P.pink, radius: 18, border: 4, shadow: 7, onClick: () => showLobbyView('prizes') }, [
-      img(px, 'tt_card_prizes', undefined, undefined, 0.75)
-    ])
+
+    sideCard(px, 'season-prizes', 58, P.pink, 'art_prizes_sq', 'tt_card_prizes', () => showLobbyView('prizes'), [
+      text(px, fs, lobbyMenuState.prizes.length ? `${lobbyMenuState.prizes.length} wearables` : 'Season wearables', 51, 26, 100, 14, 11)
+    ]),
+    ...top10Card(px, fs, 116, 255, 16, 'Diamonds when the season ends')
   ])
 }
 
 // ---------------------------------------------------------------------------
-// TUTORIAL (Story2.dc.html)
+// TUTORIAL (M2Story.dc.html)
 
 const TUTORIAL_STEPS = 9
 const NODE_LABELS = ['Welcome, intern', 'Sphere 1 of 4', 'Sphere 2 of 4', 'Sphere 3 of 4', 'Sphere 4 of 4', 'Secret emote', 'Sharpen your aim', 'Play ranked', 'Reach STONE']
-const NODE_GLYPHS = ['gl_lock', 'gl_lock', 'gl_lock', 'gl_lock', 'gl_lock', 'gl_hand', 'gl_club', 'gl_cup', 'gl_star']
-// One line per mission for Dr. Par's panel: a summary, not the dialog.
+// One line per mission for Dr. Par's card: a summary, not the dialog.
 const MISSION_LINES: Record<number, string> = {
   1: 'Welcome, intern! Grab a club and play your first hole.',
   2: 'Four energy spheres escaped to ancient Egypt. Let us catch the first one.',
@@ -183,125 +232,122 @@ const MISSION_LINES: Record<number, string> = {
   8: 'You are ready to compete. Play Season and reach STONE rank.',
   9: 'Congrats on STONE rank! Your NFT wearable is on its way.'
 }
-// Node centres on the map, inside the map card (Story2: 822x368 inner box).
-const MAP_X = 56
-const MAP_Y = 126
-const NODE_X = [58, 150, 242, 334, 426, 518, 610, 702, 794]
-const NODE_Y = (i: number) => (i % 2 === 0 ? 250 : 130)
-const SAND_LIGHT = hex('#F7E7B0')
+// Node centres on the map card: a zigzag of 9 nodes, 36 px apart.
+const NODE_CX = (i: number) => 177 + 36 * i
+const NODE_CY = (i: number) => (i % 2 === 0 ? 131 : 185)
 const SPHERE = hex('#EF57B4')
 const SPHERE_RING = hex('#9FF5E8')
-const PINK_SHADOW = hex('#8E145F')
+const NODE_TODO = hex('#2A3170')
+const NODE_TODO_EDGE = hex('#4A55B8')
+const NODE_TODO_TEXT = hex('#9FA8E8')
+const PATH_DOT = Color4.create(1, 1, 1, 0.35)
 
 const mapNode = (px: Px, fs: Px, i: number, mission: number, done: boolean) => {
   const n = i + 1
   const status = done || n < mission ? 'done' : n === mission ? 'current' : 'pending'
-  const cx = MAP_X + NODE_X[i]
-  const cy = MAP_Y + NODE_Y(i)
-  const upper = i % 2 === 1
-  const label = `${n} · ${NODE_LABELS[i]}`
+  const cx = NODE_CX(i)
+  const cy = NODE_CY(i)
   if (status === 'current') {
-    const s = 96
     return [
-      box(px, `node-ring-${i}`, cx - s / 2 - 4, cy - s / 2 - 4, s + 8, s + 8, { color: P.ink, radius: (s + 8) / 2, shadow: 8, shadowColor: PINK_SHADOW }),
-      box(px, `node-${i}`, cx - s / 2, cy - s / 2, s, s, { color: SPHERE, radius: s / 2, border: 5, justify: 'center', align: 'center' }, [
-        <Label value={String(n)} fontSize={fs(44)} color={P.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />
+      box(px, `node-ring-${i}`, cx - 19, cy - 19, 38, 38, { color: C.yellow, radius: 19 }),
+      box(px, `node-${i}`, cx - 16, cy - 16, 32, 32, { color: SPHERE, radius: 16, border: 3, justify: 'center', align: 'center' }, [
+        <Label value={String(n)} fontSize={fs(14)} color={P.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />
       ]),
-      yellowTag(px, fs, 'YOU ARE HERE', cx - 70, cy - s / 2 - (upper ? 66 : 44), 140, 28, 15),
-      text(px, fs, label, cx - 75, cy + s / 2 + 12, 150, 22, 15, P.white, 'middle-center')
+      box(px, `node-here-${i}`, cx - 30, cy + 21, 60, 13, { color: C.yellow, radius: 6, justify: 'center', align: 'center' }, [
+        <Label value="YOU ARE HERE" fontSize={fs(9)} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />
+      ])
     ]
   }
-  const s = 64
-  const glyph = status === 'done' ? img(px, 'gl_check', cx - 15, cy - 12, 0.9) : img(px, NODE_GLYPHS[i], cx - imgW(NODE_GLYPHS[i], 0.75) / 2, cy - 15, 0.75, Color4.create(1, 1, 1, 0.9))
-  return [
-    status === 'done'
-      ? box(px, `node-${i}`, cx - s / 2, cy - s / 2, s, s, { color: C.yellow, radius: s / 2, border: 4, borderColor: P.ink, shadow: 5, shadowColor: P.yellowShadow })
-      : box(px, `node-${i}`, cx - s / 2, cy - s / 2, s, s, { color: Color4.create(1, 1, 1, 0.12), radius: s / 2, border: 4, borderColor: Color4.create(1, 1, 1, 0.5) }),
-    glyph,
-    text(px, fs, label, cx - 70, upper ? cy - s / 2 - 42 : cy + s / 2 + 10, 140, 22, 15, status === 'pending' ? Color4.create(1, 1, 1, 0.85) : P.white, 'middle-center')
-  ]
+  if (status === 'done') {
+    return box(px, `node-${i}`, cx - 13, cy - 13, 26, 26, { color: C.yellow, radius: 13, border: 2, justify: 'center', align: 'center' }, [img(px, 'gl_check', undefined, undefined, 0.4)])
+  }
+  return box(px, `node-${i}`, cx - 13, cy - 13, 26, 26, { color: NODE_TODO, radius: 13, border: 2, borderColor: NODE_TODO_EDGE, justify: 'center', align: 'center' }, [
+    <Label value={String(n)} fontSize={fs(12)} color={NODE_TODO_TEXT} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />
+  ])
 }
 
-// The zigzag path between the nodes, as dots (no lines in the UI).
+// The zigzag between the nodes, as two dots a segment (no lines in the UI).
 const mapPath = (px: Px) => {
   const dots: ReactEcs.JSX.Element[] = []
-  for (let i = 0; i < NODE_X.length - 1; i++) {
-    for (let k = 1; k < 7; k++) {
-      const t = k / 7
-      const x = MAP_X + NODE_X[i] + (NODE_X[i + 1] - NODE_X[i]) * t
-      const y = MAP_Y + NODE_Y(i) + (NODE_Y(i + 1) - NODE_Y(i)) * t
-      dots.push(<UiEntity key={`dot-${i}-${k}`} uiTransform={{ ...at(px, x - 6, y - 6, 12, 12), borderRadius: px(6) }} uiBackground={{ color: SAND_LIGHT }} />)
+  for (let i = 0; i < TUTORIAL_STEPS - 1; i++) {
+    for (const t of [1 / 3, 2 / 3]) {
+      const x = NODE_CX(i) + (NODE_CX(i + 1) - NODE_CX(i)) * t
+      const y = NODE_CY(i) + (NODE_CY(i + 1) - NODE_CY(i)) * t
+      dots.push(<UiEntity key={`dot-${i}-${t}`} uiTransform={{ ...at(px, x - 2.5, y - 2.5, 5, 5), borderRadius: px(2.5) }} uiBackground={{ color: PATH_DOT }} />)
     }
   }
   return dots
 }
 
 export const TutorialView = () => {
-  const L = containLayout(DESIGN_W, DESIGN_H, { margin: MARGIN })
+  const L = fullLayout()
   const { px, fs } = scaler(L.scale)
   const mission = Number(globalStore.userData.getState()['statistic_current_mission'] || 1)
   const done = mission > TUTORIAL_STEPS
   const spheres = Math.max(0, Math.min(4, mission - 2))
   const portrait = done || mission === 9 ? 'drpar_box_3' : 'drpar_box_1'
   const line = done ? 'Tutorial complete. Thank you, intern: the lab is safe again.' : MISSION_LINES[mission] || ''
-  const hx = headerRight(px, 'rb_tutorial')
+  const hx = afterRibbon('rb_tutorial')
 
-  const sphereCells = [0, 1, 2, 3].map((i) => {
-    const x = 936 + (i % 2) * 138
-    const y = 248 + Math.floor(i / 2) * 78
-    return box(px, `sphere-${i}`, x, y, 128, 68, { color: P.dimmer, radius: 14, justify: 'center', align: 'center' }, [
-      <UiEntity
-        uiTransform={{ width: px(50), height: px(50), borderRadius: px(25), borderWidth: border(px, 3), borderColor: i < spheres ? P.white : SPHERE_RING }}
-        uiBackground={{ color: i < spheres ? SPHERE : P.clear }}
-      />
-    ])
-  })
-
-  return frame(L, 'view', [
-    ...viewHeader(px, 'rb_tutorial', back),
-    yellowTag(px, fs, 'Ancient Egypt', hx, 51, 140),
-    navyPill(px, fs, 'mission', 1048, 44, 180, 46, [
-      <Label value={done ? 'Tutorial complete' : 'Mission'} fontSize={fs(19)} color={P.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(40) }} />,
-      done ? null : <Label value={`${mission} / ${TUTORIAL_STEPS}`} fontSize={fs(19)} color={C.yellow} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(40), margin: { left: px(8) } }} />
+  return fullFrame(L, [
+    ...fullHeader(px, 'rb_tutorial'),
+    topTag(px, fs, 'Ancient Egypt', hx, 96),
+    box(px, 'mission', 515, 10, 96, 36, { color: P.navyDeep, radius: 10, border: 2, borderColor: P.navyEdge, align: 'center', justify: 'center' }, [
+      <Label value={done ? 'Complete' : 'Mission'} fontSize={fs(13)} color={P.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(32) }} />,
+      done ? null : <Label value={`${mission} / ${TUTORIAL_STEPS}`} fontSize={fs(13)} color={C.yellow} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(32), margin: { left: px(4) } }} />
     ]),
 
-    box(px, 'map', 52, 122, 830, 376, card),
+    box(px, 'spheres', 6, 58, 140, 188, { color: P.teal, radius: 14, border: 2 }),
+    img(px, 'tt_energy_spheres', 16, 65, 0.53),
+    ...[0, 1, 2, 3].map((i) => (
+      <UiEntity
+        key={`sphere-${i}`}
+        uiTransform={{ ...at(px, 16 + i * 30, 86, 24, 24), borderRadius: px(12), borderWidth: border(px, i < spheres ? 3 : 2), borderColor: i < spheres ? SPHERE_RING : Color4.create(1, 1, 1, 0.7) }}
+        uiBackground={{ color: i < spheres ? SPHERE : P.clear }}
+      />
+    )),
+    text(px, fs, `${spheres} of 4 caught`, 16, 118, 124, 16, 12, C.yellow),
+    text(px, fs, 'Four spheres escaped back to ancient Egypt. Push each one into the hole.', 16, 138, 124, 80, 11, hex('#E8FFFB'), 'middle-left', true),
+
+    box(px, 'map', 152, 58, 340, 236, { color: P.navyDeep, radius: 14, border: 2, borderColor: P.navyEdge }),
+    text(px, fs, '9 MISSIONS · ANCIENT EGYPT', 164, 68, 220, 12, 10, P.pale),
     ...mapPath(px),
-    ...NODE_X.map((_, i) => mapNode(px, fs, i, mission, done)),
+    ...NODE_LABELS.map((_, i) => mapNode(px, fs, i, mission, done)),
+    box(px, 'now', 162, 220, 320, 64, { color: P.navy, radius: 12, border: 2, borderColor: P.navyEdge }),
+    text(px, fs, done ? 'ALL 9 MISSIONS DONE' : `NOW · MISSION ${mission}`, 172, 225, 300, 12, 10, P.pale),
+    text(px, fs, done ? 'Tutorial complete' : NODE_LABELS[mission - 1] || '', 172, 238, 300, 22, 17),
+    text(px, fs, done ? 'Thank you, intern: the lab is safe again.' : mission < TUTORIAL_STEPS ? `Next: ${NODE_LABELS[mission]}` : 'The last mission', 172, 261, 300, 14, 11, P.pale),
 
-    box(px, 'spheres', 900, 122, 328, 376, { ...card, color: P.teal }),
-    img(px, 'tt_energy_spheres', 922, 144),
-    text(px, fs, 'Four spheres escaped back to ancient Egypt. Push each one into the hole.', 924, 178, 282, 50, 16, hex('#E8FFFB'), 'middle-left', true),
-    box(px, 'sphere-grid', 924, 236, 280, 168, { color: P.dim, radius: 16 }),
-    ...sphereCells,
-    text(px, fs, `${spheres} of 4 caught`, 924, 440, 280, 32, 22, C.yellow),
+    box(px, 'drpar', 498, 58, 163, 168, { color: P.purple, radius: 14, border: 2, shadow: 4 }),
+    img(px, portrait, 504, 64, 52 / imgW(portrait)),
+    text(px, fs, 'DR. PAR', 564, 68, 90, 18, 16),
+    text(px, fs, 'your mentor', 564, 88, 90, 12, 10, hex('#E6DAFF')),
+    text(px, fs, line, 506, 122, 147, 96, 11, P.white, 'middle-left', true),
 
-    box(px, 'drpar', 52, 518, 1176, 172, { ...card, color: P.purple }),
-    img(px, portrait, 68, 531),
-    yellowTag(px, fs, 'DR. PAR', 236, 552, 96, 26, 15),
-    text(px, fs, line, 236, 584, 700, 84, 24, P.white, 'middle-left', true),
     done
       ? null
       : button2(
           px,
           {
-            id: 'tutorial-go', x: 976, y: 539, w: 230, h: 66, color: P.yellow, radius: 18, shadow: 7, shadowColor: P.yellowShadow,
+            id: 'tutorial-go', x: 152, y: 302, w: 222, h: 52, color: P.yellow, radius: 15, shadow: 5, shadowColor: P.yellowShadow,
             onClick: () => {
               closeLobbyMenu()
               markStartedFromMenu()
               talkToNpc().catch((err) => console.log('[lobby] talkToNpc failed', err))
             }
           },
-          [img(px, 'bt_lets_go'), <UiEntity uiTransform={{ width: px(12) }} />, img(px, 'ic_play_n', undefined, undefined, 0.6)]
+          [img(px, 'bt_lets_go', undefined, undefined, 0.75), <UiEntity uiTransform={{ width: px(8) }} />, img(px, 'ic_play_n', undefined, undefined, 0.5)]
         ),
     done
       ? null
-      : button2(px, { id: 'tutorial-not-now', x: 976, y: 619, w: 230, h: 52, color: P.lavender, radius: 18, shadow: 7, shadowColor: P.lavenderShadow, onClick: back }, [img(px, 'bt_not_now')])
+      : button2(px, { id: 'tutorial-not-now', x: 380, y: 302, w: 112, h: 52, color: P.lavender, radius: 15, shadow: 5, shadowColor: P.lavenderShadow, onClick: back }, [
+          img(px, 'bt_not_now', undefined, undefined, 0.75)
+        ])
   ])
 }
 
 // ---------------------------------------------------------------------------
-// WORKSHOP (Workshop2.dc.html)
+// WORKSHOP (M2Workshop.dc.html)
 
 const UPGRADE_COSTS = [10, 20, 30, 60, 120]
 const UPGRADE_MATERIALS: Record<string, 'IR' | 'ST' | 'WD'> = { power: 'IR', control: 'ST', aim: 'WD' }
@@ -466,12 +512,10 @@ export const WorkshopView = () => {
 
   const nft = !!club && !isBasic(club)
   return fullFrame(L, [
-    squareButton(px, 'view-back', 140, 6, 'ic_chev_left_w', 0.8, back),
-    img(px, 'rb_workshop', 194, 9, 0.55),
+    ...fullHeader(px, 'rb_workshop'),
     materialPill('WD', 365, 86),
     materialPill('ST', 455, 80),
     materialPill('IR', 539, 72),
-    squareButton(px, 'view-close', 617, 6, 'ic_close_w', 0.67, closeLobbyMenu),
 
     img(px, 'tt_my_clubs', 8, 58, 0.64),
     ...pageClubs.map((c, j) => clubCard(c, page * CLUBS_PER_PAGE + j, j)),
@@ -518,20 +562,22 @@ export const WorkshopView = () => {
 }
 
 // ---------------------------------------------------------------------------
-// PRIZES (Prizes2.dc.html)
+// PRIZES (M2Prizes.dc.html)
 
-// A 5x4 grid of the season's wearables next to the real TOP 10. A sold-out
-// wearable pays Fashion Tickets instead, so its cell shows the FT icon and
-// that amount; no stock counts.
-const CELL_W = (790 - 8 - 24 - 40) / 5
-const CELL_H = (568 - 8 - 24 - 30) / 4
-const CELL_COLORS = [hex('#2D6FE0'), hex('#8B2BE0'), hex('#E03AB8')]
-// Diamonds for the Season's top 10, by position.
-const TOP10_PRIZES = [500, 300, 200, 100, 100, 100, 100, 100, 100, 100]
-const GOLD_ROW = Color4.create(8 / 255, 18 / 255, 40 / 255, 0.3)
+// The season's 20 wearables, ten a tab (5x2 cells), next to the real TOP 10.
+// A sold-out wearable pays Fashion Tickets instead, so its cell shows the FT
+// icon and that amount; no stock counts.
+const CELL_W = (340 - 4 * 6) / 5
+const CELL_H = 122
+const PER_TAB = 10
+const CELL_EDGE = Color4.create(1, 1, 1, 0.55)
+const SOLD_BG = hex('#2B1F6E')
 
 // "Golfcraft x COCOBAY Cap" -> "Cap": the header already names the collection.
 const prizeName = (name: string) => shortName(name).replace(/^cocobay\s*/i, '')
+// "GRAND MASTER 3" does not fit a cell.
+const cellTierName = (tier: number) => (seasonTierDefinitions[tier]?.name || '').replace('GRAND MASTER', 'G.MASTER')
+const catName = (tier: number) => String(TIER_CATEGORIES[getCatFromTier(tier)] || '')
 
 // Without the stock service there are still 20 wearable tiers in the season
 // table; show those ranks so the grid is never blank.
@@ -542,18 +588,8 @@ const fallbackPrizes = (): SeasonPrize[] =>
     .slice(0, 20)
     .map(({ tier }: any, i: number) => ({ name: `Wearable ${i + 1}`, tierReward: Number(getPointsToTier(tier) || 0), stock: 1 }))
 
-const rankChip = (px: Px, fs: Px, tier: number, h: number, size: number) => (
-  <UiEntity uiTransform={{ height: px(h), flexDirection: 'row', alignItems: 'center', padding: { left: px(6), right: px(8) }, borderRadius: px(h / 2.4), alignSelf: 'flex-start', flexShrink: 0 }} uiBackground={{ color: P.dimmer }}>
-    <UiEntity
-      uiTransform={{ width: px(10), height: px(10), borderRadius: px(5), borderWidth: border(px, 2), borderColor: P.white }}
-      uiBackground={{ color: hex(TIER_COLORS[getCatFromTier(tier)] || '#FFFFFF') }}
-    />
-    <Label value={seasonTierDefinitions[tier]?.name || ''} fontSize={fs(size)} color={P.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(h), margin: { left: px(5) } }} />
-  </UiEntity>
-)
-
 export const PrizesView = () => {
-  const L = containLayout(DESIGN_W, DESIGN_H, { margin: MARGIN })
+  const L = fullLayout()
   const { px, fs } = scaler(L.scale)
   const userData = globalStore.userData.getState()
   const tierSub = Number(userData['statistic_tier-sub'] || 0)
@@ -566,99 +602,89 @@ export const PrizesView = () => {
   const next = nextIndex >= 0 ? prizes[nextIndex] : null
   const myTier = tierOf(tierSub)
   const toNext = next ? Math.max(0, next.tierReward - tierSub) : 0
-  const myPlayFabId = getPlayFabId()
-  const board = lobbyMenuState.leaderboard
-  const hx = headerRight(px, 'rb_prizes')
+  const tabs = Math.max(1, Math.ceil(prizes.length / PER_TAB))
+  const tab = Math.max(0, Math.min(tabs - 1, lobbyMenuState.prizesTab ?? Math.floor(Math.max(0, nextIndex) / PER_TAB)))
+  const hx = afterRibbon('rb_prizes')
+
+  // "WOOD → SILVER": the categories of a tab's first and last prize.
+  const tabLabel = (t: number) => {
+    const slice = prizes.slice(t * PER_TAB, (t + 1) * PER_TAB)
+    if (!slice.length) return ''
+    const a = catName(tierOf(slice[0].tierReward))
+    const b = catName(tierOf(slice[slice.length - 1].tierReward))
+    return a === b ? a : `${a} → ${b}`
+  }
 
   const cell = (p: SeasonPrize, i: number) => {
+    const j = i - tab * PER_TAB
     const tier = tierOf(p.tierReward)
     const soldOut = live && prizeSoldOut(p)
     const claimed = live && p.tierReward <= tierSubMax
     const isNext = i === nextIndex
-    const x = 56 + 12 + (i % 5) * (CELL_W + 10)
-    const y = 126 + 12 + Math.floor(i / 5) * (CELL_H + 10)
-    const pic = soldOut ? 'images/icons/ft.png' : p.thumbnail
-    const picSize = soldOut ? 62 : 84
+    const x = 152 + (j % 5) * (CELL_W + 6)
+    const y = 104 + Math.floor(j / 5) * (CELL_H + 8)
+    const picX = x + (CELL_W - 52) / 2
     return [
-      box(px, `prize-${i}`, x, y, CELL_W, CELL_H, { color: CELL_COLORS[i < 10 ? 0 : i < 15 ? 1 : 2], radius: 14, border: isNext ? 4 : 3, borderColor: isNext ? C.yellow : Color4.create(1, 1, 1, 0.7) }),
-      pic ? (
-        <UiEntity key={`prize-pic-${i}`} uiTransform={at(px, x + (CELL_W - picSize) / 2, y + (soldOut ? 26 : 14), picSize, picSize)} uiBackground={{ texture: { src: pic }, textureMode: 'stretch' }} />
+      box(px, `prize-${i}`, x, y, CELL_W, CELL_H, { color: P.navy, radius: 12, border: 2, borderColor: isNext ? C.yellow : CELL_EDGE }),
+      soldOut ? box(px, `prize-sold-${i}`, picX, y + 4, 52, 52, { color: SOLD_BG, radius: 9 }) : null,
+      soldOut ? (
+        <UiEntity key={`prize-ft-${i}`} uiTransform={at(px, picX + 9, y + 13, 34, 34)} uiBackground={{ texture: { src: 'images/icons/ft.png' }, textureMode: 'stretch' }} />
+      ) : p.thumbnail ? (
+        <UiEntity key={`prize-pic-${i}`} uiTransform={{ ...at(px, picX, y + 4, 52, 52), borderRadius: px(9) }} uiBackground={{ texture: { src: p.thumbnail }, textureMode: 'stretch' }} />
       ) : null,
-      <UiEntity key={`prize-rank-${i}`} uiTransform={at(px, x + 6, y + 6)}>
-        {rankChip(px, fs, tier, 18, 11)}
+      <UiEntity key={`prize-tier-${i}`} uiTransform={{ ...at(px, x, y + 62, CELL_W, 14), flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+        <UiEntity uiTransform={{ width: px(8), height: px(8), borderRadius: px(4), borderWidth: border(px, 1.5), borderColor: P.white, flexShrink: 0 }} uiBackground={{ color: hex(TIER_COLORS[getCatFromTier(tier)] || '#FFFFFF') }} />
+        <Label value={cellTierName(tier)} fontSize={fs(10)} color={P.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(14), margin: { left: px(3) } }} />
       </UiEntity>,
-      box(px, `prize-foot-${i}`, x + 3, y + CELL_H - 27, CELL_W - 6, 24, { color: P.dimmer, radius: 10, align: 'center', padding: { left: px(8), right: px(6) } }, [
-        <Label
-          value={soldOut ? `SOLD OUT · ${p.fashionTickets ? fmt(p.fashionTickets) + ' ' : ''}FT` : prizeName(p.name)}
-          fontSize={fs(soldOut ? 11 : 12)}
-          color={soldOut ? C.yellow : P.white}
-          textAlign="middle-left"
-          textWrap="nowrap"
-          uiTransform={{ height: px(24) }}
-        />
-      ]),
+      text(px, fs, soldOut ? 'SOLD OUT' : prizeName(p.name), x + 3, y + 79, CELL_W - 6, 14, 10, soldOut ? C.yellow : P.paler, 'middle-center'),
+      text(
+        px, fs,
+        claimed ? 'RECEIVED' : isNext ? 'NEXT' : soldOut ? `${p.fashionTickets ? fmt(p.fashionTickets) + ' ' : ''}FT` : '',
+        x + 3, y + 96, CELL_W - 6, 14, 10, claimed ? P.green : C.yellow, 'middle-center'
+      ),
       claimed
-        ? box(px, `prize-ok-${i}`, x + CELL_W - 30, y + 4, 26, 26, { color: P.green, radius: 13, border: 3, justify: 'center', align: 'center' }, [img(px, 'gl_check', undefined, undefined, 0.45)])
-        : null,
-      isNext
-        ? box(px, `prize-next-${i}`, x + CELL_W - 54, y + 5, 48, 20, { color: C.yellow, radius: 9, border: 2, justify: 'center', align: 'center' }, [
-            <Label value="NEXT" fontSize={fs(11)} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(20) }} />
-          ])
+        ? box(px, `prize-ok-${i}`, x + CELL_W - 14, y - 6, 20, 20, { color: P.green, radius: 10, border: 2, justify: 'center', align: 'center' }, [img(px, 'gl_check', undefined, undefined, 0.3)])
         : null
     ]
   }
 
-  // One leaderboard row: position, name, points and the diamonds that
-  // position wins, with no rank per line, like the original panel. Mine is
-  // pink. Without data the names and points read "—".
-  const boardRow = (i: number) => {
-    const entry = board[i]
-    const mine = !!entry && !!myPlayFabId && entry.playFabId === myPlayFabId
-    return box(px, `top-${i}`, 882, 210 + i * 36, 326, 34, { color: mine ? P.pink : GOLD_ROW, radius: 10, align: 'center', padding: { left: px(8), right: px(8) } }, [
-      <Label value={String(i + 1)} fontSize={fs(15)} color={P.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ width: px(24), height: px(34), flexShrink: 0 }} />,
-      <UiEntity uiTransform={{ width: px(182), height: px(34), flexShrink: 0, overflow: 'hidden' }}>
-        <Label value={entry ? entry.name : '—'} fontSize={fs(14)} color={P.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ width: '100%', height: px(34) }} />
-      </UiEntity>,
-      <Label value={entry ? String(entry.points) : '—'} fontSize={fs(14)} color={P.white} textAlign="middle-right" textWrap="nowrap" uiTransform={{ width: px(38), height: px(34), flexShrink: 0 }} />,
-      <Label value={String(TOP10_PRIZES[i])} fontSize={fs(14)} color={P.white} textAlign="middle-right" textWrap="nowrap" uiTransform={{ width: px(40), height: px(34), margin: { left: px(4) }, flexShrink: 0 }} />,
-      materialIcon(px, 'DM', 18, { left: px(4) })
-    ])
-  }
+  const tabButton = (t: number, x: number) =>
+    button2(
+      px,
+      {
+        id: `prizes-tab-${t}`, x, y: 58, w: 167, h: 40, color: t === tab ? P.yellow : P.navy, radius: 12, border: 2, borderColor: t === tab ? P.white : P.navyEdge,
+        onClick: () => (lobbyMenuState.prizesTab = t)
+      },
+      [<Label value={tabLabel(t)} fontSize={fs(14)} color={t === tab ? P.ink : P.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />]
+    )
 
-  const youText = !live
-    ? 'Prize stock unavailable right now'
-    : `${last ? `${prizeName(last.name)} received. ` : 'No prize received yet. '}${
-        next ? `${prizeName(next.name)} unlocks at ${seasonTierDefinitions[tierOf(next.tierReward)]?.name || ''}, ${toNext} season points away.` : 'Every prize received!'
-      }`
+  const receivedLine = !live ? 'Prize stock unavailable right now' : last ? `${prizeName(last.name)} received.` : 'No prize received yet.'
+  const nextLine = !live ? '' : next ? `${prizeName(next.name)} unlocks ${toNext} points away.` : 'Every prize received!'
 
-  return frame(L, 'view', [
-    ...viewHeader(px, 'rb_prizes', back),
-    box(px, 'collection', hx, 51, 200, 32, { color: P.pink, radius: 12, border: 2, justify: 'center', align: 'center' }, [
-      <Label value="Golfcraft x COCOBAY" fontSize={fs(15)} color={P.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: px(32) }} />
-    ]),
-    text(px, fs, 'Reach the rank and it is sent to you. Sold out? You get Fashion Tickets.', 690, 52, 538, 30, 15, P.paler, 'middle-right'),
+  return fullFrame(L, [
+    ...fullHeader(px, 'rb_prizes'),
+    topTag(px, fs, `${seasonNameNow()} Season`, hx, 116),
 
-    box(px, 'prize-grid', 52, 122, 790, 568, card),
-    ...prizes.map((p, i) => cell(p, i)),
+    box(px, 'you', 6, 58, 140, 188, { color: P.navy, radius: 14, border: 2, borderColor: P.navyEdge }),
+    rankBadge(px, myTier, 40, 14, 66),
+    text(px, fs, 'YOU', 60, 69, 80, 12, 10, P.pale),
+    text(px, fs, seasonTierDefinitions[myTier]?.name || 'WOOD 5', 60, 81, 84, 20, 16),
+    text(px, fs, receivedLine, 14, 112, 124, 28, 11, P.white, 'middle-left', true),
+    text(px, fs, nextLine, 14, 142, 124, 28, 11, C.yellow, 'middle-left', true),
+    text(px, fs, 'Reach the rank and the wearable is sent to you.', 14, 172, 124, 28, 10, P.pale, 'middle-left', true),
+    <UiEntity key="you-ft" uiTransform={at(px, 14, 210, 22, 22)} uiBackground={{ texture: { src: 'images/icons/ft.png' }, textureMode: 'stretch' }} />,
+    text(px, fs, 'Sold out? You get Fashion Tickets', 40, 206, 100, 30, 10, P.white, 'middle-left', true),
 
-    box(px, 'top10', 862, 122, 366, 568, { ...card, color: P.gold }),
-    img(px, 'tt_top10', 884, 144),
-    text(px, fs, 'Diamonds for the best players when the season ends', 884, 180, 326, 22, 13, hex('#FFF3D6')),
-    ...Array.from({ length: 10 }, (_, i) => boardRow(i)),
-    box(px, 'you', 882, 586, 326, 88, { color: P.navy, radius: 16, border: 3, borderColor: P.navyEdge, align: 'center', padding: { left: px(10), right: px(10) } }, [
-      rankBadge(px, myTier, 46),
-      <UiEntity uiTransform={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, flexDirection: 'column', margin: { left: px(10) } }}>
-        <Label value={`YOU · ${seasonTierDefinitions[myTier]?.name || 'WOOD 5'}`} fontSize={fs(14)} color={C.yellow} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(20) }} />
-        <Label value={youText} fontSize={fs(12)} color={P.paler} textAlign="middle-left" textWrap="wrap" uiTransform={{ width: '100%', height: px(50) }} />
-      </UiEntity>
-    ])
+    ...(tabs > 1 ? [tabButton(0, 152), tabButton(1, 325)] : []),
+    ...prizes.slice(tab * PER_TAB, (tab + 1) * PER_TAB).map((p, j) => cell(p, tab * PER_TAB + j)),
+
+    ...top10Card(px, fs, 58, 313, 23, 'Diamonds for the best players when the season ends')
   ])
 }
 
 // ---------------------------------------------------------------------------
-// DAILY MISSIONS (DailyMissions2.dc.html)
+// DAILY MISSIONS (M2Daily.dc.html)
 
-const DAILY_NOTE = 'Rewards land in your account the moment a mission completes. Missions renew every 24 hours.'
 const REWARD_ORDER = ['FT', 'DM', 'GD', 'IR', 'ST', 'WD', 'GC', 'PT', 'EN']
 
 // A counted mission's target is the number at the end of its alias
@@ -682,8 +708,12 @@ const renewalText = (date?: string): string | null => {
   return `${h}h ${m}m`
 }
 
+const LOCKED_ROW = Color4.create(P.navy.r, P.navy.g, P.navy.b, 0.85)
+const REWARD_CHIP = Color4.create(8 / 255, 18 / 255, 40 / 255, 0.3)
+const NOT_YET = hex('#FFB38A')
+
 export const DailyMissionsView = () => {
-  const L = containLayout(DESIGN_W, DESIGN_H, { margin: MARGIN })
+  const L = fullLayout()
   const { px, fs } = scaler(L.scale)
   const data = lobbyHudState.dailyMissions
   const missions: DailyMission[] = data?.state.missions || []
@@ -692,7 +722,6 @@ export const DailyMissionsView = () => {
   const total = missions.length || 5
   const doneCount = Math.min(index, total)
   const renew = renewalText(data?.state.date)
-  const hx = headerRight(px, 'rb_daily')
 
   // Rewards still to earn: every mission not yet done, grouped by material.
   const toEarn: Record<string, number> = {}
@@ -704,102 +733,78 @@ export const DailyMissionsView = () => {
     const i = REWARD_ORDER.indexOf(code)
     return i < 0 ? 99 : i
   }
-  const toEarnCodes = Object.keys(toEarn).sort((a, b) => order(a) - order(b))
+  const toEarnCodes = Object.keys(toEarn).sort((a, b) => order(a) - order(b)).slice(0, 5)
 
-  const rowH = (568 - 4 * 10) / 5
   const missionRow = (m: DailyMission, i: number) => {
     const done = i < index
     const active = i === index
-    const locked = i > index
-    const y = 122 + i * (rowH + 10)
+    const y = 58 + i * 60
     const target = missionTarget(m.alias)
     const available = missionAvailable(m.alias)
     const fg = active ? P.ink : P.white
-    const rewards = m.rewards ? Object.keys(m.rewards) : []
-    const smallTag = (value: string, color: Color4) => (
-      <UiEntity uiTransform={{ height: px(20), padding: { left: px(9), right: px(9) }, margin: { left: px(10) }, borderRadius: px(8), justifyContent: 'center', flexShrink: 0 }} uiBackground={{ color: hex('#1C0A3F') }}>
-        <Label value={value} fontSize={fs(12)} color={color} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(20) }} />
-      </UiEntity>
-    )
+    const rewards = m.rewards ? Object.keys(m.rewards).slice(0, 4) : []
     return [
-      box(px, `mission-${i}`, 52, y, 840, rowH, {
-        color: done ? P.teal : active ? P.yellow : Color4.create(P.navy.r, P.navy.g, P.navy.b, 0.8),
-        radius: 18,
-        border: 4,
-        borderColor: locked ? Color4.create(1, 1, 1, 0.8) : P.white,
-        shadow: 8
-      }),
-      box(px, `mission-badge-${i}`, 70, y + (rowH - 50) / 2, 50, 50, { color: done ? P.green : active ? P.ink : P.dim, radius: 25, border: 3, justify: 'center', align: 'center' }, [
-        done ? img(px, 'gl_check', undefined, undefined, 0.75) : <Label value={String(i + 1)} fontSize={fs(24)} color={active ? C.yellow : P.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />
+      box(px, `mission-${i}`, 152, y, 340, 54, { color: done ? P.teal : active ? P.yellow : LOCKED_ROW, radius: 12, border: 2, borderColor: done || active ? P.white : P.navyEdge }),
+      box(px, `mission-badge-${i}`, 160, y + 13, 28, 28, { color: done ? P.green : active ? P.ink : P.dim, radius: 14, border: 2, borderColor: Color4.create(1, 1, 1, 0.8), justify: 'center', align: 'center' }, [
+        done
+          ? img(px, 'gl_check', undefined, undefined, 0.35)
+          : <Label value={String(i + 1)} fontSize={fs(13)} color={active ? C.yellow : P.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />
       ]),
-      <UiEntity key={`mission-title-${i}`} uiTransform={{ ...at(px, 138, y + 18, 560, 30), flexDirection: 'row', alignItems: 'center' }}>
-        <Label value={m.description} fontSize={fs(21)} color={fg} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(30) }} />
-        {active ? smallTag('IN PROGRESS', C.yellow) : null}
-        {done ? smallTag('DONE', P.green) : null}
-        {!done && !available ? smallTag('Not in this version yet', hex('#FFB38A')) : null}
-      </UiEntity>,
-      <UiEntity key={`mission-rewards-${i}`} uiTransform={{ ...at(px, 138, y + 56, 560, 26), flexDirection: 'row', alignItems: 'center' }}>
-        <Label value="REWARDS" fontSize={fs(12)} color={active ? P.ink : P.pale} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(26) }} />
-        {rewards.map((code) => (
-          <UiEntity key={code} uiTransform={{ height: px(26), flexDirection: 'row', alignItems: 'center', padding: { left: px(5), right: px(9) }, margin: { left: px(8) }, borderRadius: px(9) }} uiBackground={{ color: P.dim }}>
-            {materialIcon(px, code, 20)}
-            <Label value={`${m.rewards ? m.rewards[code] : ''} ${code}`} fontSize={fs(14)} color={P.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(26), margin: { left: px(5) } }} />
-          </UiEntity>
-        ))}
-      </UiEntity>,
-      active && target ? text(px, fs, `${Math.min(stepNow, target)} / ${target}`, 700, y + 24, 70, 20, 15, P.ink, 'middle-right') : null,
+      text(px, fs, m.description, 196, y + 4, 164, 30, 12, fg, 'middle-left', true),
       active && target
-        ? box(px, `mission-bar-${i}`, 620, y + 50, 150, 14, { color: P.dim, radius: 7 }, [
-            <UiEntity uiTransform={{ width: `${Math.round((100 * Math.min(stepNow, target)) / target)}%`, height: '100%', borderRadius: px(7) }} uiBackground={{ color: P.green }} />
-          ])
-        : null,
-      ...[1, 2, 3, 4, 5].map((n) => img(px, n <= (m.difficulty || 0) ? 'gl_star_on' : 'gl_star_off', 786 + (n - 1) * 19, y + rowH / 2 - 8, 0.5))
+        ? [
+            box(px, `mission-bar-${i}`, 196, y + 39, 116, 8, { color: Color4.create(P.ink.r, P.ink.g, P.ink.b, 0.3), radius: 4 }, [
+              <UiEntity uiTransform={{ width: `${Math.round((100 * Math.min(stepNow, target)) / target)}%`, height: '100%', borderRadius: px(4) }} uiBackground={{ color: P.ink }} />
+            ]),
+            text(px, fs, `${Math.min(stepNow, target)} / ${target}`, 316, y + 35, 44, 16, 10, P.ink)
+          ]
+        : [
+            ...[1, 2, 3, 4, 5].map((n) => img(px, n <= (m.difficulty || 0) ? 'gl_star_on' : 'gl_star_off', 196 + (n - 1) * 11, y + 38, 0.27)),
+            done ? text(px, fs, 'DONE', 254, y + 35, 40, 16, 9, P.white) : !available ? text(px, fs, 'Not in this version yet', 254, y + 35, 106, 16, 9, NOT_YET) : null
+          ],
+      ...rewards.map((code, k) => (
+        <UiEntity
+          key={`mission-${i}-reward-${code}`}
+          uiTransform={{ ...at(px, 364 + (k % 2) * 62, y + 5 + Math.floor(k / 2) * 22, 58, 19), flexDirection: 'row', alignItems: 'center', padding: { left: px(4) }, borderRadius: px(6) }}
+          uiBackground={{ color: REWARD_CHIP }}
+        >
+          {materialIcon(px, code, 14)}
+          <Label value={`${m.rewards ? m.rewards[code] : ''} ${code}`} fontSize={fs(10)} color={fg} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(19), margin: { left: px(3) } }} />
+        </UiEntity>
+      ))
     ]
   }
 
-  const earnPills = toEarnCodes.map((code, k) =>
-    box(px, `earn-${code}`, 930 + (k % 2) * 142, 380 + Math.floor(k / 2) * 48, 134, 40, { color: P.glass, radius: 12, align: 'center', padding: { left: px(8) } }, [
-      materialIcon(px, code, 26),
-      <Label value={`${toEarn[code]} ${code}`} fontSize={fs(17)} color={P.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(40), margin: { left: px(8) } }} />
-    ])
-  )
-
-  return frame(L, 'view', [
-    ...viewHeader(px, 'rb_daily', back),
-    yellowTag(px, fs, 'Done in order, one at a time', hx, 51, 236),
-    navyPill(px, fs, 'renew', 1018, 38, 210, 60, [
-      img(px, 'ic_timer_w', undefined, undefined, 0.7),
-      renew ? (
-        <UiEntity uiTransform={{ flexDirection: 'column', margin: { left: px(10) } }}>
-          <Label value="NEW MISSIONS IN" fontSize={fs(11)} color={P.pale} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(16) }} />
-          <Label value={renew} fontSize={fs(21)} color={P.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(26) }} />
-        </UiEntity>
-      ) : (
-        <Label value="New missions soon" fontSize={fs(16)} color={P.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(52), margin: { left: px(10) } }} />
-      )
+  return fullFrame(L, [
+    ...fullHeader(px, 'rb_daily'),
+    box(px, 'renew', 487, 10, 124, 36, { color: P.navyDeep, radius: 10, border: 2, borderColor: P.navyEdge, column: true, justify: 'center', align: 'center' }, [
+      renew ? <Label value="NEW MISSIONS IN" fontSize={fs(9)} color={P.pale} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(12) }} /> : null,
+      <Label value={renew || 'New missions soon'} fontSize={fs(renew ? 13 : 11)} color={C.yellow} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(16) }} />
     ]),
 
+    box(px, 'today', 6, 58, 140, 96, { color: P.teal, radius: 14, border: 2, column: true, justify: 'center', align: 'center' }, [
+      <Label value="TODAY" fontSize={fs(10)} color={hex('#E8FFFB')} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(14) }} />,
+      <Label value={`${doneCount} / ${total}`} fontSize={fs(32)} color={P.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(38) }} />,
+      <Label value="missions done" fontSize={fs(11)} color={P.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(16) }} />
+    ]),
+    box(px, 'daily-note', 6, 160, 140, 86, { color: P.navy, radius: 14, border: 2, borderColor: P.navyEdge }),
+    text(px, fs, 'Done in order, one at a time.', 16, 166, 124, 30, 11, P.white, 'middle-left', true),
+    text(px, fs, 'Rewards land the moment a mission completes.', 16, 198, 124, 40, 10, P.pale, 'middle-left', true),
+
     ...(missions.length
-      ? missions.map((m, i) => missionRow(m, i))
-      : [text(px, fs, data ? 'No missions today' : 'Loading missions...', 52, 122, 840, 568, 22, P.white, 'middle-center')]),
+      ? missions.slice(0, 5).map((m, i) => missionRow(m, i))
+      : [text(px, fs, data ? 'No missions today' : 'Loading missions...', 152, 58, 340, 294, 14, P.white, 'middle-center')]),
 
-    box(px, 'today', 912, 122, 316, 186, { ...card, color: P.purple }),
-    text(px, fs, 'TODAY', 912, 138, 316, 18, 13, hex('#E9DDFF'), 'middle-center'),
-    text(px, fs, `${doneCount} / ${total}`, 912, 158, 316, 70, 60, C.yellow, 'middle-center'),
-    text(px, fs, 'missions done', 912, 228, 316, 22, 16, P.white, 'middle-center'),
-    ...Array.from({ length: total }, (_, i) => (
-      <UiEntity
-        key={`today-${i}`}
-        uiTransform={{ ...at(px, 912 + (316 - (total * 36 + (total - 1) * 6)) / 2 + i * 42, 264, 36, 12), borderRadius: px(6) }}
-        uiBackground={{ color: i < index ? P.green : i === index ? C.yellow : P.dimmer }}
-      />
+    box(px, 'earn', 498, 58, 163, 168, { color: P.purple, radius: 14, border: 2, shadow: 4 }),
+    img(px, 'tt_still_to_earn', 508, 65, 0.55),
+    ...toEarnCodes.map((code, k) => (
+      <UiEntity key={`earn-${code}`} uiTransform={{ ...at(px, 508, 84 + k * 22, 145, 22), flexDirection: 'row', alignItems: 'center' }}>
+        {materialIcon(px, code, 20)}
+        <Label value={String(toEarn[code])} fontSize={fs(14)} color={P.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(22), margin: { left: px(6) } }} />
+        <Label value={code} fontSize={fs(10)} color={hex('#E6DAFF')} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(22), margin: { left: px(6) } }} />
+      </UiEntity>
     )),
-
-    box(px, 'earn', 912, 324, 316, 366, card),
-    img(px, 'tt_still_to_earn', 930, 342),
-    ...earnPills,
-    toEarnCodes.length ? null : text(px, fs, data ? 'Everything earned today!' : 'Loading...', 930, 380, 280, 40, 16, P.pale),
-    text(px, fs, DAILY_NOTE, 930, 604, 280, 70, 14, P.pale, 'middle-left', true)
+    toEarnCodes.length ? null : text(px, fs, data ? 'Everything earned today!' : 'Loading...', 508, 86, 145, 30, 11, hex('#E6DAFF'), 'middle-left', true),
+    text(px, fs, 'Missions renew every 24 hours.', 508, 204, 147, 14, 10, hex('#E6DAFF'))
   ])
 }
-

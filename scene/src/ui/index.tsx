@@ -9,7 +9,7 @@ import { overlayState } from '../components/ui/overlay'
 import { centerPanelState, BANNER_SPRITES, showBanner } from './centerpanel-state'
 import { LobbyMenu, lobbyMenuInputSystem } from './lobby-menu'
 import { lobbyMenuState, openLobbyMenu, returnToMenuIfRequested } from './lobby-menu-state'
-import { MissionTimer, HoleStats, LiveRanking, PowerColumn, ControlsHelp, MapFooter, EndingBanner, RankPill } from './game-hud'
+import { MissionTimer, HoleStats, LiveRanking, PowerColumn, ControlsHelp, MapFooter, EndingBanner } from './game-hud'
 import { LobbyHud } from './lobby-hud'
 import { ATLAS, spriteUvs } from './sprites'
 import { JoiningScreen, PartyScreen, HoleResultScreen, RunCompleteScreen } from './season-screens'
@@ -28,7 +28,6 @@ const ui = () => (
     <LobbyHud />
     <MissionTimer />
     <HoleStats />
-    <RankPill />
     <LiveRanking />
     <PowerColumn />
     <ControlsHelp />

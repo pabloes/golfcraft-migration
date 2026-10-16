@@ -20,9 +20,9 @@ import { globalStore } from '../services/globalStore/globalStore'
 import { lobbyHudState } from './lobby-hud-state'
 import { lobbyMenuState, closeOrBack, showLobbyView, nextSeasonPrize, seasonPlayState } from './lobby-menu-state'
 import { TutorialView, WorkshopView, PrizesView, DailyMissionsView, SeasonView } from './lobby-views'
-import { C, hex, fmt, shortName, materialIcon } from './ui-theme'
+import { C, hex, fmt, materialIcon } from './ui-theme'
 import { fullLayout, scaler, type Px } from './ui-scale'
-import { P, at, img, imgW, imgBox, text, box, fullFrame, button2, imageButton, squareButton, resIcon, rankBadge, border, energyChip } from './ui2'
+import { P, at, img, imgW, imgBox, text, box, fullFrame, button2, imageButton, squareButton, sideCard, nextPrizeStrip, resIcon, rankBadge, border, energyChip } from './ui2'
 import { seasonCatalog } from '../components/lobby/seasons/season-catalog'
 // @ts-ignore - common/utils has @ts-nocheck
 import { getCatFromTier, getPointsOnCurrentTier, getPointsToTier, getTierFromSub, seasonPointsPerCategory } from '../../../common/utils'
@@ -44,7 +44,6 @@ const BAR_TRACK = hex('#150A33')
 const XP_TRACK = hex('#0B0E33')
 const AVATAR_EDGE = hex('#7CE34A')
 const CHIP_DARK = hex('#1C0A3F')
-const PRIZE_TEXT = hex('#FFE1F1')
 const SOON_TEXT = Color4.create(201 / 255, 207 / 255, 1, 0.8)
 
 // Features of the SDK6 game that this scene does not have yet; the design
@@ -174,14 +173,6 @@ export const LobbyMenu = () => {
 
   // ---------------------------------------------------------- season card
   const toNextTier = nextTierName ? `${ptsPerTier - ptsOnTier} pts to ${nextTierName}` : 'Top rank reached'
-  const prizePic = nextPrize ? (nextPrize.stock <= 0 ? 'images/icons/ft.png' : nextPrize.thumbnail) : undefined
-  const prizeName = !nextPrize
-    ? prizesLoaded
-      ? 'Every prize reached!'
-      : 'Loading prizes...'
-    : nextPrize.stock <= 0
-      ? `${nextPrize.fashionTickets ? fmt(nextPrize.fashionTickets) + ' ' : ''}Fashion Tickets`
-      : shortName(nextPrize.name)
   const season = [
     imgBox(px, 'season_card_m', 152, 58, 340, 236),
     // The champion stands in the card's left column, behind the PLAY button.
@@ -204,17 +195,7 @@ export const LobbyMenu = () => {
 
     ...(gameOpen
       ? [
-          box(px, 'next-prize', 255, 177, 226, 40, { color: P.pinkBar, radius: 10, border: 2, borderColor: P.pinkEdge }),
-          <UiEntity key="np-thumb" uiTransform={{ ...at(px, 261, 182, 30, 30), borderRadius: px(7) }} uiBackground={{ color: Color4.create(1, 1, 1, 0.25) }}>
-            {prizePic ? <UiEntity uiTransform={{ width: '100%', height: '100%', borderRadius: px(7) }} uiBackground={{ texture: { src: prizePic }, textureMode: 'stretch' }} /> : null}
-          </UiEntity>,
-          <UiEntity key="np-line" uiTransform={{ ...at(px, 298, 181, 180, 14), flexDirection: 'row', alignItems: 'center' }}>
-            <Label value="NEXT PRIZE" fontSize={fs(10)} color={PRIZE_TEXT} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(14) }} />
-            {nextPrize ? (
-              <Label value={`· ${toNextPrize} pts to go`} fontSize={fs(10)} color={C.yellow} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(14), margin: { left: px(4) } }} />
-            ) : null}
-          </UiEntity>,
-          text(px, fs, prizeName, 298, 195, 180, 18, 14)
+          ...nextPrizeStrip(px, fs, 'next-prize', 255, 177, 226, 40, nextPrize, '', toNextPrize, prizesLoaded)
         ]
       : [
           box(px, 'closed', 255, 177, 226, 40, { color: P.navyDeep, radius: 10, border: 2, borderColor: C.yellow }),
@@ -272,7 +253,7 @@ export const LobbyMenu = () => {
 
   // ---------------------------------------------------------- right cards
   const cards = [
-    menuCard(px, 'card-tutorial', 58, P.teal, tutorialDone || currentMission === 9 ? 'art_tutorial_3_sq' : 'art_tutorial_1_sq', 'tt_card_tutorial', () => showLobbyView('tutorial'), [
+    sideCard(px, 'card-tutorial', 58, P.teal, tutorialDone || currentMission === 9 ? 'art_tutorial_3_sq' : 'art_tutorial_1_sq', 'tt_card_tutorial', () => showLobbyView('tutorial'), [
       <UiEntity key="tut-line" uiTransform={{ ...at(px, 51, 26, 100, 14), flexDirection: 'row', alignItems: 'center' }}>
         {tutorialDone ? (
           <Label value="All 9 done" fontSize={fs(11)} color={C.yellow} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(14) }} />
@@ -284,10 +265,10 @@ export const LobbyMenu = () => {
         )}
       </UiEntity>
     ]),
-    menuCard(px, 'card-workshop', 116, P.purple, 'art_workshop_sq', 'tt_card_workshop', () => showLobbyView('workshop'), [
+    sideCard(px, 'card-workshop', 116, P.purple, 'art_workshop_sq', 'tt_card_workshop', () => showLobbyView('workshop'), [
       text(px, fs, upgradeHint || 'Upgrade your club', 51, 26, 100, 14, 11, upgradeHint ? C.yellow : P.white)
     ]),
-    menuCard(px, 'card-prizes', 174, P.pink, 'art_prizes_sq', 'tt_card_prizes', () => showLobbyView('prizes'), [
+    sideCard(px, 'card-prizes', 174, P.pink, 'art_prizes_sq', 'tt_card_prizes', () => showLobbyView('prizes'), [
       text(px, fs, prizesLoaded ? `${lobbyMenuState.prizes.length} wearables` : 'Season wearables', 51, 26, 100, 14, 11)
     ])
   ]
@@ -310,16 +291,6 @@ const resourceChip = (px: Px, fs: Px, code: string, value: string, w: number, ga
     <Label value={value} fontSize={fs(15)} color={P.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(34), margin: { left: px(6) } }} />
   </UiEntity>
 )
-
-// One of the three cards on the right: square art, display title, one line of
-// text and a chevron. The whole card is the button.
-const menuCard = (px: Px, id: string, y: number, color: Color4, art: string, titleKey: string, onClick: () => void, content: any[]) =>
-  button2(px, { id, x: 498, y, w: 163, h: 52, color, radius: 14, border: 2, shadow: 4, onClick }, [
-    imgBox(px, art, 3, 3, 42, 42),
-    img(px, titleKey, 51, 4, 0.5),
-    ...content,
-    img(px, 'ic_chev_right_w', 147, 18, 0.42)
-  ])
 
 // E or F: back to the lobby from a sub-view, close from the lobby (E is also
 // what dismisses the intro image).

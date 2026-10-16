@@ -1,10 +1,13 @@
-// In-hole HUD pieces in the new visual language (design canvas HUD.dc.html):
-// the HOLE / TIME / SHOTS block, the "Ending in" banner, the live ranking, the power column,
-// the controls help and the map footer. Everything is anchored to the
-// explorer's interactable area and scales with the contain ratio.
+// In-hole HUD pieces after the "En el campo" board of the canvas page "Móvil ·
+// propuesta 2" (M2HUD.dc.html), on phones and desktop alike: the HOLE / TIME /
+// SHOTS boxes and the map name along the top, the live ranking on the left,
+// the power column top right, the "Ending in" banner top centre and, on
+// desktop, the controls help at the bottom (phones have the touch controls
+// there, mobile-shoot-controls.tsx). The centre stays clear for the course.
 //
-// They read the same state the old sprite-based components did; the data
-// producers are unchanged except for the scoreboard, which is structured now.
+// Everything sits on the full-screen 667x375 grid of ui-scale.ts fullLayout,
+// which keeps the explorer's corners free. They read the same state the old
+// components did; the data producers are unchanged.
 import ReactEcs, { Label, UiEntity } from '@dcl/sdk/react-ecs'
 import { Color4 } from '@dcl/sdk/math'
 
@@ -13,113 +16,73 @@ import { topbarState, formatTopBarTime } from './topbar-state'
 import { powerBarState, controlHintState } from './shoot-hud-state'
 import { seasonClockState, seasonResultsState, seasonCountdownState, seasonHoleState, SeasonResultRow } from './season-hud-state'
 import { C, hex, mmss } from './ui-theme'
-import { P, border, initialAvatar, rankBadge } from './ui2'
+import { P, border, initialAvatar, placeAt } from './ui2'
 // @ts-ignore - common/utils has @ts-nocheck
 import { getTierFromSub } from '../../../common/utils'
 // @ts-ignore - season-tier-definitions has @ts-nocheck
 import { seasonTierDefinitions } from '../../../common/season-tier-definitions'
-import { hudScale, type Canvas, type Px } from './ui-scale'
+import { fullLayout, scaler, type Layout, type Px } from './ui-scale'
 import { CAMERA_AIM_MODE } from '../config/controls'
 import { isMobile } from '../services/platform'
 import { mobileShootState } from './mobile-shoot-state'
-import { scaler } from './ui-scale'
+
+const HUD_BG = Color4.create(18 / 255, 22 / 255, 70 / 255, 0.88)
+const SHADOW_TEXT = hex('#1B2A6B')
 
 // ---------------------------------------------------------------------------
-// A labelled stat box: small caption on top, big value under it.
-const statBox = (px: Px, fs: Px, w: number, caption: string, value: string, bg: Color4) => (
+// A labelled stat box of the top bar: small caption on top, big value under it.
+const statBox = (L: Layout, px: Px, fs: Px, key: string, x: number, caption: string, value: string, bg: Color4) => (
   <UiEntity
-    uiTransform={{
-      width: w,
-      height: px(72),
-      flexDirection: 'column',
-      justifyContent: 'center',
-      alignItems: 'center',
-      margin: { right: px(10) },
-      borderRadius: px(18),
-      borderWidth: border(px, 4),
-      borderColor: P.white
-    }}
+    key={key}
+    uiTransform={{ ...placeAt(L, px, x, 6, 60, 44), flexDirection: 'column', justifyContent: 'center', alignItems: 'center', borderRadius: px(12), borderWidth: border(px, 2), borderColor: P.white }}
     uiBackground={{ color: bg }}
   >
-    <Label value={caption} fontSize={fs(12)} color={P.pale} textAlign="middle-center" uiTransform={{ height: px(18) }} textWrap="nowrap" />
-    <Label value={value} fontSize={fs(28)} color={C.white} textAlign="middle-center" uiTransform={{ height: px(34) }} textWrap="nowrap" />
+    <Label value={caption} fontSize={fs(9)} color={P.pale} textAlign="middle-center" uiTransform={{ height: px(12) }} textWrap="nowrap" />
+    <Label value={value} fontSize={fs(17)} color={C.white} textAlign="middle-center" uiTransform={{ height: px(22) }} textWrap="nowrap" />
   </UiEntity>
 )
 
 // Storymode missions keep their own single timer (topbarState); a season hole
 // shows HOLE, TIME and SHOTS together. Neither block exists outside a hole.
-// Left edge of the HOLE / TIME / SHOTS row and the live ranking. On phones and
-// tablets the reported interactable area pushed them toward the centre, onto
-// the map name; there they start just right of the avatar + chat buttons.
-// On desktop the Unity explorer reports a left inset as wide as its chat
-// column, which sits at the bottom; at the top only the minimap and its
-// buttons are there, and they end about px(90) before that inset (measured on
-// a screenshot). Explorers with a small or no inset keep the plain margin.
-const hudLeft = (canvas: Canvas, px: Px) => {
-  if (isMobile()) return canvas.width * 0.2
-  const left = canvas.area.left
-  return left > px(200) ? left - px(90) : left + px(24)
-}
-
 export const MissionTimer = () => {
   if (!topbarState.visible) return null
-  const { canvas, s } = hudScale()
-  const { px, fs } = s
-  return (
-    <UiEntity uiTransform={{ positionType: 'absolute', position: { top: canvas.area.top + px(22), left: hudLeft(canvas, px) }, flexDirection: 'row' }}>
-      {statBox(px, fs, px(104), 'TIME', formatTopBarTime(topbarState.ms), P.navy)}
-    </UiEntity>
-  )
+  const L = fullLayout()
+  const { px, fs } = scaler(L.scale)
+  return statBox(L, px, fs, 'mission-time', 140, 'TIME', formatTopBarTime(topbarState.ms), P.navy)
 }
 
 export const HoleStats = () => {
   if (!seasonClockState.visible) return null
-  const { canvas, s } = hudScale()
-  const { px, fs } = s
+  const L = fullLayout()
+  const { px, fs } = scaler(L.scale)
   const me = seasonResultsState.rows.find((row) => row.isMe)
   return (
-    <UiEntity uiTransform={{ positionType: 'absolute', position: { top: canvas.area.top + px(22), left: hudLeft(canvas, px) }, flexDirection: 'row' }}>
-      {statBox(px, fs, px(104), 'HOLE', `${seasonHoleState.current} / ${seasonHoleState.total}`, P.purple)}
-      {statBox(px, fs, px(104), 'TIME', mmss(seasonClockState.ms), P.navy)}
-      {statBox(px, fs, px(104), 'SHOTS', String(me ? me.shots : 0), P.navy)}
+    <UiEntity uiTransform={{ positionType: 'absolute', width: '100%', height: '100%' }}>
+      {statBox(L, px, fs, 'stat-hole', 140, 'HOLE', `${seasonHoleState.current} / ${seasonHoleState.total}`, P.navy)}
+      {statBox(L, px, fs, 'stat-time', 205, 'TIME', mmss(seasonClockState.ms), P.navy)}
+      {statBox(L, px, fs, 'stat-shots', 270, 'SHOTS', String(me ? me.shots : 0), P.purple)}
     </UiEntity>
   )
 }
 
 // "Starting in... N" before a hole (purple) and "Ending in... N" once a rival
-// holes out (red), top centre.
+// holes out (pink), top centre under the top bar.
 export const EndingBanner = () => {
   if (!seasonCountdownState.visible || !seasonCountdownState.text) return null
-  const { canvas, s } = hudScale()
-  const { px, fs } = s
+  const L = fullLayout()
+  const { px, fs } = scaler(L.scale)
   const [first, second] = seasonCountdownState.text.split('\n')
   const ending = /ending/i.test(first)
   const label = first.replace(/\.{2,}$/, '').trim()
   return (
-    <UiEntity
-      uiTransform={{
-        positionType: 'absolute',
-        // Phones: under the map name, which sits top-centre there.
-        position: isMobile() ? { top: 8 + px(84), left: 0 } : { top: canvas.area.top + px(22), left: canvas.area.left },
-        width: isMobile() ? canvas.width : canvas.availW,
-        justifyContent: 'center'
-      }}
-    >
+    <UiEntity uiTransform={{ ...placeAt(L, px, 152, 58, 340, 40), justifyContent: 'center' }}>
       <UiEntity
-        uiTransform={{
-          height: px(72),
-          flexDirection: 'row',
-          alignItems: 'center',
-          padding: { left: px(22), right: px(22) },
-          borderRadius: px(18),
-          borderWidth: border(px, 4),
-          borderColor: P.white
-        }}
+        uiTransform={{ height: px(40), flexDirection: 'row', alignItems: 'center', padding: { left: px(14), right: px(14) }, borderRadius: px(12), borderWidth: border(px, 2), borderColor: P.white }}
         uiBackground={{ color: ending ? P.pink : P.purple }}
       >
-        <Label value={label} fontSize={fs(16)} color={C.white} textAlign="middle-center" uiTransform={{ height: px(64) }} textWrap="nowrap" />
+        <Label value={label} fontSize={fs(12)} color={C.white} textAlign="middle-center" uiTransform={{ height: px(36) }} textWrap="nowrap" />
         {second ? (
-          <Label value={second} fontSize={fs(28)} color={C.white} textAlign="middle-center" uiTransform={{ height: px(64), margin: { left: px(14) } }} textWrap="nowrap" />
+          <Label value={second} fontSize={fs(17)} color={C.yellow} textAlign="middle-center" uiTransform={{ height: px(36), margin: { left: px(8) } }} textWrap="nowrap" />
         ) : null}
       </UiEntity>
     </UiEntity>
@@ -134,60 +97,37 @@ const rankRows = (rows: SeasonResultRow[]) =>
     return a.timeMs - b.timeMs
   })
 
+// Left column, with your Season rank as its header. In a hole the explorer
+// has no joystick, so up to seven rows (a full party) may run lower.
 export const LiveRanking = () => {
   if (!seasonResultsState.visible || !seasonResultsState.rows.length) return null
-  const { canvas, s } = hudScale()
-  const { px, fs } = s
+  const L = fullLayout()
+  const { px, fs } = scaler(L.scale)
   const rows = rankRows(seasonResultsState.rows)
+  const rowH = rows.length > 5 ? 24 : 28
+  const tierSub = Number(globalStore.userData.getState()['statistic_tier-sub'] || 0)
+  const tier = Number(getTierFromSub(tierSub) || 0)
   return (
     <UiEntity
-      uiTransform={{
-        positionType: 'absolute',
-        position: { top: canvas.area.top + px(128), left: hudLeft(canvas, px) },
-        width: px(272),
-        flexDirection: 'column',
-        padding: px(10),
-        borderRadius: px(18),
-        borderWidth: border(px, 4),
-        borderColor: P.white
-      }}
-      uiBackground={{ color: P.navy }}
+      uiTransform={{ ...placeAt(L, px, 6, 58, 140), flexDirection: 'column', padding: px(4), borderRadius: px(14), borderWidth: border(px, 2), borderColor: P.navyEdge }}
+      uiBackground={{ color: HUD_BG }}
     >
+      <Label value={`${seasonTierDefinitions[tier]?.name || 'WOOD 5'} · ${tierSub} pts`} fontSize={fs(10)} color={P.pale} textAlign="middle-left" uiTransform={{ height: px(16), margin: { left: px(4) } }} textWrap="nowrap" />
       {rows.map((row, i) => (
         <UiEntity
           key={i}
-          uiTransform={{
-            width: '100%',
-            height: px(40),
-            flexDirection: 'row',
-            alignItems: 'center',
-            margin: { bottom: i === rows.length - 1 ? 0 : px(6) },
-            padding: { left: px(10), right: px(10) },
-            borderRadius: px(12)
-          }}
-          uiBackground={{ color: row.isMe ? P.yellow : P.glass }}
+          uiTransform={{ width: px(128), height: px(rowH), flexDirection: 'row', alignItems: 'center', margin: { top: px(2) }, padding: { left: px(6), right: px(6) }, borderRadius: px(9) }}
+          uiBackground={{ color: row.isMe ? P.yellow : P.clear }}
         >
-          <Label
-            value={String(i + 1)}
-            fontSize={fs(20)}
-            color={row.isMe ? P.ink : i === 0 ? C.yellow : P.pale}
-            textAlign="middle-left"
-            uiTransform={{ width: px(22), height: px(40) }} textWrap="nowrap"
-          />
-          <UiEntity uiTransform={{ margin: { left: px(4) } }}>{initialAvatar(px, fs, row.name, 24, i)}</UiEntity>
-          <Label
-            value={row.isMe ? `${row.name} · you` : row.name}
-            fontSize={fs(16)}
-            color={row.isMe ? P.ink : C.white}
-            textAlign="middle-left"
-            uiTransform={{ flexGrow: 1, height: px(40), margin: { left: px(8) } }} textWrap="nowrap"
-          />
+          <Label value={String(i + 1)} fontSize={fs(11)} color={row.isMe ? P.ink : C.white} textAlign="middle-left" uiTransform={{ width: px(10), height: px(rowH) }} textWrap="nowrap" />
+          <UiEntity uiTransform={{ margin: { left: px(3) } }}>{initialAvatar(px, fs, row.name, 20, i)}</UiEntity>
+          <UiEntity uiTransform={{ width: px(row.holed ? 50 : 66), height: px(rowH), margin: { left: px(5) }, overflow: 'hidden' }}>
+            <Label value={row.isMe ? `${row.name} · you` : row.name} fontSize={fs(11)} color={row.isMe ? P.ink : C.white} textAlign="middle-left" uiTransform={{ width: '100%', height: px(rowH) }} textWrap="nowrap" />
+          </UiEntity>
           {row.holed ? (
-            <UiEntity uiTransform={{ height: px(22), padding: { left: px(8), right: px(8) }, borderRadius: px(8), justifyContent: 'center' }} uiBackground={{ color: P.green }}>
-              <Label value={`IN · ${row.shots}`} fontSize={fs(12)} color={P.ink} textAlign="middle-center" uiTransform={{ height: px(22) }} textWrap="nowrap" />
-            </UiEntity>
+            <Label value={`IN · ${row.shots}`} fontSize={fs(10)} color={row.isMe ? P.ink : P.green} textAlign="middle-right" uiTransform={{ width: px(30), height: px(rowH) }} textWrap="nowrap" />
           ) : (
-            <Label value={String(row.shots)} fontSize={fs(18)} color={row.isMe ? P.ink : C.white} textAlign="middle-right" uiTransform={{ width: px(30), height: px(40) }} textWrap="nowrap" />
+            <Label value={String(row.shots)} fontSize={fs(11)} color={row.isMe ? P.ink : C.white} textAlign="middle-right" uiTransform={{ width: px(14), height: px(rowH) }} textWrap="nowrap" />
           )}
         </UiEntity>
       ))}
@@ -195,12 +135,14 @@ export const LiveRanking = () => {
   )
 }
 
-// Shot power as 10 vertical segments: green up to 40, yellow to 70, red above.
-// Phones: a held power button acts as a held E / F (see mobile-shoot-state).
-const powerHoldButton = (label: string, size: number, dir: -1 | 1, margin: { top?: number; bottom?: number }) => (
+// Shot power, top right: 10 segments (green up to 40, yellow to 70, red
+// above) with the value and the wobble note on their left. Phones get + above
+// and - below the bar; held, they act as a held E / F (mobile-shoot-state).
+const powerHoldButton = (L: Layout, px: Px, fs: Px, key: string, y: number, label: string, dir: -1 | 1) => (
   <UiEntity
-    uiTransform={{ width: size, height: size, margin, borderRadius: size * 0.28, borderWidth: Math.max(2, size * 0.05), borderColor: P.white, justifyContent: 'center', alignItems: 'center' }}
-    uiBackground={{ color: P.lavender }}
+    key={key}
+    uiTransform={{ ...placeAt(L, px, 617, y, 44, 40), borderRadius: px(12), borderWidth: border(px, 2), borderColor: P.navyEdge, justifyContent: 'center', alignItems: 'center' }}
+    uiBackground={{ color: P.navy }}
     onMouseDown={() => {
       mobileShootState.powerHold = dir
     }}
@@ -211,84 +153,72 @@ const powerHoldButton = (label: string, size: number, dir: -1 | 1, margin: { top
       mobileShootState.powerHold = 0
     }}
   >
-    <Label value={label} fontSize={size * 0.45} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: size }} />
+    <Label value={label} fontSize={fs(22)} color={C.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />
   </UiEntity>
 )
 
 export const PowerColumn = () => {
   if (!powerBarState.visible) return null
   const mobile = isMobile()
-  const hud = hudScale()
-  const canvas = hud.canvas
-  // Phones: laid out against the whole canvas (top-right corner is free
-  // there), scaled from the shorter side so it stays above the explorer's
-  // buttons, with + above and - below the bar.
-  const s = mobile ? scaler(Math.max(0.5, Math.min(1, (Math.min(canvas.width, canvas.height) / 720) * 0.72))) : hud.s
-  const { px, fs } = s
-  const touch = Math.max(40, Math.min(80, Math.min(canvas.width, canvas.height) * 0.09))
+  const L = fullLayout()
+  const { px, fs } = scaler(L.scale)
   const power = Math.max(0, Math.min(100, powerBarState.power))
   const lit = Math.ceil(power / 10)
+  // Phones: the bar sits between the + and - buttons; desktop: the full column.
+  const barTop = mobile ? 102 : 70
+  const barH = mobile ? 80 : 130
+  const segH = (barH - 6 - 9) / 10
   const segments: ReactEcs.JSX.Element[] = []
   for (let i = 10; i >= 1; i--) {
     const level = i * 10
-    const color = i > lit ? Color4.create(1, 1, 1, 0.12) : level <= 40 ? C.green : level <= 70 ? C.yellow : hex('#FF5A3C')
-    segments.push(
-      <UiEntity key={i} uiTransform={{ width: px(60), height: px(24), borderRadius: px(6), margin: { bottom: i === 1 ? 0 : px(4) } }} uiBackground={{ color }} />
-    )
+    const color = i > lit ? Color4.create(1, 1, 1, 0.15) : level <= 40 ? C.green : level <= 70 ? C.yellow : hex('#FF5A3C')
+    segments.push(<UiEntity key={i} uiTransform={{ width: px(20), height: px(segH), borderRadius: px(2), margin: { bottom: i === 1 ? 0 : px(1) } }} uiBackground={{ color }} />)
   }
+  const labelTop = barTop + barH / 2 - 44
   return (
-    <UiEntity
-      uiTransform={{
-        positionType: 'absolute',
-        position: mobile ? { top: 8, right: 12 } : { top: canvas.area.top + px(120), right: canvas.area.right + px(28) },
-        flexDirection: 'column',
-        alignItems: 'center',
-        padding: { top: px(10), bottom: px(12), left: px(10), right: px(10) },
-        borderRadius: px(18),
-        borderWidth: border(px, 4),
-        borderColor: P.white
-      }}
-      uiBackground={{ color: P.navy }}
-    >
-      {mobile ? powerHoldButton('+', touch, 1, { bottom: px(8) }) : null}
-      <Label value="POWER" fontSize={fs(12)} color={P.pale} textAlign="middle-center" uiTransform={{ height: px(18) }} textWrap="nowrap" />
-      <UiEntity uiTransform={{ flexDirection: 'column', padding: px(6), margin: { top: px(6) }, borderRadius: px(12) }} uiBackground={{ color: P.dim }}>
+    <UiEntity uiTransform={{ positionType: 'absolute', width: '100%', height: '100%' }}>
+      {mobile ? powerHoldButton(L, px, fs, 'power-up', 58, '+', 1) : null}
+      <UiEntity
+        uiTransform={{ ...placeAt(L, px, 625, barTop, 28, barH), flexDirection: 'column', alignItems: 'center', padding: px(3), borderRadius: px(8), borderWidth: border(px, 2), borderColor: P.navyEdge }}
+        uiBackground={{ color: HUD_BG }}
+      >
         {segments}
       </UiEntity>
-      <Label value={`${Math.round(power)}%`} fontSize={fs(26)} color={C.white} textAlign="middle-center" uiTransform={{ height: px(36), margin: { top: px(8) } }} textWrap="nowrap" />
-      {mobile ? (
-        powerHoldButton('-', touch, -1, { top: px(8) })
-      ) : (
-        <Label value={'Above 40% the\nshot can wobble'} fontSize={fs(11)} color={P.pale} textAlign="middle-center" uiTransform={{ width: px(90), height: px(30) }} textWrap="nowrap" />
-      )}
+      {mobile ? powerHoldButton(L, px, fs, 'power-down', 186, '−', -1) : null}
+      <UiEntity uiTransform={{ ...placeAt(L, px, 532, labelTop, 86, 88), flexDirection: 'column', alignItems: 'flex-end' }}>
+        <Label value="POWER" fontSize={fs(10)} color={C.white} textAlign="middle-right" uiTransform={{ height: px(14) }} textWrap="nowrap" />
+        <Label value={`${Math.round(power)}%`} fontSize={fs(24)} color={C.yellow} textAlign="middle-right" uiTransform={{ height: px(30) }} textWrap="nowrap" />
+        <Label value="Above 40% the shot can wobble" fontSize={fs(10)} color={C.white} textAlign="top-right" uiTransform={{ width: px(86), height: px(40) }} textWrap="wrap" />
+      </UiEntity>
     </UiEntity>
   )
 }
 
-// Controls help, bottom centre: one key cap per input and what it does.
+// Controls help, desktop only: one key cap per input and what it does, in the
+// bottom-centre slot that phones give to the touch controls.
 const keyCap = (px: Px, fs: Px, text: string, wide: boolean, accent = false) => (
   <UiEntity
     uiTransform={{
-      width: wide ? undefined : px(34),
-      height: px(34),
-      padding: wide ? { left: px(10), right: px(10) } : undefined,
-      margin: { right: px(4) },
-      borderRadius: px(8),
-      borderWidth: border(px, 2),
+      width: wide ? undefined : px(18),
+      height: px(18),
+      padding: wide ? { left: px(5), right: px(5) } : undefined,
+      margin: { right: px(2) },
+      borderRadius: px(5),
+      borderWidth: border(px, 1.5),
       borderColor: accent ? P.yellowShadow : P.lavenderShadow,
       justifyContent: 'center',
       alignItems: 'center'
     }}
     uiBackground={{ color: accent ? C.yellow : C.white }}
   >
-    <Label value={text} fontSize={fs(wide ? 14 : 17)} color={P.ink} textAlign="middle-center" uiTransform={{ height: px(30) }} textWrap="nowrap" />
+    <Label value={text} fontSize={fs(wide ? 9 : 10)} color={P.ink} textAlign="middle-center" uiTransform={{ height: px(16) }} textWrap="nowrap" />
   </UiEntity>
 )
 
 const helpItem = (px: Px, fs: Px, keys: ReactEcs.JSX.Element[], what: string) => (
-  <UiEntity uiTransform={{ height: px(34), flexDirection: 'row', alignItems: 'center', margin: { right: px(18) } }}>
+  <UiEntity uiTransform={{ height: px(20), flexDirection: 'row', alignItems: 'center', margin: { left: px(5), right: px(5) } }}>
     {keys}
-    <Label value={what} fontSize={fs(17)} color={C.white} textAlign="middle-left" uiTransform={{ height: px(34), margin: { left: px(4) } }} textWrap="nowrap" />
+    <Label value={what} fontSize={fs(11)} color={C.white} textAlign="middle-left" uiTransform={{ height: px(20), margin: { left: px(3) } }} textWrap="nowrap" />
   </UiEntity>
 )
 
@@ -299,108 +229,54 @@ export const ControlsHelp = () => {
   // player can read the keys before the first shot.
   const starting = (seasonCountdownState.visible && /^starting/i.test(seasonCountdownState.text)) || !!globalStore.game.getState().starting
   if ((!controlHintState.visible && !starting) || isMobile()) return null
-  const { canvas, s } = hudScale()
-  const { px, fs } = s
-  const items: ReactEcs.JSX.Element[] = []
+  const L = fullLayout()
+  const { px, fs } = scaler(L.scale)
+  const rows: ReactEcs.JSX.Element[][] = []
   if (CAMERA_AIM_MODE) {
-    items.push(helpItem(px, fs, [keyCap(px, fs, 'MOUSE', true)], 'Orbit'))
-    items.push(helpItem(px, fs, [keyCap(px, fs, 'A', false), keyCap(px, fs, 'D', false)], 'Turn'))
-    items.push(helpItem(px, fs, [keyCap(px, fs, 'W', false), keyCap(px, fs, 'S', false)], 'Zoom'))
-    items.push(helpItem(px, fs, [keyCap(px, fs, 'E', false), keyCap(px, fs, 'F', false)], 'Power'))
-    items.push(helpItem(px, fs, [keyCap(px, fs, 'CLICK', true, true)], 'Shoot'))
+    rows.push([
+      helpItem(px, fs, [keyCap(px, fs, 'MOUSE', true)], 'Orbit'),
+      helpItem(px, fs, [keyCap(px, fs, 'A', false), keyCap(px, fs, 'D', false)], 'Turn'),
+      helpItem(px, fs, [keyCap(px, fs, 'W', false), keyCap(px, fs, 'S', false)], 'Zoom')
+    ])
+    rows.push([helpItem(px, fs, [keyCap(px, fs, 'E', false), keyCap(px, fs, 'F', false)], 'Power'), helpItem(px, fs, [keyCap(px, fs, 'CLICK', true, true)], 'Shoot')])
   } else if (controlHintState.step === 0) {
-    items.push(helpItem(px, fs, [keyCap(px, fs, 'E', false), keyCap(px, fs, 'F', false)], 'Rotate'))
-    items.push(helpItem(px, fs, [keyCap(px, fs, 'CLICK', true, true)], 'Set direction'))
+    rows.push([helpItem(px, fs, [keyCap(px, fs, 'E', false), keyCap(px, fs, 'F', false)], 'Rotate'), helpItem(px, fs, [keyCap(px, fs, 'CLICK', true, true)], 'Set direction')])
   } else {
-    items.push(helpItem(px, fs, [keyCap(px, fs, 'E', false), keyCap(px, fs, 'F', false)], 'Power'))
-    items.push(helpItem(px, fs, [keyCap(px, fs, 'CLICK', true, true)], 'Shoot'))
+    rows.push([helpItem(px, fs, [keyCap(px, fs, 'E', false), keyCap(px, fs, 'F', false)], 'Power'), helpItem(px, fs, [keyCap(px, fs, 'CLICK', true, true)], 'Shoot')])
   }
   return (
-    <UiEntity
-      uiTransform={{
-        positionType: 'absolute',
-        position: { bottom: canvas.area.bottom + px(22), left: canvas.area.left },
-        width: canvas.availW,
-        justifyContent: 'center'
-      }}
-    >
+    <UiEntity uiTransform={{ ...placeAt(L, px, 152, 300, 340, 56), justifyContent: 'center', alignItems: 'flex-end' }}>
       <UiEntity
-        uiTransform={{
-          height: px(60),
-          flexDirection: 'row',
-          alignItems: 'center',
-          padding: { left: px(20), right: px(2) },
-          borderRadius: px(18),
-          borderWidth: border(px, 4),
-          borderColor: P.white
-        }}
+        uiTransform={{ flexDirection: 'column', alignItems: 'center', padding: { top: px(4), bottom: px(4), left: px(4), right: px(4) }, borderRadius: px(12), borderWidth: border(px, 2), borderColor: P.white }}
         uiBackground={{ color: P.navy }}
       >
-        {items}
+        {rows.map((items, i) => (
+          <UiEntity key={i} uiTransform={{ flexDirection: 'row', alignItems: 'center', margin: { top: i ? px(2) : 0 } }}>
+            {items}
+          </UiEntity>
+        ))}
       </UiEntity>
     </UiEntity>
   )
 }
 
-// Map name and author, bottom right, only while playing (SDK6 game-ui.ts).
+// Map name and author, top bar right of the stat boxes, only while playing
+// (SDK6 game-ui.ts).
 export const MapFooter = () => {
   const gs = globalStore.game.getState()
   const name = gs.courseName || gs.courseId
   if (!gs.playing || !name) return null
-  const { canvas, s } = hudScale()
-  const { px, fs } = s
-  // Phones: the bottom-right corner is the explorer's jump button; the top
-  // centre is free.
-  const mobile = isMobile()
+  const L = fullLayout()
+  const { px, fs } = scaler(L.scale)
   return (
     <UiEntity
-      uiTransform={{
-        positionType: 'absolute',
-        position: mobile ? { top: 8, left: canvas.width * 0.5 - px(140) } : { bottom: canvas.area.bottom + px(24), right: canvas.area.right + px(28) },
-        width: mobile ? px(280) : undefined,
-        flexDirection: 'column',
-        alignItems: mobile ? 'center' : 'flex-end',
-        padding: { top: px(8), bottom: px(8), left: px(18), right: px(18) },
-        borderRadius: px(18),
-        borderWidth: border(px, 4),
-        borderColor: P.white
-      }}
-      uiBackground={{ color: P.navy }}
+      uiTransform={{ ...placeAt(L, px, 336, 13, undefined, 30), flexDirection: 'row', alignItems: 'center', padding: { left: px(10), right: px(10) }, borderRadius: px(10), borderWidth: border(px, 2), borderColor: P.navyEdge }}
+      uiBackground={{ color: HUD_BG }}
     >
-      <Label value={String(name)} fontSize={fs(19)} color={C.white} textAlign="middle-right" uiTransform={{ height: px(26) }} textWrap="nowrap" />
+      <Label value={String(name)} fontSize={fs(11)} color={C.white} textAlign="middle-left" uiTransform={{ height: px(26) }} textWrap="nowrap" />
       {gs.courseAuthor ? (
-        <Label value={`by ${gs.courseAuthor}`} fontSize={fs(13)} color={P.pale} textAlign="middle-right" uiTransform={{ height: px(20) }} textWrap="nowrap" />
+        <Label value={`by ${gs.courseAuthor}`} fontSize={fs(11)} color={P.pale} textAlign="middle-left" uiTransform={{ height: px(26), margin: { left: px(6) } }} textWrap="nowrap" />
       ) : null}
-    </UiEntity>
-  )
-}
-
-// Your Season rank, top right, during a Season run (HUD2). Phones keep that
-// corner for the power column.
-export const RankPill = () => {
-  if (!seasonClockState.visible || isMobile()) return null
-  const { canvas, s } = hudScale()
-  const { px, fs } = s
-  const tierSub = Number(globalStore.userData.getState()['statistic_tier-sub'] || 0)
-  const tier = Number(getTierFromSub(tierSub) || 0)
-  return (
-    <UiEntity
-      uiTransform={{
-        positionType: 'absolute',
-        position: { top: canvas.area.top + px(22), right: canvas.area.right + px(28) },
-        height: px(46),
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: { left: px(8), right: px(14) },
-        borderRadius: px(14),
-        borderWidth: border(px, 3),
-        borderColor: P.navyEdge
-      }}
-      uiBackground={{ color: P.navyDeep }}
-    >
-      {rankBadge(px, tier, 26)}
-      <Label value={`${seasonTierDefinitions[tier]?.name || 'WOOD 5'} ·`} fontSize={fs(15)} color={C.white} textAlign="middle-left" uiTransform={{ height: px(40), margin: { left: px(8) } }} textWrap="nowrap" />
-      <Label value={`${tierSub} pts`} fontSize={fs(15)} color={C.yellow} textAlign="middle-left" uiTransform={{ height: px(40), margin: { left: px(6) } }} textWrap="nowrap" />
     </UiEntity>
   )
 }

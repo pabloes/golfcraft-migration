@@ -1,65 +1,43 @@
-// Touch controls for a hole on the mobile explorer. Laid out against the whole
-// canvas (the interactable area it reports keeps its top bar but not its touch
-// controls) and kept clear of those controls: the F / E / + / jump / hand
-// cluster in the bottom-right quarter, the emote button bottom-left and the
-// avatar + chat top-left. Sizes come from the shorter side so landscape and
-// portrait get the same finger-sized buttons.
-//   - bottom, left of centre:  < - SHOOT + >   (aim, power, shot)
-//   - left, middle:            ^ v             (camera pitch)
-//   - top-left:                QUIT, with a confirm dialog
-// Hold buttons act like a held key (release on up or when the finger leaves).
+// Touch controls for a hole on the mobile explorer, on the full-screen grid of
+// the canvas page "Móvil · propuesta 2" (M2HUD.dc.html), which keeps clear of
+// the explorer's own buttons (avatar + chat top-left, emotes bottom-left, the
+// F / E / + / hand / jump cluster bottom-right):
+//   - bottom centre:  ^ v  < SHOOT >   (camera pitch, aim, shot)
+//   - top right:      QUIT, with a confirm dialog
+// Power + / - sit with the power column (game-hud.tsx). Hold buttons act like
+// a held key (release on up or when the finger leaves).
 import ReactEcs, { Label, UiEntity } from '@dcl/sdk/react-ecs'
-import { Color4 } from '@dcl/sdk/math'
 
 import { isMobile } from '../services/platform'
 import { mobileShootState } from './mobile-shoot-state'
-import { readCanvas } from './ui-scale'
+import { fullLayout, scaler, type Layout, type Px } from './ui-scale'
 import { C } from './ui-theme'
+import { P, border, img, placeAt } from './ui2'
 
-const holdButton = (
-  label: string,
-  size: number,
-  color: Color4,
-  onDown: () => void,
-  onUp: () => void,
-  extra: { width?: number; margin?: { left?: number; top?: number } } = {}
-) => (
+const holdButton = (L: Layout, px: Px, key: string, x: number, content: any, onDown: () => void, onUp: () => void) => (
   <UiEntity
-    uiTransform={{
-      width: extra.width || size,
-      height: size,
-      margin: extra.margin,
-      borderRadius: size * 0.28,
-      borderWidth: Math.max(2, size * 0.05),
-      borderColor: C.dark,
-      justifyContent: 'center',
-      alignItems: 'center'
-    }}
-    uiBackground={{ color }}
+    key={key}
+    uiTransform={{ ...placeAt(L, px, x, 306, 44, 44), borderRadius: px(12), borderWidth: border(px, 2), borderColor: P.navyEdge, justifyContent: 'center', alignItems: 'center' }}
+    uiBackground={{ color: P.navy }}
     onMouseDown={onDown}
     onMouseUp={onUp}
     onMouseLeave={onUp}
   >
-    <Label value={label} fontSize={size * 0.4} color={C.dark} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: size }} />
+    {content}
   </UiEntity>
 )
 
-const tapButton = (label: string, width: number, height: number, color: Color4, textColor: Color4, onTap: () => void, margin?: { left?: number }) => (
+const glyph = (px: Px, fs: Px, value: string) => (
+  <Label value={value} fontSize={fs(20)} color={C.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />
+)
+
+const tapButton = (px: Px, fs: Px, label: string, w: number, h: number, color: any, textColor: any, onTap: () => void, margin?: { left?: number }) => (
   <UiEntity
-    uiTransform={{
-      width,
-      height,
-      margin,
-      borderRadius: height * 0.3,
-      borderWidth: Math.max(2, height * 0.06),
-      borderColor: C.dark,
-      justifyContent: 'center',
-      alignItems: 'center'
-    }}
+    uiTransform={{ width: px(w), height: px(h), margin, borderRadius: px(12), borderWidth: border(px, 2), borderColor: P.white, justifyContent: 'center', alignItems: 'center' }}
     uiBackground={{ color }}
     onMouseDown={onTap}
   >
-    <Label value={label} fontSize={height * 0.42} color={textColor} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height }} />
+    <Label value={label} fontSize={fs(16)} color={textColor} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />
   </UiEntity>
 )
 
@@ -67,12 +45,8 @@ export const MobileShootControls = () => {
   if (!isMobile()) return null
   const st = mobileShootState
   if (!st.visible && !st.quit) return null
-  const { width: W, height: H } = readCanvas()
-  const portrait = H > W
-  const u = Math.max(44, Math.min(96, Math.min(W, H) * 0.11))
-  const gap = u * 0.15
-  const shootW = u * 2.2
-  const panelW = u * 4 + shootW + gap * 4
+  const L = fullLayout()
+  const { px, fs } = scaler(L.scale)
 
   const aim = (dir: -1 | 0 | 1) => () => {
     st.aimHold = dir
@@ -80,62 +54,37 @@ export const MobileShootControls = () => {
   const pitch = (dir: -1 | 0 | 1) => () => {
     st.pitchHold = dir
   }
-  const pow = (dir: -1 | 0 | 1) => () => {
-    st.powerHold = dir
-  }
 
   return (
     <UiEntity uiTransform={{ width: '100%', height: '100%', positionType: 'absolute' }}>
-      {st.visible ? (
-        <UiEntity
-          uiTransform={{
-            positionType: 'absolute',
-            position: { left: (portrait ? W * 0.5 : W * 0.45) - panelW / 2, bottom: portrait ? H * 0.2 : u * 0.2 },
-            width: panelW,
-            height: u,
-            flexDirection: 'row',
-            alignItems: 'center'
-          }}
-        >
-          {holdButton('<', u, C.white, aim(-1), aim(0))}
-          {holdButton('-', u, C.lilac, pow(-1), pow(0), { margin: { left: gap } })}
-          <UiEntity
-            uiTransform={{
-              width: shootW,
-              height: u,
-              margin: { left: gap },
-              borderRadius: u * 0.28,
-              borderWidth: Math.max(2, u * 0.05),
-              borderColor: C.dark,
-              flexDirection: 'column',
-              justifyContent: 'center',
-              alignItems: 'center'
-            }}
-            uiBackground={{ color: C.yellow }}
-            onMouseDown={() => st.shoot && st.shoot()}
-          >
-            <Label value="SHOOT" fontSize={u * 0.36} color={C.dark} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: u * 0.5 }} />
-            <Label value={`${Math.round(st.power)}%`} fontSize={u * 0.22} color={C.dark} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: u * 0.3 }} />
-          </UiEntity>
-          {holdButton('+', u, C.lilac, pow(1), pow(0), { margin: { left: gap } })}
-          {holdButton('>', u, C.white, aim(1), aim(0), { margin: { left: gap } })}
-        </UiEntity>
-      ) : null}
-
-      {st.visible ? (
-        <UiEntity
-          uiTransform={{ positionType: 'absolute', position: { left: 12, top: H / 2 - u - gap / 2 }, width: u, flexDirection: 'column' }}
-        >
-          {holdButton('^', u, C.white, pitch(1), pitch(0))}
-          {holdButton('v', u, C.white, pitch(-1), pitch(0), { margin: { top: gap } })}
-        </UiEntity>
-      ) : null}
+      {st.visible
+        ? [
+            holdButton(L, px, 'pitch-up', 162, glyph(px, fs, '^'), pitch(1), pitch(0)),
+            holdButton(L, px, 'pitch-down', 210, glyph(px, fs, 'v'), pitch(-1), pitch(0)),
+            holdButton(L, px, 'aim-left', 266, img(px, 'ic_chev_left_w', undefined, undefined, 0.7), aim(-1), aim(0)),
+            <UiEntity
+              key="shoot"
+              uiTransform={{ ...placeAt(L, px, 316, 302, 116, 52), flexDirection: 'column', justifyContent: 'center', alignItems: 'center', borderRadius: px(15) }}
+              uiBackground={{ color: P.yellow }}
+              onMouseDown={() => st.shoot && st.shoot()}
+            >
+              <Label value="SHOOT" fontSize={fs(20)} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: px(24) }} />
+              <Label value={`${Math.round(st.power)}%`} fontSize={fs(11)} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: px(14) }} />
+            </UiEntity>,
+            holdButton(L, px, 'aim-right', 438, img(px, 'ic_chev_right_w', undefined, undefined, 0.7), aim(1), aim(0))
+          ]
+        : null}
 
       {st.quit ? (
-        <UiEntity uiTransform={{ positionType: 'absolute', position: { left: 12, top: H * 0.15 }, width: u * 1.6, height: u * 0.7 }}>
-          {tapButton('QUIT', u * 1.6, u * 0.7, C.pink, C.white, () => {
+        <UiEntity
+          uiTransform={{ ...placeAt(L, px, 617, 6, 44, 44), flexDirection: 'column', justifyContent: 'center', alignItems: 'center', borderRadius: px(12), borderWidth: border(px, 2), borderColor: P.white }}
+          uiBackground={{ color: P.crimson }}
+          onMouseDown={() => {
             st.quitConfirm = true
-          })}
+          }}
+        >
+          {img(px, 'ic_close_w', undefined, undefined, 0.45)}
+          <Label value="QUIT" fontSize={fs(9)} color={C.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(12) }} />
         </UiEntity>
       ) : null}
 
@@ -145,34 +94,26 @@ export const MobileShootControls = () => {
           uiBackground={{ color: C.backdrop }}
         >
           <UiEntity
-            uiTransform={{
-              width: Math.min(W * 0.8, u * 6.5),
-              flexDirection: 'column',
-              alignItems: 'center',
-              padding: u * 0.3,
-              borderRadius: u * 0.3,
-              borderWidth: Math.max(2, u * 0.05),
-              borderColor: C.dark
-            }}
-            uiBackground={{ color: C.bg }}
+            uiTransform={{ width: px(300), flexDirection: 'column', alignItems: 'center', padding: px(14), borderRadius: px(16), borderWidth: border(px, 2), borderColor: P.white }}
+            uiBackground={{ color: P.navy }}
           >
-            <Label value="Leave this hole?" fontSize={u * 0.4} color={C.yellow} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: u * 0.6 }} />
+            <Label value="Leave this hole?" fontSize={fs(18)} color={C.yellow} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: px(26) }} />
             <Label
               value="You will lose the run and the shots played so far."
-              fontSize={u * 0.22}
+              fontSize={fs(12)}
               color={C.white}
               textAlign="middle-center"
               textWrap="wrap"
-              uiTransform={{ width: '100%', height: u * 0.8, margin: { top: u * 0.1 } }}
+              uiTransform={{ width: '100%', height: px(36), margin: { top: px(4) } }}
             />
-            <UiEntity uiTransform={{ flexDirection: 'row', margin: { top: u * 0.25 } }}>
-              {tapButton('STAY', u * 2, u * 0.8, C.white, C.dark, () => {
+            <UiEntity uiTransform={{ flexDirection: 'row', margin: { top: px(10) } }}>
+              {tapButton(px, fs, 'STAY', 120, 44, P.lavender, P.ink, () => {
                 st.quitConfirm = false
               })}
-              {tapButton('LEAVE', u * 2, u * 0.8, C.pink, C.white, () => {
+              {tapButton(px, fs, 'LEAVE', 120, 44, P.pink, C.white, () => {
                 st.quitConfirm = false
                 st.quit && st.quit()
-              }, { left: gap })}
+              }, { left: px(10) })}
             </UiEntity>
           </UiEntity>
         </UiEntity>

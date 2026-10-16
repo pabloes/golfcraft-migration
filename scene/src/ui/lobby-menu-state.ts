@@ -52,7 +52,9 @@ export const lobbyMenuState: {
   reopenAfterGame: boolean
   prizes: SeasonPrize[]
   prizesFetchedAt: number
-  // PRIZES: the Season's current top 10 (empty until fetched or on failure).
+  // PRIZES: the tab of ten prizes shown; null = the one holding the next prize.
+  prizesTab: number | null
+  // PRIZES and SEASON: the Season's current top 10 (empty until fetched or on failure).
   leaderboard: LeaderboardEntry[]
   leaderboardFetchedAt: number
   actions: {
@@ -72,6 +74,7 @@ export const lobbyMenuState: {
   reopenAfterGame: false,
   prizes: [],
   prizesFetchedAt: 0,
+  prizesTab: null,
   leaderboard: [],
   leaderboardFetchedAt: 0,
   actions: { playSeason: null, playWithFriends: null, friendsLabel: null, friendsAction: null }
@@ -148,7 +151,8 @@ export const showLobbyView = (view: LobbyMenuView) => {
   // WORKSHOP opens on the equipped club, on the page that holds it.
   lobbyMenuState.selectedClubTokenId = undefined
   lobbyMenuState.clubsPage = null
-  if (view === 'prizes') refreshLobbyLeaderboard()
+  lobbyMenuState.prizesTab = null
+  if (view === 'prizes' || view === 'season') refreshLobbyLeaderboard()
   // Progress moves while playing, so DAILY MISSIONS always re-reads it.
   if (view === 'daily') fetchDailyMissions().catch((err) => console.log('[lobby] daily missions refresh failed', err))
   clearPointerState()
