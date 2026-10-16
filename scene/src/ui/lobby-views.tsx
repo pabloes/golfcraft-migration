@@ -310,6 +310,7 @@ const ATTR_GLYPHS: Record<string, [string, number]> = { power: ['ic_bolt_w', 0.7
 const PIP_EMPTY = Color4.create(8 / 255, 18 / 255, 40 / 255, 0.45)
 const MATERIAL_NAMES: Record<string, string> = { IR: 'iron', ST: 'stone', WD: 'wood' }
 const SHORT = hex('#FF9A8A')
+const WARN_BG = Color4.create(1, 210 / 255, 31 / 255, 0.14)
 
 // MY CLUBS: two cards a page in the left column, with a pager under them.
 const CLUBS_PER_PAGE = 2
@@ -414,7 +415,7 @@ export const WorkshopView = () => {
           uiBackground={{ color: k < value ? ATTR_COLORS[attribute] : PIP_EMPTY }}
         />
       )),
-      text(px, fs, maxed ? 'Level 5 of 5' : `Level ${value} of 5`, 210, y + 70, 150, 14, 11, P.pale),
+      text(px, fs, maxed ? 'Level 5 of 5' : `Level ${value} of 5`, 210, y + 70, 120, 14, 11, P.pale),
       maxed
         ? box(px, `attr-max-${attribute}`, 376, y + 28, 108, 40, { color: P.green, radius: 12, border: 2, justify: 'center', align: 'center' }, [
             <Label value="MAXED" fontSize={fs(16)} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />
@@ -442,7 +443,17 @@ export const WorkshopView = () => {
                   },
                   [<Label value="+1 UPGRADE" fontSize={fs(16)} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />]
                 )
-              : text(px, fs, why, 376, y + 50, 108, 34, 11, enough ? P.pale : SHORT, 'middle-center', true)
+              : !upgradeAvailable
+                ? [
+                    // The club needs more XP: a yellow warning that says what to do.
+                    box(px, `attr-xp-${attribute}`, 344, y + 50, 140, 38, { color: WARN_BG, radius: 10, border: 2, borderColor: C.yellow }),
+                    box(px, `attr-xp-icon-${attribute}`, 351, y + 55, 14, 14, { color: C.yellow, radius: 7, justify: 'center', align: 'center' }, [
+                      <Label value="!" fontSize={fs(10)} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />
+                    ]),
+                    text(px, fs, 'Needs more club XP', 369, y + 54, 113, 16, 11, C.yellow),
+                    text(px, fs, 'To upgrade, play more!', 351, y + 71, 131, 14, 10, P.white)
+                  ]
+                : text(px, fs, why, 376, y + 50, 108, 34, 11, SHORT, 'middle-center', true)
           ]
     ]
   }
@@ -597,17 +608,17 @@ export const PrizesView = () => {
     ]
   }
 
-  // One leaderboard row: position, name, rank, points and the diamonds that
-  // position wins. Mine is pink. Without data the names and points read "—".
+  // One leaderboard row: position, name, points and the diamonds that
+  // position wins, with no rank per line, like the original panel. Mine is
+  // pink. Without data the names and points read "—".
   const boardRow = (i: number) => {
     const entry = board[i]
     const mine = !!entry && !!myPlayFabId && entry.playFabId === myPlayFabId
     return box(px, `top-${i}`, 882, 210 + i * 36, 326, 34, { color: mine ? P.pink : GOLD_ROW, radius: 10, align: 'center', padding: { left: px(8), right: px(8) } }, [
       <Label value={String(i + 1)} fontSize={fs(15)} color={P.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ width: px(24), height: px(34), flexShrink: 0 }} />,
-      <UiEntity uiTransform={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, height: px(34), overflow: 'hidden' }}>
+      <UiEntity uiTransform={{ width: px(182), height: px(34), flexShrink: 0, overflow: 'hidden' }}>
         <Label value={entry ? entry.name : '—'} fontSize={fs(14)} color={P.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ width: '100%', height: px(34) }} />
       </UiEntity>,
-      <UiEntity uiTransform={{ width: px(98), height: px(34), justifyContent: 'center', flexShrink: 0 }}>{entry ? rankChip(px, fs, tierOf(entry.points), 20, 10) : null}</UiEntity>,
       <Label value={entry ? String(entry.points) : '—'} fontSize={fs(14)} color={P.white} textAlign="middle-right" textWrap="nowrap" uiTransform={{ width: px(38), height: px(34), flexShrink: 0 }} />,
       <Label value={String(TOP10_PRIZES[i])} fontSize={fs(14)} color={P.white} textAlign="middle-right" textWrap="nowrap" uiTransform={{ width: px(40), height: px(34), margin: { left: px(4) }, flexShrink: 0 }} />,
       materialIcon(px, 'DM', 18, { left: px(4) })
