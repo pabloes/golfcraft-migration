@@ -21,3 +21,10 @@ yarn-error.log*
 *.p12
 *.keystore
 deploy/*.tar
+
+# Local runtime output of scripts/dev-up.sh (service logs, and exports such as
+# orphan-account lists that hold PlayFab IDs), the IDE's project folder, and the
+# Codex instruction stub.
+scripts/.dev-logs/
+.idea/
+AGENTS.md

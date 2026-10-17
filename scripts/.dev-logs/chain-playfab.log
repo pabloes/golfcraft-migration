@@ -1,6 +1,0 @@
-
-> chain-playfab@1.0.0 dev
-> PROD=false PORT=2568 ts-node --files index.ts
-
-TESTS_ENABLED false
-listening on PORT 2568
