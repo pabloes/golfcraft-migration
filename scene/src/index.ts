@@ -18,6 +18,7 @@ import { bootstrap } from './meta/bootstrap'
 import { setupUI } from './ui'
 import { startGameWindow } from './services/game-window'
 import { returnToMenuIfRequested } from './ui/lobby-menu-state'
+import { joinGameLobby } from './meta/game-lobby'
 
 // Mission-1 production flow:
 //   1. bootstrap() -> PlayFab LoginWithCustomID, get user, realm, Colyseus client
@@ -43,6 +44,9 @@ export async function main() {
     console.log('[main] bootstrap done')
     // Monthly game window (services/game-window.ts) for this wallet.
     startGameWindow(user.publicKey || user.userId)
+    // SDK6 joined the shared lobby room at login: attached NFT golf clubs,
+    // connected days, passive income (meta/game-lobby.ts). Not awaited.
+    joinGameLobby({ colyseus, user, PlayFabId, realm }).catch((err) => console.log('[main] game lobby failed', err))
 
     const spawnLobby = () => {
       console.log('[main] spawnLobby (building + golfclub board + NPC)')
