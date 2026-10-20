@@ -42,6 +42,8 @@ export const UI2: Record<string, [number, number]> = {
   ic_play_n: [24, 30],
   ic_play_w: [24, 30],
   ic_timer_w: [38, 44],
+  ic_zoom_in_w: [26, 26],
+  ic_zoom_out_w: [26, 26],
   logo: [206, 155],
   medal_0: [60, 60],
   medal_1: [60, 60],

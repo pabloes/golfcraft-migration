@@ -4,8 +4,9 @@
 // F / E / + / hand / jump cluster bottom-right):
 //   - bottom centre:  ^ v  < SHOOT >   (camera pitch, aim, shot)
 //   - top right:      QUIT, with a confirm dialog
-// Power + / - sit with the power column (game-hud.tsx). Hold buttons act like
-// a held key (release on up or when the finger leaves).
+//   - right column:   zoom in / out, left of the power column's + (game-hud.tsx)
+// Power + / - sit with the power column. Hold buttons act like a held key
+// (release on up or when the finger leaves).
 import ReactEcs, { Label, UiEntity } from '@dcl/sdk/react-ecs'
 
 import { isMobile } from '../services/platform'
@@ -14,10 +15,10 @@ import { fullLayout, scaler, type Layout, type Px } from './ui-scale'
 import { C } from './ui-theme'
 import { P, border, img, placeAt } from './ui2'
 
-const holdButton = (L: Layout, px: Px, key: string, x: number, content: any, onDown: () => void, onUp: () => void) => (
+const holdButton = (L: Layout, px: Px, key: string, x: number, content: any, onDown: () => void, onUp: () => void, y = 306, h = 44) => (
   <UiEntity
     key={key}
-    uiTransform={{ ...placeAt(L, px, x, 306, 44, 44), borderRadius: px(12), borderWidth: border(px, 2), borderColor: P.navyEdge, justifyContent: 'center', alignItems: 'center' }}
+    uiTransform={{ ...placeAt(L, px, x, y, 44, h), borderRadius: px(12), borderWidth: border(px, 2), borderColor: P.navyEdge, justifyContent: 'center', alignItems: 'center' }}
     uiBackground={{ color: P.navy }}
     onMouseDown={onDown}
     onMouseUp={onUp}
@@ -44,7 +45,7 @@ const tapButton = (px: Px, fs: Px, label: string, w: number, h: number, color: a
 export const MobileShootControls = () => {
   if (!isMobile()) return null
   const st = mobileShootState
-  if (!st.visible && !st.quit) return null
+  if (!st.visible && !st.quit && !st.zoomable) return null
   const L = fullLayout()
   const { px, fs } = scaler(L.scale)
 
@@ -54,9 +55,19 @@ export const MobileShootControls = () => {
   const pitch = (dir: -1 | 0 | 1) => () => {
     st.pitchHold = dir
   }
+  const zoom = (dir: -1 | 0 | 1) => () => {
+    st.zoomHold = dir
+  }
 
   return (
     <UiEntity uiTransform={{ width: '100%', height: '100%', positionType: 'absolute' }}>
+      {st.zoomable
+        ? [
+            holdButton(L, px, 'zoom-in', 524, img(px, 'ic_zoom_in_w', undefined, undefined, 0.85), zoom(-1), zoom(0), 58, 40),
+            holdButton(L, px, 'zoom-out', 572, img(px, 'ic_zoom_out_w', undefined, undefined, 0.85), zoom(1), zoom(0), 58, 40)
+          ]
+        : null}
+
       {st.visible
         ? [
             holdButton(L, px, 'pitch-up', 162, glyph(px, fs, '^'), pitch(1), pitch(0)),

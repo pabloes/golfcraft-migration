@@ -8,8 +8,9 @@
 //
 // A VirtualCamera takes no input from the explorer, so the scene reads it:
 //   - the pointer, from PrimaryPointerInfo on the root entity;
-//   - A/D to turn and W/S to zoom (the joystick on mobile), which reach the
-//     scene even while InputModifier keeps the avatar still.
+//   - A/D to turn and W/S to zoom, which reach the scene even while
+//     InputModifier keeps the avatar still (on mobile, the touch panel's
+//     arrows and zoom buttons, through mobileShootState).
 import {
   Entity,
   InputAction,
@@ -157,8 +158,8 @@ export const createBallOrbitCamera = (
     const mouse = pointerDelta()
     // The mobile touch panel's aim arrows count as A / D.
     const turn = pressed(InputAction.IA_RIGHT) - pressed(InputAction.IA_LEFT) + mobileShootState.aimHold
-    // W brings the camera in, S takes it out.
-    const zoom = pressed(InputAction.IA_BACKWARD) - pressed(InputAction.IA_FORWARD)
+    // W brings the camera in, S takes it out; so do the mobile zoom buttons.
+    const zoom = pressed(InputAction.IA_BACKWARD) - pressed(InputAction.IA_FORWARD) + mobileShootState.zoomHold
 
     targetYaw += mouse.x * ORBIT_MOUSE_SENSITIVITY + turn * ORBIT_KEY_SPEED * dt
     // Screen Y grows upwards in the desktop client, so pushing the mouse up
@@ -188,12 +189,15 @@ export const createBallOrbitCamera = (
     mode: InputModifier.Mode.Standard({ disableAll: true })
   })
   engine.addSystem(update)
+  mobileShootState.zoomable = true
 
   let released = false
   function release() {
     if (released) return
     released = true
     engine.removeSystem(update)
+    mobileShootState.zoomable = false
+    mobileShootState.zoomHold = 0
     if (MainCamera.getOrNull(engine.CameraEntity)?.virtualCameraEntity === camera) {
       MainCamera.deleteFrom(engine.CameraEntity)
     }
