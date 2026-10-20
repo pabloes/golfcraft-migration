@@ -77,6 +77,14 @@ export const formatUtc = (t: number) => {
   return `${DAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}, ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())} UTC`
 }
 
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+
+// "November 1, 00:00 UTC"
+export const formatOpeningDay = (t: number) => {
+  const d = new Date(t)
+  return `${MONTH_NAMES[d.getUTCMonth()]} ${d.getUTCDate()}, ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())} UTC`
+}
+
 // "18d 4h", "3h 12m", "5m"
 export const formatCountdown = (ms: number) => {
   const minutes = Math.max(0, Math.floor(ms / 60000))

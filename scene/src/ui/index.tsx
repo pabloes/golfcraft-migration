@@ -16,7 +16,7 @@ import { JoiningScreen, PartyScreen, HoleResultScreen, RunCompleteScreen } from 
 import { containLayout, scaler, isSmallCanvas } from './ui-scale'
 import { MobileShootControls } from './mobile-shoot-controls'
 import { isMobile } from '../services/platform'
-import { dismissGameClosedNotice, formatCountdown, formatUtc, gameWindowState, serverNow, showClosedNoticeOnce } from '../services/game-window'
+import { dismissGameClosedNotice, formatOpeningDay, gameWindowState, showClosedNoticeOnce } from '../services/game-window'
 import { C, pressable } from './ui-theme'
 import { P, img, border } from './ui2'
 
@@ -238,38 +238,13 @@ const GameClosedNotice = () => {
       >
         {img(px, 'rb_closed')}
         <Label
-          value="GolfCraft opens the first week of every month, from day 1 to day 7 (UTC)."
-          fontSize={fs(19)}
+          value={opensAt ? `GolfCraft opens ${formatOpeningDay(opensAt)}` : 'GolfCraft opens soon'}
+          fontSize={fs(28)}
           color={C.white}
           textAlign="middle-center"
           textWrap="wrap"
-          uiTransform={{ width: '100%', height: px(56), margin: { top: px(10) } }}
+          uiTransform={{ width: '100%', height: px(80), margin: { top: px(14) } }}
         />
-        <UiEntity
-          uiTransform={{
-            flexDirection: 'column',
-            alignItems: 'center',
-            margin: { top: px(16) },
-            padding: { top: px(14), bottom: px(14), left: px(36), right: px(36) },
-            borderRadius: px(20),
-            borderWidth: border(px, 4),
-            borderColor: P.white
-          }}
-          uiBackground={{ color: P.purple }}
-        >
-          <Label value="OPENS IN" fontSize={fs(16)} color={C.lilac} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(22) }} />
-          <Label
-            value={opensAt ? formatCountdown(opensAt - serverNow()) : 'soon'}
-            fontSize={fs(48)}
-            color={C.yellow}
-            textAlign="middle-center"
-            textWrap="nowrap"
-            uiTransform={{ height: px(60) }}
-          />
-          {opensAt ? (
-            <Label value={formatUtc(opensAt)} fontSize={fs(17)} color={C.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(24) }} />
-          ) : null}
-        </UiEntity>
         <UiEntity uiTransform={{ height: px(22) }} />
         {pressable(
           {

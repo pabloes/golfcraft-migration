@@ -149,7 +149,9 @@ export const box = (
 
 // The full-screen version of the dialog (lobby and workshop, page "Móvil ·
 // propuesta 2"): a navy background over the whole canvas, cropped to cover
-// it, and the 667x375 design box of fullLayout on top.
+// it, and the 667x375 design box of fullLayout on top. The background is at 90 %
+// opacity so the scene shows faintly behind it.
+const BG_FULL_TINT = Color4.create(1, 1, 1, 0.9)
 export const fullFrame = (L: Layout, children: Kids, after: any = null) => {
   const aspect = L.canvas.width / Math.max(1, L.canvas.height)
   const f = Math.min(1, aspect / (16 / 9))
@@ -159,7 +161,7 @@ export const fullFrame = (L: Layout, children: Kids, after: any = null) => {
   return (
     <UiEntity
       uiTransform={{ width: '100%', height: '100%', positionType: 'absolute' }}
-      uiBackground={{ texture: { src: src('bg_full') }, textureMode: 'stretch', uvs: [uL, vB, uL, 1 - vB, 1 - uL, 1 - vB, 1 - uL, vB] }}
+      uiBackground={{ texture: { src: src('bg_full') }, textureMode: 'stretch', uvs: [uL, vB, uL, 1 - vB, 1 - uL, 1 - vB, 1 - uL, vB], color: BG_FULL_TINT }}
     >
       <UiEntity uiTransform={{ positionType: 'absolute', position: { left: L.left, top: L.top }, width: L.panelW, height: L.panelH }}>{children}</UiEntity>
       {after}
