@@ -9,7 +9,8 @@ import { overlayState } from '../components/ui/overlay'
 import { centerPanelState, BANNER_SPRITES, showBanner } from './centerpanel-state'
 import { LobbyMenu, lobbyMenuInputSystem } from './lobby-menu'
 import { lobbyMenuState, openLobbyMenu, returnToMenuIfRequested } from './lobby-menu-state'
-import { MissionTimer, HoleStats, LiveRanking, PowerColumn, ControlsHelp, MapFooter, EndingBanner } from './game-hud'
+import * as phoneHud from './game-hud'
+import * as desktopHud from './game-hud-desktop'
 import { LobbyHud } from './lobby-hud'
 import { ATLAS, spriteUvs } from './sprites'
 import { JoiningScreen, PartyScreen, HoleResultScreen, RunCompleteScreen } from './season-screens'
@@ -23,37 +24,44 @@ import { P, img, border } from './ui2'
 // SDK6 game.ts called initializeIntroScreen() on startup. It used UICanvas +
 // UIImage from the legacy DCL UI; here we port the same flow to ReactEcs.
 
-const ui = () => (
-  <UiEntity uiTransform={{ width: '100%', height: '100%' }}>
-    <LobbyHud />
-    <MissionTimer />
-    <HoleStats />
-    <LiveRanking />
-    <PowerColumn />
-    <ControlsHelp />
-    <MobileShootControls />
-    <MapFooter />
-    <LobbyMenu />
-    <IntroScreen />
-    <BootErrorDialog />
-    <GameClosedNotice />
-    <NpcUtilsUi />
-    <Overlay />
-    {/* These three sit AFTER <Overlay /> on purpose: later siblings paint on
-        top, and all of them are meant to be read WHILE the screen is faded to
-        black. season-demo fades in before joining the room and only fades out
-        once the course is ready, so a wait screen rendered before the overlay
-        is invisible — the player just sees ~10s of black while the server picks
-        the 4 courses and queries the ghosts. Same for the between-round
-        scoreboard, which is shown before the fade-out. */}
-    <JoiningScreen />
-    <PartyScreen />
-    <HoleResultScreen />
-    <RunCompleteScreen />
-    <CenterPopup />
-    <EndingBanner />
-  </UiEntity>
-)
+// The menus share one layout on phones and desktop; the in-hole HUD does not:
+// phones get the full-screen grid, desktop a HUD anchored to the window edges.
+const ui = () => {
+  const mobile = isMobile()
+  const hud = mobile ? phoneHud : desktopHud
+  return (
+    <UiEntity uiTransform={{ width: '100%', height: '100%' }}>
+      <LobbyHud />
+      <hud.MissionTimer />
+      <hud.HoleStats />
+      <hud.LiveRanking />
+      <hud.PowerColumn />
+      {mobile ? null : <desktopHud.ControlsHelp />}
+      {mobile ? null : <desktopHud.RankPill />}
+      <MobileShootControls />
+      <hud.MapFooter />
+      <LobbyMenu />
+      <IntroScreen />
+      <BootErrorDialog />
+      <GameClosedNotice />
+      <NpcUtilsUi />
+      <Overlay />
+      {/* These three sit AFTER <Overlay /> on purpose: later siblings paint on
+          top, and all of them are meant to be read WHILE the screen is faded to
+          black. season-demo fades in before joining the room and only fades out
+          once the course is ready, so a wait screen rendered before the overlay
+          is invisible — the player just sees ~10s of black while the server picks
+          the 4 courses and queries the ghosts. Same for the between-round
+          scoreboard, which is shown before the fade-out. */}
+      <JoiningScreen />
+      <PartyScreen />
+      <HoleResultScreen />
+      <RunCompleteScreen />
+      <CenterPopup />
+      <hud.EndingBanner />
+    </UiEntity>
+  )
+}
 
 // Full-screen black fade overlay for the mission start/end cinematic. Driven by
 // overlayState (alpha 0..1) animated in components/ui/overlay.ts. Rendered last

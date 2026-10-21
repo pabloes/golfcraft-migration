@@ -1,9 +1,9 @@
-// In-hole HUD pieces after the "En el campo" board of the canvas page "Móvil ·
-// propuesta 2" (M2HUD.dc.html), on phones and desktop alike: the HOLE / TIME /
-// SHOTS boxes and the map name along the top, the live ranking on the left,
-// the power column top right, the "Ending in" banner top centre and, on
-// desktop, the controls help at the bottom (phones have the touch controls
-// there, mobile-shoot-controls.tsx). The centre stays clear for the course.
+// In-hole HUD on phones, after the "En el campo" board of the canvas page
+// "Móvil · propuesta 2" (M2HUD.dc.html): the HOLE / TIME / SHOTS boxes and the
+// map name along the top, the live ranking on the left, the power column top
+// right and the "Ending in" banner top centre; the touch controls sit at the
+// bottom (mobile-shoot-controls.tsx). The centre stays clear for the course.
+// Desktop has its own HUD, game-hud-desktop.tsx.
 //
 // Everything sits on the full-screen 667x375 grid of ui-scale.ts fullLayout,
 // which keeps the explorer's corners free. They read the same state the old
@@ -13,7 +13,7 @@ import { Color4 } from '@dcl/sdk/math'
 
 import { globalStore } from '../services/globalStore/globalStore'
 import { topbarState, formatTopBarTime } from './topbar-state'
-import { powerBarState, controlHintState } from './shoot-hud-state'
+import { powerBarState } from './shoot-hud-state'
 import { seasonClockState, seasonResultsState, seasonCountdownState, seasonHoleState, SeasonResultRow } from './season-hud-state'
 import { C, hex, mmss } from './ui-theme'
 import { P, border, initialAvatar, placeAt } from './ui2'
@@ -22,8 +22,6 @@ import { getTierFromSub } from '../../../common/utils'
 // @ts-ignore - season-tier-definitions has @ts-nocheck
 import { seasonTierDefinitions } from '../../../common/season-tier-definitions'
 import { fullLayout, scaler, type Layout, type Px } from './ui-scale'
-import { CAMERA_AIM_MODE } from '../config/controls'
-import { isMobile } from '../services/platform'
 import { mobileShootState } from './mobile-shoot-state'
 
 const HUD_BG = Color4.create(18 / 255, 22 / 255, 70 / 255, 0.88)
@@ -136,8 +134,8 @@ export const LiveRanking = () => {
 }
 
 // Shot power, top right: 10 segments (green up to 40, yellow to 70, red
-// above) with the value and the wobble note on their left. Phones get + above
-// and - below the bar; held, they act as a held E / F (mobile-shoot-state).
+// above) with the value and the wobble note on their left, + above and - below
+// the bar; held, they act as a held E / F (mobile-shoot-state).
 const powerHoldButton = (L: Layout, px: Px, fs: Px, key: string, y: number, label: string, dir: -1 | 1) => (
   <UiEntity
     key={key}
@@ -159,14 +157,13 @@ const powerHoldButton = (L: Layout, px: Px, fs: Px, key: string, y: number, labe
 
 export const PowerColumn = () => {
   if (!powerBarState.visible) return null
-  const mobile = isMobile()
   const L = fullLayout()
   const { px, fs } = scaler(L.scale)
   const power = Math.max(0, Math.min(100, powerBarState.power))
   const lit = Math.ceil(power / 10)
-  // Phones: the bar sits between the + and - buttons; desktop: the full column.
-  const barTop = mobile ? 102 : 70
-  const barH = mobile ? 80 : 130
+  // The bar sits between the + and - buttons.
+  const barTop = 102
+  const barH = 80
   const segH = (barH - 6 - 9) / 10
   const segments: ReactEcs.JSX.Element[] = []
   for (let i = 10; i >= 1; i--) {
@@ -177,84 +174,18 @@ export const PowerColumn = () => {
   const labelTop = barTop + barH / 2 - 44
   return (
     <UiEntity uiTransform={{ positionType: 'absolute', width: '100%', height: '100%' }}>
-      {mobile ? powerHoldButton(L, px, fs, 'power-up', 58, '+', 1) : null}
+      {powerHoldButton(L, px, fs, 'power-up', 58, '+', 1)}
       <UiEntity
         uiTransform={{ ...placeAt(L, px, 625, barTop, 28, barH), flexDirection: 'column', alignItems: 'center', padding: px(3), borderRadius: px(8), borderWidth: border(px, 2), borderColor: P.navyEdge }}
         uiBackground={{ color: HUD_BG }}
       >
         {segments}
       </UiEntity>
-      {mobile ? powerHoldButton(L, px, fs, 'power-down', 186, '−', -1) : null}
+      {powerHoldButton(L, px, fs, 'power-down', 186, '−', -1)}
       <UiEntity uiTransform={{ ...placeAt(L, px, 532, labelTop, 86, 88), flexDirection: 'column', alignItems: 'flex-end' }}>
         <Label value="POWER" fontSize={fs(10)} color={C.white} textAlign="middle-right" uiTransform={{ height: px(14) }} textWrap="nowrap" />
         <Label value={`${Math.round(power)}%`} fontSize={fs(24)} color={C.yellow} textAlign="middle-right" uiTransform={{ height: px(30) }} textWrap="nowrap" />
         <Label value="Above 40% the shot can wobble" fontSize={fs(10)} color={C.white} textAlign="top-right" uiTransform={{ width: px(86), height: px(40) }} textWrap="wrap" />
-      </UiEntity>
-    </UiEntity>
-  )
-}
-
-// Controls help, desktop only: one key cap per input and what it does, in the
-// bottom-centre slot that phones give to the touch controls.
-const keyCap = (px: Px, fs: Px, text: string, wide: boolean, accent = false) => (
-  <UiEntity
-    uiTransform={{
-      width: wide ? undefined : px(18),
-      height: px(18),
-      padding: wide ? { left: px(5), right: px(5) } : undefined,
-      margin: { right: px(2) },
-      borderRadius: px(5),
-      borderWidth: border(px, 1.5),
-      borderColor: accent ? P.yellowShadow : P.lavenderShadow,
-      justifyContent: 'center',
-      alignItems: 'center'
-    }}
-    uiBackground={{ color: accent ? C.yellow : C.white }}
-  >
-    <Label value={text} fontSize={fs(wide ? 9 : 10)} color={P.ink} textAlign="middle-center" uiTransform={{ height: px(16) }} textWrap="nowrap" />
-  </UiEntity>
-)
-
-const helpItem = (px: Px, fs: Px, keys: ReactEcs.JSX.Element[], what: string) => (
-  <UiEntity uiTransform={{ height: px(20), flexDirection: 'row', alignItems: 'center', margin: { left: px(5), right: px(5) } }}>
-    {keys}
-    <Label value={what} fontSize={fs(11)} color={C.white} textAlign="middle-left" uiTransform={{ height: px(20), margin: { left: px(3) } }} textWrap="nowrap" />
-  </UiEntity>
-)
-
-export const ControlsHelp = () => {
-  // Keyboard and mouse hints: nothing to say on a phone. Shown while the
-  // shot control is up, and also while a hole is starting (the Season's
-  // "Starting in..." countdown, or a tutorial mission loading in), so the
-  // player can read the keys before the first shot.
-  const starting = (seasonCountdownState.visible && /^starting/i.test(seasonCountdownState.text)) || !!globalStore.game.getState().starting
-  if ((!controlHintState.visible && !starting) || isMobile()) return null
-  const L = fullLayout()
-  const { px, fs } = scaler(L.scale)
-  const rows: ReactEcs.JSX.Element[][] = []
-  if (CAMERA_AIM_MODE) {
-    rows.push([
-      helpItem(px, fs, [keyCap(px, fs, 'MOUSE', true)], 'Orbit'),
-      helpItem(px, fs, [keyCap(px, fs, 'A', false), keyCap(px, fs, 'D', false)], 'Turn'),
-      helpItem(px, fs, [keyCap(px, fs, 'W', false), keyCap(px, fs, 'S', false)], 'Zoom')
-    ])
-    rows.push([helpItem(px, fs, [keyCap(px, fs, 'E', false), keyCap(px, fs, 'F', false)], 'Power'), helpItem(px, fs, [keyCap(px, fs, 'CLICK', true, true)], 'Shoot')])
-  } else if (controlHintState.step === 0) {
-    rows.push([helpItem(px, fs, [keyCap(px, fs, 'E', false), keyCap(px, fs, 'F', false)], 'Rotate'), helpItem(px, fs, [keyCap(px, fs, 'CLICK', true, true)], 'Set direction')])
-  } else {
-    rows.push([helpItem(px, fs, [keyCap(px, fs, 'E', false), keyCap(px, fs, 'F', false)], 'Power'), helpItem(px, fs, [keyCap(px, fs, 'CLICK', true, true)], 'Shoot')])
-  }
-  return (
-    <UiEntity uiTransform={{ ...placeAt(L, px, 152, 300, 340, 56), justifyContent: 'center', alignItems: 'flex-end' }}>
-      <UiEntity
-        uiTransform={{ flexDirection: 'column', alignItems: 'center', padding: { top: px(4), bottom: px(4), left: px(4), right: px(4) }, borderRadius: px(12), borderWidth: border(px, 2), borderColor: P.white }}
-        uiBackground={{ color: P.navy }}
-      >
-        {rows.map((items, i) => (
-          <UiEntity key={i} uiTransform={{ flexDirection: 'row', alignItems: 'center', margin: { top: i ? px(2) : 0 } }}>
-            {items}
-          </UiEntity>
-        ))}
       </UiEntity>
     </UiEntity>
   )
