@@ -1,11 +1,12 @@
 // The lobby dialog's sub-views, after the "Móvil · propuesta 2" page of the
 // GolfCraft UI canvas, on phones and desktop alike: SEASON (M2Season.dc.html),
-// TUTORIAL (M2Story), WORKSHOP (M2Workshop), PRIZES (M2Prizes) and DAILY
-// MISSIONS (M2Daily). Full screen like the lobby view, with back, the screen's
-// ribbon and close on top. They only read the scene's state and call the
-// handlers the 3D lobby already uses.
+// TUTORIAL (M2Story), WORKSHOP (M2Workshop), PRIZES (M2Prizes), DAILY
+// MISSIONS (M2Daily) and MORE GAMES (page "Más juegos", OGList). Full screen
+// like the lobby view, with back, the screen's ribbon and close on top. They
+// only read the scene's state and call the handlers the 3D lobby already uses.
 import ReactEcs, { Label, UiEntity } from '@dcl/sdk/react-ecs'
 import { Color4 } from '@dcl/sdk/math'
+import { changeRealm } from '~system/RestrictedActions'
 
 import { globalStore } from '../services/globalStore/globalStore'
 import { lobbyHudState, DailyMission } from './lobby-hud-state'
@@ -13,8 +14,9 @@ import { lobbyMenuState, showLobbyView, closeLobbyMenu, SeasonPrize, markStarted
 import { C, hex, fmt, shortName, materialIcon } from './ui-theme'
 import { fullLayout, scaler, type Px } from './ui-scale'
 import {
-  P, at, img, imgW, text, box, fullFrame, button2, squareButton, sideCard, nextPrizeStrip, yellowTag, resIcon, rankBadge, border, energyChip
+  P, at, img, imgW, imgBox, text, box, fullFrame, button2, squareButton, sideCard, nextPrizeStrip, yellowTag, resIcon, rankBadge, border, energyChip
 } from './ui2'
+import { isMobile } from '../services/platform'
 import { talkToNpc } from '../components/lobby/npc-storymode/npc-storymode'
 import { getGolfclubCollection, selectGolfclub, upgradeGolfclubAttribute } from '../components/lobby/lobby-training'
 import { BoardGolfclub } from '../components/lobby/golfclub-screen/golfclub-screen-ui'
@@ -806,5 +808,68 @@ export const DailyMissionsView = () => {
     )),
     toEarnCodes.length ? null : text(px, fs, data ? 'Everything earned today!' : 'Loading...', 508, 86, 145, 30, 11, hex('#E6DAFF'), 'middle-left', true),
     text(px, fs, 'Missions renew every 24 hours.', 508, 204, 147, 14, 10, hex('#E6DAFF'))
+  ])
+}
+
+// ---------------------------------------------------------------------------
+// MORE GAMES (canvas page "Más juegos", OGList.dc.html)
+
+// Other Decentraland games by the team. GO leaves GolfCraft for the game's
+// World through changeRealm, which the explorer confirms with the player. A
+// game that only runs on desktop shows a red notice on phones instead of GO.
+const ROADSTER = { name: 'ELON ROADSTER RACE', realm: 'lowpol.dcl.eth', desktopOnly: true }
+const GAME_CARD_BG = hex('#08101F')
+const RACING_TAG = hex('#3FE0FF')
+const GAME_TAGLINE = hex('#B9E9F5')
+const CHIP_GLASS = Color4.create(1, 1, 1, 0.12)
+const DESKTOP_ONLY = hex('#FF5A5A')
+const SOON_EDGE = hex('#5B67C9')
+const SOON_FILL = Color4.create(18 / 255, 22 / 255, 70 / 255, 0.6)
+
+const goToGame = (realm: string, name: string) => {
+  closeLobbyMenu()
+  changeRealm({ realm, message: `Go to ${name}?` }).catch((err) => console.log('[lobby] changeRealm failed', realm, err))
+}
+
+export const MoreGamesView = () => {
+  const L = fullLayout()
+  const { px, fs } = scaler(L.scale)
+  const playable = !(ROADSTER.desktopOnly && isMobile())
+  return fullFrame(L, [
+    ...fullHeader(px, 'rb_more_games'),
+
+    box(px, 'games-about', 6, 58, 140, 188, { color: P.navyDeep, radius: 14, border: 2, borderColor: P.navyEdge }),
+    text(px, fs, 'MADE BY THE GOLFCRAFT TEAM', 16, 68, 120, 34, 12, C.yellow, 'middle-left', true),
+    text(px, fs, 'Other Decentraland games we built. Your GolfCraft progress stays here.', 16, 106, 120, 60, 11, P.pale, 'middle-left', true),
+    text(px, fs, 'Decentraland asks you to confirm before you travel.', 16, 196, 120, 40, 10, P.pale, 'middle-left', true),
+
+    box(px, 'game-roadster', 152, 58, 340, 236, { color: GAME_CARD_BG, radius: 16, border: 3, borderColor: P.white }),
+    imgBox(px, 'art_roadster', 155, 61, 334, 150),
+    box(px, 'game-roadster-tag', 161, 67, 58, 18, { color: RACING_TAG, radius: 9, justify: 'center', align: 'center' }, [
+      <Label value="RACING" fontSize={fs(10)} color={GAME_CARD_BG} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />
+    ]),
+    text(px, fs, ROADSTER.name, 162, 216, 320, 22, 17),
+    text(px, fs, 'Stunt racing · ramps · thrusters', 162, 238, 220, 16, 11, GAME_TAGLINE),
+    box(px, 'game-roadster-world', 162, 262, 128, 18, { color: CHIP_GLASS, radius: 9, justify: 'center', align: 'center' }, [
+      <Label value={`World · ${ROADSTER.realm}`} fontSize={fs(10)} color={P.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />
+    ]),
+    box(px, 'game-roadster-free', 294, 262, 40, 18, { color: P.green, radius: 9, justify: 'center', align: 'center' }, [
+      <Label value="Free" fontSize={fs(10)} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />
+    ]),
+    playable
+      ? button2(
+          px,
+          { id: 'game-roadster-go', x: 390, y: 244, w: 92, h: 38, color: C.yellow, radius: 12, shadow: 4, shadowColor: P.yellowShadow, onClick: () => goToGame(ROADSTER.realm, ROADSTER.name) },
+          [
+            <Label value="GO" fontSize={fs(18)} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(24) }} />,
+            img(px, 'ic_play_n', undefined, undefined, 14 / imgW('ic_play_n'))
+          ]
+        )
+      : text(px, fs, 'ONLY PLAYABLE IN DESKTOP', 340, 244, 142, 38, 12, DESKTOP_ONLY, 'middle-right', true),
+
+    box(px, 'games-soon', 498, 58, 163, 168, { color: SOON_FILL, radius: 14, border: 2, borderColor: SOON_EDGE }),
+    img(px, 'ic_gamepad_w', 498 + (163 - 30) / 2, 96, 30 / imgW('ic_gamepad_w'), SOON_EDGE),
+    text(px, fs, 'MORE SOON', 498, 128, 163, 20, 15, P.pale, 'middle-center'),
+    text(px, fs, 'The next game shows up here', 512, 150, 135, 30, 10, P.pale, 'middle-center', true)
   ])
 }

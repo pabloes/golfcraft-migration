@@ -35,7 +35,7 @@ export type LeaderboardEntry = {
   points: number
 }
 
-export type LobbyMenuView = 'lobby' | 'season' | 'tutorial' | 'workshop' | 'prizes' | 'daily'
+export type LobbyMenuView = 'lobby' | 'season' | 'tutorial' | 'workshop' | 'prizes' | 'daily' | 'games'
 
 export const lobbyMenuState: {
   visible: boolean

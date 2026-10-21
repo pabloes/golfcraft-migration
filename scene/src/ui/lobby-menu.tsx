@@ -19,7 +19,7 @@ import { getPlayer } from '@dcl/sdk/players'
 import { globalStore } from '../services/globalStore/globalStore'
 import { lobbyHudState } from './lobby-hud-state'
 import { lobbyMenuState, closeOrBack, showLobbyView, nextSeasonPrize, seasonPlayState } from './lobby-menu-state'
-import { TutorialView, WorkshopView, PrizesView, DailyMissionsView, SeasonView } from './lobby-views'
+import { TutorialView, WorkshopView, PrizesView, DailyMissionsView, SeasonView, MoreGamesView } from './lobby-views'
 import { C, hex, fmt, materialIcon } from './ui-theme'
 import { fullLayout, scaler, type Px } from './ui-scale'
 import { P, at, img, imgW, imgBox, text, box, fullFrame, button2, imageButton, squareButton, sideCard, nextPrizeStrip, resIcon, rankBadge, border, energyChip } from './ui2'
@@ -50,10 +50,13 @@ const SOON_TEXT = Color4.create(201 / 255, 207 / 255, 1, 0.8)
 // keeps their buttons, so they show as "soon".
 const SOON = [
   { icon: 'ic_flag_w', title: 'CUSTOM' },
-  { icon: 'ic_people_w', title: 'COMMUNITY' },
   { icon: 'ic_map_w', title: 'MY MAPS' },
   { icon: 'ic_cart_w', title: 'SHOP' }
 ]
+// MORE GAMES, the last slot of that row (canvas page "Más juegos", OGMainA).
+const MORE_GAMES = hex('#FF8A1F')
+const MORE_GAMES_SHADOW = hex('#A9480A')
+const NEW_TAG = hex('#2BD9C6')
 
 // 155,100 -> 155K, 8,717 -> 8.7K: the lobby only has room for short amounts
 // (the workshop shows the exact ones).
@@ -72,6 +75,7 @@ export const LobbyMenu = () => {
   if (lobbyMenuState.view === 'workshop') return <WorkshopView />
   if (lobbyMenuState.view === 'prizes') return <PrizesView />
   if (lobbyMenuState.view === 'daily') return <DailyMissionsView />
+  if (lobbyMenuState.view === 'games') return <MoreGamesView />
 
   const L = fullLayout()
   const { px, fs } = scaler(L.scale)
@@ -250,6 +254,20 @@ export const LobbyMenu = () => {
       ])
     ]
   })
+  const moreX = 152 + SOON.length * 86.5
+  const moreGames = [
+    button2(
+      px,
+      { id: 'more-games', x: moreX, y: 300, w: 80.5, h: 50, color: MORE_GAMES, radius: 12, border: 2, borderColor: P.white, shadow: 4, shadowColor: MORE_GAMES_SHADOW, row: false, onClick: () => showLobbyView('games') },
+      [
+        img(px, 'ic_gamepad_w', undefined, undefined, 20 / imgW('ic_gamepad_w')),
+        <Label value="MORE GAMES" fontSize={fs(11)} color={P.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(16), margin: { top: px(3) } }} />
+      ]
+    ),
+    box(px, 'more-games-tag', moreX + 80.5 - 3 - 30, 293, 30, 14, { color: NEW_TAG, radius: 6, justify: 'center', align: 'center' }, [
+      <Label value="NEW" fontSize={fs(9)} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />
+    ])
+  ]
 
   // ---------------------------------------------------------- right cards
   const cards = [
@@ -277,7 +295,7 @@ export const LobbyMenu = () => {
   // explorer's buttons and the X does it.
   const hint = isMobile() ? null : text(px, fs, 'Press E or F to close', 498, 338, 163, 16, 11, P.pale, 'middle-right')
 
-  return fullFrame(L, [...top, ...left, ...season, ...soon, ...cards, hint])
+  return fullFrame(L, [...top, ...left, ...season, ...soon, ...moreGames, ...cards, hint])
 }
 
 // Resource chip of the top bar: the game's icon and the amount.
