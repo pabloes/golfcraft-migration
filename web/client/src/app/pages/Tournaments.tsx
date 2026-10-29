@@ -2,13 +2,13 @@ import React, { useState, useEffect } from "react";
 import {Link} from "react-router-dom";
 import "./MyLand.scss"
 
-import {resolveFetch, resolvePost} from '../../lib/http';
+import {resolvePost} from '../../lib/http';
 import {
     AvatarFace,
     Header, Pagination,
     Table
 } from "decentraland-ui";
-import {getAvatars} from "../../lib/avatars";
+import {fetchAvatars, getAvatars} from "../../lib/avatars";
 import {useLocalStorage} from "../hooks/use-localstorage";
 
 const PAGE_SIZE = 10;
@@ -39,15 +39,8 @@ export const Tournaments = () => {
                 return data || {results:[],total:0};
             })
             setTournaments(tourneys);
-            const organizerAddresses:string[] = Array.from(new Set(tourneys.results.map(t=>t.organizer)));
-
-            let i = organizerAddresses.length;
-            while(i--){
-                if(!avatars[organizerAddresses[i]]){
-                    const profile = await resolveFetch(`https://peer-lb.decentraland.org/lambdas/profiles?id=${organizerAddresses[i]}`);
-                    avatars[organizerAddresses[i]] = profile[0].avatars[0];
-                }
-            }
+            const organizerAddresses:string[] = Array.from(new Set((tourneys.results || []).map(t=>t.organizer)));
+            await fetchAvatars(organizerAddresses);
             setAvatars(avatars);
             setOrganizers(avatars);
             setLoading(false);

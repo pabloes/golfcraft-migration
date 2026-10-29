@@ -18,8 +18,7 @@ import {ViewTournament} from "./pages/ViewTournament";
 import {Tournaments} from "./pages/Tournaments";
 import {RequireWeb3Wallet} from "./components/RequireMetamask";
 import {AppContextProvider} from "./AppContext";
-import {getAvatars} from "../lib/avatars";
-import {resolveFetch} from "../lib/http";
+import {fetchAvatars, getAvatars} from "../lib/avatars";
 import {useLocalStorage} from "./hooks/use-localstorage";
 import {BuilderContest} from "./pages/BuilderContest";
 import {MyCourses} from "./pages/MyCourses";
@@ -40,9 +39,8 @@ export const AppView = () => {
             await ethereum.request({ method: 'eth_requestAccounts' });//to connect
         }
         const {selectedAddress} = ethereum;
-        const profile = avatars[selectedAddress] || await resolveFetch(`https://peer-lb.decentraland.org/lambdas/profiles?id=${selectedAddress}`).then(r=>{
-            return r?.length && r[0].avatars?.length && r[0].avatars[0];
-        });
+        //a scratch store, so the check below still sees a new profile and saves it
+        const profile = avatars[selectedAddress] || (await fetchAvatars([selectedAddress], {}))[selectedAddress];
         if(!avatars[selectedAddress] && profile){
             avatars[selectedAddress] = profile;
             try{

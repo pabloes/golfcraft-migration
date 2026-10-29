@@ -50,6 +50,8 @@ export const Header = () => {
                     <Menu.Item><Link to="">Home</Link></Menu.Item>
                     <Menu.Item><Link to="tournaments">tournaments</Link></Menu.Item>
                     <Menu.Item><Link to="create-tournament">create tournament</Link></Menu.Item>
+                    {/* a plain link: /stats is served by the web API, not a route of this app */}
+                    <Menu.Item><a href="/stats">stats</a></Menu.Item>
                     <Menu.Item><a href="https://discord.com/invite/2tshKm6UzJ">DISCORD</a></Menu.Item>
                     <Menu.Item><a href="https://twitter.com/GolfcraftGame">TWITTER</a></Menu.Item>
             </>

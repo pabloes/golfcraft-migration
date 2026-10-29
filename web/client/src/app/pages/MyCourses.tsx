@@ -2,13 +2,13 @@ import React, {useState, useEffect, useContext} from "react";
 import {Link} from "react-router-dom";
 import "./MyLand.scss"
 
-import {resolveFetch, resolvePost} from '../../lib/http';
+import {resolvePost} from '../../lib/http';
 import {
     AvatarFace,
     Header, Pagination,
     Table
 } from "decentraland-ui";
-import {getAvatars} from "../../lib/avatars";
+import {fetchAvatars, getAvatars} from "../../lib/avatars";
 import {useLocalStorage} from "../hooks/use-localstorage";
 import {AppContext} from "../AppContext";
 import {serializeRecipe} from "../../../../../common/utils";
@@ -37,14 +37,7 @@ export const MyCourses = () => {
             console.log(courses)
             setCourses(courses);
             const organizerAddresses:string[] = Array.from(new Set(courses.map(t=>t.createdBy)));
-
-            let i = organizerAddresses.length;
-            while(i--){
-                if(!avatars[organizerAddresses[i]]){
-                    const profile = await resolveFetch(`https://peer-lb.decentraland.org/lambdas/profiles?id=${organizerAddresses[i]}`);
-                    avatars[organizerAddresses[i]] = profile[0].avatars[0];
-                }
-            }
+            await fetchAvatars(organizerAddresses);
             setAvatars(avatars);
             setLoading(false);
         })();
