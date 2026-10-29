@@ -1,0 +1,32 @@
+<div class="gc-account" data-account>
+  <div class="gc-account-head">
+    <span class="gc-account-name" data-name></span>
+    <span class="gc-account-line" data-line></span>
+  </div>
+  <section class="gc-account-save" data-section="save" hidden>
+    <p class="gc-account-save-text">{{saveText}}</p>
+  </section>
+  <section class="gc-account-actions" data-section="actions">
+    <div class="gc-account-slot" data-slot="link-wallet"></div>
+    <div class="gc-account-slot" data-slot="link-walletconnect"></div>
+    <div class="gc-account-slot" data-slot="add-email"></div>
+    <div class="gc-account-slot gc-account-google" data-slot="add-google"></div>
+    <div class="gc-account-slot" data-slot="logout"></div>
+  </section>
+  <section class="gc-account-form" data-section="email" hidden>
+    <div class="gc-account-slot" data-slot="email-address"></div>
+    <div class="gc-account-slot" data-slot="email-password"></div>
+    <div class="gc-account-row">
+      <div class="gc-account-slot gc-account-grow" data-slot="email-submit"></div>
+      <div class="gc-account-slot" data-slot="email-cancel"></div>
+    </div>
+  </section>
+  <section class="gc-account-conflict" data-section="conflict" hidden>
+    <p class="gc-account-conflict-text" data-conflict-text></p>
+    <div class="gc-account-row">
+      <div class="gc-account-slot gc-account-grow" data-slot="conflict-continue"></div>
+      <div class="gc-account-slot" data-slot="conflict-cancel"></div>
+    </div>
+  </section>
+  <p class="gc-account-status" data-status></p>
+</div>

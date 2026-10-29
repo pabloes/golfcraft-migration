@@ -1,0 +1,126 @@
+/* GolfCraft login screen: a full-screen backdrop with one card, phone first. */
+.gc-login {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  overflow: auto;
+  background: rgba(8, 10, 20, 0.86);
+  color: #e8eaed;
+  font-family: 'Inter', sans-serif;
+  pointer-events: auto;
+}
+
+.gc-login-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 360px;
+  padding: 22px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  background: #2a2d44;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.gc-login-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: center;
+}
+
+.gc-login-title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.gc-login-subtitle {
+  margin: 0;
+  font-size: 13px;
+  color: #9aa0ad;
+}
+
+.gc-login-methods,
+.gc-login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.gc-login-slot:empty {
+  display: none;
+}
+
+.gc-login-slot > * {
+  width: 100%;
+}
+
+.gc-login-slot .ui-button {
+  width: 100%;
+  justify-content: center;
+}
+
+.gc-login-google {
+  display: flex;
+  justify-content: center;
+}
+
+.gc-login-row {
+  display: flex;
+  gap: 10px;
+}
+
+.gc-login-grow {
+  flex: 1 1 auto;
+}
+
+.gc-login-links {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.gc-login-link {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 2px 0;
+  color: #8ab4ff;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.gc-login-link:hover {
+  text-decoration: underline;
+}
+
+.gc-login-status {
+  min-height: 18px;
+  margin: 0;
+  font-size: 13px;
+  color: #9aa0ad;
+  text-align: center;
+}
+
+.gc-login-status[data-error='true'] {
+  color: #ff8a80;
+}
+
+.gc-login-note {
+  margin: 0;
+  font-size: 11px;
+  color: #6f7585;
+  text-align: center;
+}
+
+.gc-login [hidden] {
+  display: none !important;
+}

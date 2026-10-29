@@ -1,0 +1,30 @@
+<div class="gc-login" data-login>
+  <div class="gc-login-card">
+    <div class="gc-login-head">
+      <h1 class="gc-login-title">{{title}}</h1>
+      <p class="gc-login-subtitle" data-subtitle>{{subtitle}}</p>
+    </div>
+    <section class="gc-login-methods" data-section="methods">
+      <div class="gc-login-slot" data-slot="wallet"></div>
+      <div class="gc-login-slot" data-slot="walletconnect"></div>
+      <div class="gc-login-slot gc-login-google" data-slot="google"></div>
+      <div class="gc-login-slot" data-slot="email"></div>
+      <div class="gc-login-slot" data-slot="guest"></div>
+    </section>
+    <section class="gc-login-form" data-section="email" hidden>
+      <div class="gc-login-slot" data-slot="email-name"></div>
+      <div class="gc-login-slot" data-slot="email-address"></div>
+      <div class="gc-login-slot" data-slot="email-password"></div>
+      <div class="gc-login-row">
+        <div class="gc-login-slot gc-login-grow" data-slot="email-submit"></div>
+        <div class="gc-login-slot" data-slot="email-back"></div>
+      </div>
+      <div class="gc-login-links">
+        <button type="button" class="gc-login-link" data-action="toggle-register">Create an account</button>
+        <button type="button" class="gc-login-link" data-action="recover">Forgot password?</button>
+      </div>
+    </section>
+    <p class="gc-login-status" data-status></p>
+    <p class="gc-login-note">{{note}}</p>
+  </div>
+</div>

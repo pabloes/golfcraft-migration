@@ -1,0 +1,28 @@
+{
+  "extends": "./.genesys/sdk/tsconfig.json",
+  "compilerOptions": {
+    // Add your custom TypeScript compiler options here
+    // These will override or extend the SDK base configuration
+
+    // GolfCraft: the client imports code shared with the Decentraland scene and
+    // the server by relative path (../common, ../scene/golfplay, ../server/rooms,
+    // ../lib). The SDK base pins rootDir to studio/, which rejects them (TS6059).
+    "rootDir": "..",
+    // Type resolution only (tsc). The Studio bundles with esbuild, which ignores
+    // these and resolves each shared file's bare imports from its own tree.
+    // cannon has no types: it is declared in types/cannon.d.ts.
+    // colyseus.js 0.14's "exports" map has no types entry (TS7016).
+    "paths": {
+      "jsep": ["./node_modules/jsep"],
+      "colyseus.js": ["./node_modules/colyseus.js/lib/index.d.ts"]
+    }
+  },
+  // Base include (SDK) plus types/ for the ambient declarations.
+  "include": [
+    "src/**/*",
+    "scripts/**/*",
+    "vite.config.ts",
+    "packs/*/src/**/*",
+    "types/**/*"
+  ]
+}
