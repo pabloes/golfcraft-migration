@@ -16,6 +16,7 @@ import { EVENT } from "../../scene/golfplay/src/gameplay-handlers/handler-def";
 import MESSAGE from "./mesages";
 import { sleep } from "../../common/utils";
 import fetch from "cross-fetch";
+import {withoutSecrets} from "../../common/redact";
 
 var fs = require("fs");
 if(!fs.existsSync(`shoots.log`)){
@@ -164,9 +165,9 @@ export class CompetitionGroupRoom extends Room<CompetitionGroupState> {
         promisify(PlayFabServer.UpdateUserData)({
                     PlayFabId,
                     Data:{
-                        clientInfo:JSON.stringify(clientInfo)
+                        clientInfo:JSON.stringify(withoutSecrets(clientInfo))
                     }
-        }).then(()=>{},(err)=>{console.log("error saving clientInfo",PlayFabId,clientInfo,err)});
+        }).then(()=>{},(err)=>{console.log("error saving clientInfo",PlayFabId,withoutSecrets(clientInfo),err)});
         this.golfPlay = await creatServerGolfPlay({
             gameDefinition:<GameDefinition>this.gameDefinition,
             courseDefinition:this.courseDefinition,

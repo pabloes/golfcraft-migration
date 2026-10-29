@@ -249,6 +249,26 @@ model wearables_collections {
   name    String? @db.VarChar(45)
 }
 
+//one row per wallet and UTC day that logged in to the scene (golfcraftgame.com/stats);
+//created at web startup by server/stats with CREATE TABLE IF NOT EXISTS
+model daily_visit {
+  day      DateTime  @db.Date
+  address  String    @db.VarChar(45)
+  //UTC time of the last visit that day; NULL in rows from before it existed
+  lastSeen DateTime? @db.DateTime(0)
+
+  @@id([day, address])
+}
+
+//the same for guests (no wallet), reported by the scene through /api/record-visit
+model daily_guest_visit {
+  day      DateTime  @db.Date
+  address  String    @db.VarChar(45)
+  lastSeen DateTime? @db.DateTime(0)
+
+  @@id([day, address])
+}
+
 model recorded_game {
   ID            BigInt    @id @unique(map: "ID_UNIQUE") @default(autoincrement()) @db.UnsignedBigInt
   address       String?   @db.VarChar(45)

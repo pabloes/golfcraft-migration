@@ -1,3 +1,7 @@
+//first: captures every log line printed after it (GET /api/_logs)
+import {logsHandler} from "../../common/log-buffer";
+//before handleProcessExit(): its handlers print errors through it
+import {redactedMessage, redactUrls} from "../../common/redact";
 import {coursesApi} from "./courses/api";
 handleProcessExit();
 require('dotenv').config();
@@ -9,6 +13,8 @@ import fetch from "cross-fetch";
 import {PlayFabServer} from "playfab-sdk";
 import {PrismaClient} from "@prisma/client";
 import {dailyMissionsApi} from "./daily-missions";
+import {statsApi} from "./stats";
+import {authApi} from "./auth";
 import {raffle} from "./raffle/raffle";
 import {promisify} from "util";
 import {deserializeRecipe, getCatFromTier, getPointsToTier, getTierFromSub} from "../../common/utils";
@@ -18,6 +24,7 @@ import {textImageApi} from "./text-image/text-image";
 import {seasonsApi} from "./seasons";
 import {runChecks} from "../../chain-playfab/security/securityChecks";
 import * as dcl from 'decentraland-crypto-middleware';
+import {getAllowedFindArgs} from "./prisma-read-allow-list";
 //handleProcessExit();
 
 const fallback = require("express-history-api-fallback");
@@ -37,6 +44,7 @@ const GOLF_API_KEY = process.env.GOLF_API_KEY;
 const port = Number(process.env.PORT || 2569) + Number(process.env.NODE_APP_INSTANCE || 0);
 const app = express();
 const router = express.Router();
+router.get("/api/_logs", logsHandler);
 const prisma = new PrismaClient();
 const whitelist = ['https://play.decentraland.org', 'https://decentraland.org'];
 const corsOptions = {
@@ -85,12 +93,16 @@ if (process.env.PROD && !process.env.BRIDGE_URL) {
 }
 router.use("/bridge", (req, res) => {
     const target = new URL(BRIDGE_URL);
+    //no cookie: the AdminJS session must not reach the bridge (authorization
+    //stays, /bridge/_logs needs it)
+    const headers = {...req.headers, host: target.host};
+    delete headers.cookie;
     const proxyReq = http.request({
         host: target.hostname,
         port: target.port || 80,
         path: "/bridge" + req.url,//express strips the mount path from req.url
         method: req.method,
-        headers: {...req.headers, host: target.host}
+        headers
     }, (proxyRes) => {
         res.writeHead(proxyRes.statusCode || 502, proxyRes.headers);
         proxyRes.pipe(res);
@@ -107,6 +119,8 @@ router.use(express.json());
     coursesApi(router, app, prisma);
     tournamentApi(router, prisma);
     seasonsApi(router, prisma);
+    statsApi(router, prisma);
+    authApi(router, prisma);
 
     await dailyMissionsApi(router, process.env.PROD);
     await textImageApi(router);
@@ -356,16 +370,21 @@ console.log("set-affiliate-code",code, playerAddress, PlayFabId, displayName)
         }
     });
 
+    //only the tables, filters and columns its callers need (prisma-read-allow-list.ts)
     router.post("/api/prisma-find-many/:table", async (req, res)=>{
+        const args = getAllowedFindArgs(req.params.table, req.body);
+        if(!args) return res.status(403).send({error:"forbidden"});
         try{
-            return res.send(await prisma[req.params.table].findMany(req.body));
+            return res.send(await prisma[req.params.table].findMany(args));
         } catch(error){
             return res.status(500).send({error});
         }
     });
     router.post("/api/prisma-find-first/:table", async (req, res)=>{
+        const args = getAllowedFindArgs(req.params.table, req.body);
+        if(!args) return res.status(403).send({error:"forbidden"});
         try{
-            const result = await prisma[req.params.table].findFirst(req.body);
+            const result = await prisma[req.params.table].findFirst(args);
             return res.send(result);
         } catch(error){
             return res.status(500).send({error});
@@ -395,19 +414,20 @@ function handleProcessExit(){
         })
         process.on('uncaughtException', async (err) => {
             console.trace();
-            console.error(err);
+            //redacted: fetch/web3 errors carry URLs with webhook tokens and keys
+            console.error(redactUrls(err?.stack || err));
             // Only crash+restart in PROD (pm2 restarts it). In dev there is no
             // supervisor, so a stray error must NOT kill the whole web API.
             if (process.env.PROD) {
-                try { await callDiscordHook(`🔥 Uncaught Exception: ${err.message}`); } catch (_) {}
+                try { await callDiscordHook(`🔥 Uncaught Exception: ${redactedMessage(err)}`); } catch (_) {}
                 process.exit(1);
             }
         });
         process.on('unhandledRejection', async (reason, promise) => {
             console.trace();
-            console.error(reason && reason.toString());
+            console.error(reason && redactUrls(reason.toString()));
             if (process.env.PROD) {
-                try { await callDiscordHook(`‼️ unhandledRejection: ${JSON.stringify(reason)} ${JSON.stringify(promise)}`); } catch (_) {}
+                try { await callDiscordHook(`‼️ unhandledRejection: ${redactUrls(JSON.stringify(reason))} ${JSON.stringify(promise)}`); } catch (_) {}
                 process.exit(1);
             }
         });
@@ -424,11 +444,15 @@ function callDiscordHook(str:any, url = "https://discord.com/api/webhooks/REDACT
         content: `${str}`
     }:str;
 
+    //not awaited by most callers: a failure must not become an unhandled
+    //rejection (which exits in PROD), and is logged without the URL
     return fetch(url,
         {
             method:"POST",
             body:JSON.stringify(body),
             headers:{'Content-Type':"application/json"}
+        }).catch((error)=>{
+            console.log("discord hook error", redactedMessage(error));
         })
 }
 

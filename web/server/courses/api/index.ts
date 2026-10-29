@@ -8,6 +8,7 @@ import {PrismaClientValidationError} from '@prisma/client/runtime'
 import basicAuth = require('express-basic-auth')
 import {initAdmin} from "./admin";
 import {runChecks} from "../../../../chain-playfab/security/securityChecks";
+import {recordVisit} from "../../stats";
 import {getFinalMaterials, getFinalMaterials2} from "../../../../common/resource-bonus";
 import {PlayFabServer} from "playfab-sdk";
 import {promisify} from "util";
@@ -215,6 +216,8 @@ export const coursesApi = (router, app, prisma)=>{
 
             const authchain0 = await JSON.parse(req.header(`x-identity-auth-chain-0`));
             const address= authchain0.payload.toLowerCase();
+            //every scene login passes here: the daily visitors of /stats
+            recordVisit(prisma, address);
             const [{PlayFabId}] = await promisify(PlayFabServer.GetPlayFabIDsFromGenericIDs)({
                 "GenericIDs": [
                     {

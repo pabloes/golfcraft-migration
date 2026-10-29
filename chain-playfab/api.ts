@@ -7,10 +7,14 @@ import cors from 'cors';
 import { PlayFabServer } from 'playfab-sdk';
 var bodyParser = require('body-parser');
 import fetch from "cross-fetch";
+import {logsHandler} from "../common/log-buffer";
+import {redactError, redactedMessage} from "../common/redact";
 
 const MINT_PRICE_DM = 120;
 const app = express();
 
+//before cors: the logs route never answers with CORS headers
+app.get('*/_logs', logsHandler);
 app.use(cors({ origin: true }));
 app.use(express.json());
 
@@ -63,9 +67,10 @@ app.post(`*/mint-golf-club`, async (req, res)=>{
                 }
                 receipt = await issueGolfclub(address, PlayFabId);
             }catch(error){
-                console.error(new Date().toISOString(), "failed to mint", error);
-                callDiscordHook(`User ${user.displayName} failed to mint golf club `+error);
-                return res.status(400).send({valid:false, error})
+                //web3 errors carry the node URL (with its key): log and answer the redacted error only
+                console.error(new Date().toISOString(), "failed to mint", redactError(error));
+                callDiscordHook(`User ${user.displayName} failed to mint golf club `+redactedMessage(error));
+                return res.status(400).send({valid:false, error:redactError(error)})
             }
             callDiscordHook(`User ${user.displayName} minted free golf club`, PUBLIC_GOLFCLUB_DISCORD_CHANNEL_URL);
             if(receipt){
@@ -79,10 +84,10 @@ app.post(`*/mint-golf-club`, async (req, res)=>{
           .send({ valid: false, error: "Validation error, try from another Realm" })
         }
     }catch(err){
-        console.log("error",err);
+        console.log("error",redactError(err));
         return res
         .status(500)
-        .send({ valid: false, error: "Error", details:err })
+        .send({ valid: false, error: "Error", details:redactError(err) })
     }
 
 });
@@ -90,7 +95,7 @@ console.log("listening on PORT "+(process.env.PORT || "2567"))
 app.listen(process.env.PORT || "2567")
 
 async function callDiscordHook(str:any, url = "https://discord.com/api/webhooks/REDACTED"){
-  console.log(str, url);
+  console.log(str);
   try{
       var body = typeof str === "string"?{
           username:"Bot",
@@ -104,7 +109,7 @@ async function callDiscordHook(str:any, url = "https://discord.com/api/webhooks/
               headers:{'Content-Type':"application/json"}
           })
   }catch(error){
-      console.log("error calling discord hook", str, url);
+      console.log("error calling discord hook", str, redactedMessage(error));
   }
 
 }

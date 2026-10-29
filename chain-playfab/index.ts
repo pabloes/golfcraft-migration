@@ -1,3 +1,5 @@
+//first: captures every log line printed after it (GET */_logs, api.ts)
+import "../common/log-buffer";
 import {PlayFabServer} from "playfab-sdk";
 
 require("dotenv").config();

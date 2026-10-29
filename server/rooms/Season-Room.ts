@@ -24,6 +24,7 @@ import {
 import fetch from "cross-fetch";
 import {promisify} from "util";
 import {PlayFabAdmin, PlayFabServer} from "playfab-sdk";
+import {resolvePlayer} from "./session-auth";
 import IPlayFabError = PlayFabModule.IPlayFabError;
 import {CURRENCY} from "../../common/currency-codes";
 import {callDiscordHook} from "../../common/discord";
@@ -178,29 +179,24 @@ export class SeasonRoom extends Room<SeasonRoomState> {
     recordPositionFrames: boolean = false;
     lastRecordedFrameTime = 0;
     PlayFabId;
+    //verified wallet, or the PlayFabId for players without one (session-auth.ts)
+    address: string;
     playerTierSub = 0;
     private selectedCourses: any[];
     async onAuth(client, {clientInfo, user}, request) {
         //TODO should check if the user has enough "daily energy"
         console.log("onAuth")
         try{
-            const address = user.publicKey;
+            //the session ticket says who this is; address = verified wallet or PlayFabId
+            const {PlayFabId, address} = await resolvePlayer({clientInfo, user});
             //monthly game window: no new run outside it, unless allow-listed
             const access = await getGameAccessFor(address);
             if (!access.open) {
                 console.log("Season onAuth: game closed for", address);
                 return false;
             }
-            const [{PlayFabId}] = await promisify(PlayFabServer.GetPlayFabIDsFromGenericIDs)({
-                "GenericIDs": [
-                    {
-                        "ServiceName": "address",
-                        "UserId": address
-                    }]
-            }).then(r=>r.data.Data);
             this.PlayFabId = PlayFabId;
-
-
+            this.address = address;
 
             console.log("this.playerTierSub",this.playerTierSub);
             return true;
@@ -241,9 +237,10 @@ export class SeasonRoom extends Room<SeasonRoomState> {
 
     private user;
     private SEASON_REWARD_FACTOR;
-    async onCreate({user, groupId}) {
+    async onCreate({user, groupId, clientInfo}) {
         console.log("onCreate", JSON.stringify(user));
-        const address = user.publicKey;
+        //the session ticket says who this is; address = verified wallet or PlayFabId
+        const {PlayFabId, address} = await resolvePlayer({clientInfo, user});
         //monthly game window, checked BEFORE picking courses and ghosts: this
         //room does all that work in onCreate, ahead of onAuth
         const access = await getGameAccessFor(address);
@@ -251,15 +248,9 @@ export class SeasonRoom extends Room<SeasonRoomState> {
             console.log("Season onCreate: game closed for", address);
             throw new Error(gameClosedMessage(access));
         }
-        const [{PlayFabId}] = await promisify(PlayFabServer.GetPlayFabIDsFromGenericIDs)({
-            "GenericIDs": [
-                {
-                    "ServiceName": "address",
-                    "UserId": address
-                }]
-        }).then(r=>r.data.Data);
         console.log("create", PlayFabId);
         this.PlayFabId = PlayFabId;
+        this.address = address;
         this.user = user;
         this.SEASON_REWARD_FACTOR = await promisify(PlayFabServer.GetTitleData)({Keys:["SeasonRewardFactor"]}).then(r=>r.data.Data.SeasonRewardFactor && Number(r.data.Data.SeasonRewardFactor) || 0.25);
         this.update = this.update.bind(this);
@@ -308,7 +299,7 @@ export class SeasonRoom extends Room<SeasonRoomState> {
             console.log("error", error, courseQuery)
         }
         console.log("preparing ghostData")
-        await this.prepareGhostsData(user.userId, this.selectedCourses.map(c=>c?.alias), this.playerTierSub);
+        await this.prepareGhostsData(this.address, this.selectedCourses.map(c=>c?.alias), this.playerTierSub);
         console.log("prepared ghostData", this.ghostsData);
         await this.prepareMap({
             courseId:this.selectedCourses[0].alias,
@@ -318,7 +309,7 @@ export class SeasonRoom extends Room<SeasonRoomState> {
         this.setState(new SeasonRoomState(this.courseDefinition));
 
         this.state.results[0].name = user.displayName;
-        this.state.results[0].address = user.publicKey;
+        this.state.results[0].address = this.address;
 
         this.onMessage(MESSAGES.READY, (client) => {
             this.state.startTime = Date.now() + 12000;
@@ -560,9 +551,9 @@ export class SeasonRoom extends Room<SeasonRoomState> {
 
         //TODO should higer tier win more mats,xp,ft etc ?
 
-        console.log("found player in results", sortedResult.findIndex(r => r.address === user.userId));
-        const Value = 2-sortedResult.findIndex(r => r.address === user.userId);
-        const accumulatedValue = 2-sortedAccumulatedResult.findIndex(r => r.address === user.userId);
+        console.log("found player in results", sortedResult.findIndex(r => r.address === this.address));
+        const Value = 2-sortedResult.findIndex(r => r.address === this.address);
+        const accumulatedValue = 2-sortedAccumulatedResult.findIndex(r => r.address === this.address);
 
         const courseRewards = Value > 0 ? {[getRandomFromList(currencyCodes)]:Value, GC:Value}:{};
 
@@ -647,7 +638,7 @@ console.log("accumulatedValue", JSON.stringify(sortedAccumulatedResult,null, "  
         }else{
             const playerGameData = {
                 apiKey:process.env.GOLF_API_KEY,
-                address:this.user.address || this.user.userId,
+                address:this.address,
                 PlayFabId,
                 startTime:this.state.seasonStartTime,
                 endTime:Date.now(),
@@ -804,7 +795,7 @@ console.log("accumulatedValue", JSON.stringify(sortedAccumulatedResult,null, "  
                     courseID: this.courseDefinition.ID,
                     courseAlias: this.courseDefinition.alias,
                     courseName: this.courseDefinition.displayName || this.courseDefinition.alias,
-                    address: user.userId,
+                    address: this.address,
                     displayName: user.displayName,
                     PlayFabId,
                     frames: serializeFrames(this.recordedFrames),
@@ -872,7 +863,7 @@ console.log("accumulatedValue", JSON.stringify(sortedAccumulatedResult,null, "  
                 const sortedAccumulatedResult = [...copiedResults].sort((a,b)=>{
                     return b.score.reduce(sumAcc,0) - a.score.reduce(sumAcc,0);
                 });
-                const accumulatedValue = 2-sortedAccumulatedResult.findIndex(r => r.address === (this.user.userId));
+                const accumulatedValue = 2-sortedAccumulatedResult.findIndex(r => r.address === this.address);
 
                 console.log(`PLAYER ${this.user.displayName} LEFT GAME WITH RESULT ${accumulatedValue}`);
 

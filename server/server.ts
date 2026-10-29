@@ -1,3 +1,7 @@
+//first: captures every log line printed after it (GET */_logs)
+import {logsHandler} from "../common/log-buffer";
+//before handleProcessExit(): its handlers print errors through it
+import {redactedMessage} from "../common/redact";
 import {TournamentRoom} from "./rooms/Tournament-Room";
 import {MultiplayerDemoRoom} from "./rooms/Multiplayer-Demo-Room";
 
@@ -34,7 +38,7 @@ import express from 'express';
 import cors from 'cors';
 
 import { createServer } from 'http';
-import { Server, RelayRoom } from 'colyseus';
+import { Server, RelayRoom, matchMaker } from 'colyseus';
 import { monitor } from '@colyseus/monitor';
 import { GameLobbyRoom } from './rooms/GameLobbyRoom';
 import { TrainingRace } from './rooms/Training-Race';
@@ -82,6 +86,9 @@ if(process.env.PROD){
 if(!process.env.GOLF_API_KEY){
     throw Error("missing GOLF_API_KEY");
 }
+//before cors: the logs route never answers with CORS headers
+app.get('*/_logs', logsHandler);
+
 app.use(cors({
   corsOptions: process.env.PROD?corsOptions:undefined
 }));
@@ -177,6 +184,22 @@ app.use('*/ping', (req, res)=>{
   res.status(200).send("OK")
 });
 
+//public counters for golfcraftgame.com/stats: everyone in the scene is in
+//gameLobbyRoom, and a player in a match also sits in one of the game rooms
+const NON_GAME_ROOMS = ["gameLobbyRoom", "season-party-lobby", "LiveTournamentLobbyRoom", "ping"];
+app.get('*/online', async (req, res)=>{
+  try{
+    const rooms = await matchMaker.query({});
+    const playing = rooms
+        .filter(room => !NON_GAME_ROOMS.includes(room.name))
+        .reduce((total, room) => total + room.clients, 0);
+    res.send({inScene: getLobbyRoom()?.state.players.size || 0, playing});
+  }catch(error){
+    console.log("/online error", error);
+    res.status(500).send({error: "unavailable"});
+  }
+});
+
 const GROUP_MATCHER_URL = process.env.PROD?"http://52.12.188.146/golfcraft-competition":"http://localhost:2568";
 
 tryFetch(1, `${GROUP_MATCHER_URL}/groups`, {method:"GET"}).then(async g=>console.log("groups",await g.json()), (err)=>console.error(err))
@@ -203,7 +226,8 @@ app.post(`*/unlock-all`, async (req, res) => {
         PlayFabId
       }
     });
-    console.log("result", result);
+    //not the whole result: its cloudscript Logs can echo the parameters (apiKey)
+    console.log("result", {FunctionResult: result?.data?.FunctionResult, Error: result?.data?.Error?.Message});
     const {data} = result;
     const {FunctionResult} = data;
     console.log("unlocked all", FunctionResult);
@@ -235,7 +259,7 @@ app.post(`*/unlockWithXp`, async (req, res) => {
         ContainerItemId
       }
     });
-    console.log("data",data);
+    console.log("data", {FunctionResult: data?.FunctionResult, Error: data?.Error?.Message});
     const {FunctionResult} = data;
     return res.json({FunctionResult});
   }catch(err){
@@ -381,11 +405,12 @@ function handleProcessExit(){
       process.exit(0);
     })
   process.on('uncaughtException', async (err) => {
-      await callDiscordHook(`Uncaught Exception: ${err.message}`);
+      await callDiscordHook(`Uncaught Exception: ${redactedMessage(err?.message)}`);
       process.exit(1);
   });
   process.on('unhandledRejection', async (reason, promise) => {
-      await callDiscordHook(`unhandlerdRejection: ${reason} ${promise}`);
+      //redacted: fetch errors carry URLs with webhook tokens and API keys
+      await callDiscordHook(`unhandlerdRejection: ${redactedMessage(String(reason))} ${promise}`);
      // process.exit(1)
   });
 

@@ -17,6 +17,7 @@ import fetch from "cross-fetch";
 import {callDiscordHook} from "../../common/discord";
 import {pushChests} from "./chests-generator";
 import MESSAGES from "./mesages";
+import {withoutSecrets} from "../../common/redact";
 
 const HALLOWEEN_WEARABLE_STATISTIC = "wearable:halloween-2022";//TODO make it dynamic depending on event-key
 const OPEN_CHEST_STATISTIC = "chests_open";
@@ -53,7 +54,7 @@ export class TournamentRoom extends Room<CompetitionGroupState> {
             headers:{'Content-Type':"application/json"},
             body:JSON.stringify({ID:tournamentID})
         }).then(async r=> await r.json(), (err)=>{
-            console.log("get-tournament-by-id error",{PlayFabId, clientInfo, code, userId, user, tournamentID})
+            console.log("get-tournament-by-id error",{PlayFabId, clientInfo:withoutSecrets(clientInfo), code, userId, user, tournamentID})
             console.error(err);
             throw Error(err);
         });
@@ -107,7 +108,7 @@ export class TournamentRoom extends Room<CompetitionGroupState> {
     }
 
     async onCreate({tournamentID, user, userId, PlayFabId, code, clientInfo, roomInstanceId}){
-        console.log("onCreate", JSON.stringify({tournamentID, user, userId, PlayFabId, code, clientInfo, roomInstanceId}));
+        console.log("onCreate", JSON.stringify({tournamentID, user, userId, PlayFabId, code, clientInfo:withoutSecrets(clientInfo), roomInstanceId}));
         this.authOk = await this.authTournamentParticipant({user, userId, PlayFabId, code, clientInfo, tournamentID});
         console.log("tournament auth ok", tournamentID, code, this.authOk, roomInstanceId);
         this.participation = this.tournamentData?.participants?.find(p=>p.address.toLowerCase() === userId.toLowerCase());
@@ -241,7 +242,7 @@ export class TournamentRoom extends Room<CompetitionGroupState> {
     }
 
     async onJoin(client, {tournamentID, realm, groupId, PlayFabId, userId, user, clientInfo, lobbySessionId}){
-        console.log("onJoin", JSON.stringify( {tournamentID, realm, groupId, PlayFabId, userId, user, clientInfo, lobbySessionId}));
+        console.log("onJoin", JSON.stringify( {tournamentID, realm, groupId, PlayFabId, userId, user, clientInfo:withoutSecrets(clientInfo), lobbySessionId}));
 
         if(!this.authOk){
             console.log("onJoin no authOk",this.authOk);
@@ -255,9 +256,9 @@ export class TournamentRoom extends Room<CompetitionGroupState> {
         promisify(PlayFabServer.UpdateUserData)({
             PlayFabId,
             Data:{
-                clientInfo:JSON.stringify(clientInfo)
+                clientInfo:JSON.stringify(withoutSecrets(clientInfo))
             }
-        }).then(()=>{},(err)=>{console.log("error saving clientInfo",PlayFabId,clientInfo,err)});
+        }).then(()=>{},(err)=>{console.log("error saving clientInfo",PlayFabId,withoutSecrets(clientInfo),err)});
 
         if(this.recoveredLastCourse?.recoveredLastBallPosition){
             this.state.ball.updateFromCANNON({

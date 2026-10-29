@@ -758,8 +758,9 @@ export class SeasonPartyRoom extends Room<SeasonPartyRoomState> {
 
     private async prepareNext() {
         if (this.state.currentGame === 0) {
-            //Season-Room charges the energy once the first round is played
-            this.state.players.filter(p => this.isActive(p)).forEach(player => {
+            //Season-Room charges the energy once the first round is played; a
+            //player above the room's level scores no season points, so plays free
+            this.state.players.filter(p => this.isActive(p) && p.eligible).forEach(player => {
                 promisify(PlayFabServer.SubtractUserVirtualCurrency)({PlayFabId: player.PlayFabId, VirtualCurrency: "EN", Amount: 1})
                     .catch(error => console.log("season-party subtract EN error", player.displayName, error));
             });

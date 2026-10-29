@@ -132,7 +132,8 @@ export const tournamentApi = (router, prisma) => {
     });
 
     router.post(`/api/create-tournament`, async (req, res)=>{
-        console.log("CREATE-TOURNAMENT", JSON.stringify( req.body) );
+        //not the body: it carries the organizer's signature and email
+        console.log("CREATE-TOURNAMENT", "organizer", req.body?.organizer);
         const {organizer, useOwnCourses, courseAliases, comment, signature, email, whitelist, max_participants, expiration_date, start_date, min_level, is_live_tournament} = req.body;
         const PlayFabId = (await getPlayFabIdFromAddresses([organizer]))[0];
         const organizer_display_name = await promisify(PlayFabServer.GetUserAccountInfo)({PlayFabId}).then(r => r?.data?.UserInfo?.TitleInfo?.DisplayName);
@@ -158,6 +159,7 @@ export const tournamentApi = (router, prisma) => {
             comment,
             is_live_tournament
         });
+        console.log("CREATED TOURNAMENT", ID, "organizer", organizer, organizer_display_name);
 
         return res.send({ID, code});
     });

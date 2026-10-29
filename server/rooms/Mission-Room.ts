@@ -1,5 +1,6 @@
 import { Room } from "colyseus";
 import {PlayFabServer} from "playfab-sdk";
+import {resolvePlayer} from "./session-auth";
 import {LEAVE_CODE, STATISTICS, TRAINING} from "../../common/constants";
 import { promisify } from "util";
 import { GameDefinition } from "../../common/game-definition-type";
@@ -43,13 +44,19 @@ export class MissionRoom extends Room<TrainingRaceState> {
     static MAX_ROOM_DURATION_S = 60 * 60;        // 1 hour hard cap
     static MAX_IDLE_MS = 10 * 60 * 1000;         // 10 min without a shoot
 
-    async onAuth(client, {PlayFabId, gameDefinition, user}, request){
+    async onAuth(client, {PlayFabId, gameDefinition, user, clientInfo}, request){
         console.log("Test-Room onAuth", PlayFabId)
         try {
+            //the session ticket must belong to the account the client claims
+            const resolved = await resolvePlayer({clientInfo, user, PlayFabId});
+            if (resolved.PlayFabId !== PlayFabId) {
+                console.log("Mission onAuth: PlayFabId does not match the session", PlayFabId, resolved.PlayFabId);
+                return false;
+            }
             //monthly game window: no new mission outside it, unless allow-listed
-            const access = await getGameAccessFor(user?.publicKey || user?.userId);
+            const access = await getGameAccessFor(resolved.address);
             if (!access.open) {
-                console.log("Mission onAuth: game closed for", user?.publicKey || user?.userId);
+                console.log("Mission onAuth: game closed for", resolved.address);
                 return false;
             }
             const {data} = await promisify(PlayFabServer.GetPlayerStatistics)({PlayFabId, StatisticNames:["current_mission"]});
@@ -313,7 +320,8 @@ export class MissionRoom extends Room<TrainingRaceState> {
             FunctionName:"completeMission",
             FunctionParameter
         });
-        console.log("completeMissionOnPlayFab result", JSON.stringify(result))
+        //not the whole result: its cloudscript Logs can echo the parameters
+        console.log("completeMissionOnPlayFab result", JSON.stringify({FunctionResult: result?.data?.FunctionResult, Error: result?.data?.Error?.Message}))
         return result;
     }
    

@@ -15,6 +15,7 @@ import {getLevelInfo, getRandomFromList, getRandomInt, sleep} from "../../common
 import {createFrameReproduction} from "../../common/frame-reproductor";
 import fetch from "cross-fetch";
 import {fetchRemoteCoursesData, RemoteCourseData} from "../../common/fetch-remote-courses";
+import {withoutSecrets} from "../../common/redact";
 const apiKey = process.env.GOLF_API_KEY;
 const playfabServerApiKey = process.env.PLAYFAB_API_KEY;
 class TrainingRaceState extends Gameplay {
@@ -205,7 +206,7 @@ export class TrainingRace extends Room<TrainingRaceState> {
                     PlayFabId,
                     Data:{
                         lastPingMs:this.lastPingMs.toString(),
-                        clientInfo:JSON.stringify(clientInfo)
+                        clientInfo:JSON.stringify(withoutSecrets(clientInfo))
                     }
                 }).then(()=>{},(err)=>{console.log("error saving lastPingMs",PlayFabId,JSON.stringify(this.gameDefinition),err)});
                 if(!clientInfo){

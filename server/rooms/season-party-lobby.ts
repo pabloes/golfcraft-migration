@@ -6,6 +6,7 @@ import MESSAGE from "./mesages";
 import {tryFn} from "../../common/utils";
 import {createPartyToken, registerParty} from "./season-party-registry";
 import {gameClosedMessage, getGameAccessFor} from "../game-window-gate";
+import {resolvePlayer} from "./session-auth";
 
 // "Play ranked with friends" waiting room. One instance, one waiting party:
 // nobody can create another until this one is cancelled or starts.
@@ -110,8 +111,8 @@ export class SeasonPartyLobbyRoom extends Room<SeasonPartyLobbyState> {
         this.interval = setInterval(() => tryFn(() => this.checkIdle(), (error) => console.log("season-party-lobby checkIdle error", error)), 1000);
     }
 
-    onJoin(client: Client, {user}: any = {}) {
-        this.users.set(client.sessionId, user);
+    onJoin(client: Client, {user, clientInfo}: any = {}) {
+        this.users.set(client.sessionId, {user, clientInfo});
     }
 
     onLeave(client: Client) {
@@ -199,20 +200,21 @@ export class SeasonPartyLobbyRoom extends Room<SeasonPartyLobbyState> {
         }
     }
 
-    //Same identity source as Season-Room: the user object sent on join,
-    //resolved to a PlayFab account by wallet address.
+    //Same identity source as Season-Room: the session ticket sent on join
+    //(session-auth.ts); address = verified wallet or the PlayFabId.
     private async resolveMember(client: Client) {
-        const user = this.users.get(client.sessionId);
-        const address = user?.publicKey;
-        if (!address) throw new PartyError("Connect a wallet to play ranked");
+        const {user, clientInfo} = this.users.get(client.sessionId) || {};
+        let resolved;
+        try {
+            resolved = await resolvePlayer({clientInfo, user});
+        } catch (error) {
+            throw new PartyError("No GolfCraft account for this player");
+        }
+        const {PlayFabId, address} = resolved;
         //monthly game window: no new party outside it, unless allow-listed. A
         //party that already formed may still start (startParty doesn't check).
         const access = await getGameAccessFor(address);
         if (!access.open) throw new PartyError(gameClosedMessage(access));
-        const [{PlayFabId}] = await promisify(PlayFabServer.GetPlayFabIDsFromGenericIDs)({
-            GenericIDs: [{ServiceName: "address", UserId: address}]
-        }).then(r => r.data.Data);
-        if (!PlayFabId) throw new PartyError("No GolfCraft account for this wallet");
         const [tierSub, energy] = await Promise.all([
             promisify(PlayFabServer.GetPlayerStatistics)({PlayFabId, StatisticNames: ["tier-sub"]})
                 .then(r => r.data.Statistics[0]?.Value || 0),
@@ -220,9 +222,10 @@ export class SeasonPartyLobbyRoom extends Room<SeasonPartyLobbyState> {
                 .then(r => Number(r.data.VirtualCurrency?.EN || 0))
         ]);
         if (energy < 1) throw new PartyError("You need 1 energy to play ranked");
+        //userId keys the records (ghosts, player games) in season-party-room
         return new PartyMemberState({
             address,
-            userId: user.userId,
+            userId: address,
             displayName: user.displayName,
             tierSub,
             PlayFabId,

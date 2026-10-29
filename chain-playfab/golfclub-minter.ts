@@ -5,6 +5,7 @@ import abi from "./abi/golfclub.json";
 import fetch from "cross-fetch";
 import fs = require("fs");
 import { callDiscordHook } from "../common/discord";
+import { redactedMessage } from "../common/redact";
 
 const Web3 = require("web3");
 const HDWalletProvider = require("@truffle/hdwallet-provider");
@@ -101,7 +102,7 @@ export function issueGolfclub(to:string, PlayFabId:string){//TODO queue? TO FILE
                 }
             });
             transaction.on("error", (err, receipt)=>{
-                fs.appendFile(LOG_FILE_NAME,`\n${new Date().toISOString()} Tx Error minting golf club for ${PlayFabId} (${to}) on item ${standardGolfClub?.ItemInstanceId} tx:${receipt?.transactionHash} ${err}`,"utf8",()=>{})
+                fs.appendFile(LOG_FILE_NAME,`\n${new Date().toISOString()} Tx Error minting golf club for ${PlayFabId} (${to}) on item ${standardGolfClub?.ItemInstanceId} tx:${receipt?.transactionHash} ${redactedMessage(err)}`,"utf8",()=>{})
                 reject("Error on transaction minting new golf club");
             });
         }catch(err){

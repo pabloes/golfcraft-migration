@@ -5,6 +5,7 @@ import {callDiscordHook} from "../../common/discord";
 import {promisify} from "util";
 import {PlayFabServer} from "playfab-sdk";
 import {getRandomFromList, sleep} from "../../common/utils";
+import {withoutSecrets} from "../../common/redact";
 
 const ChestRewardChances = [
     {GC:1, weight:2000},
@@ -197,7 +198,7 @@ export class DclAwardsRoom extends Room<DclAwardsRoomState> {
     }
 
     onJoin(client: Client, options?: any, auth?: any): void | Promise<any> {
-        console.log("joined", options)
+        console.log("joined", withoutSecrets(options))
     }
 
     onDispose(): void | Promise<any> {

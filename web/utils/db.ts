@@ -1,4 +1,6 @@
-import mysql from "mysql";
+//mysql2, not mysql: the old driver can't authenticate against MySQL 8
+//(caching_sha2_password -> ER_NOT_SUPPORTED_AUTH_MODE)
+import mysql from "mysql2";
 import {promisify} from "util";
 require('dotenv').config();
 
@@ -67,9 +69,11 @@ export async function insertTournamentParticipant({ID, address, playfab, data, d
 }
 
 export async function getTournamentDataByID(ID){
-    const [tournament] = await query('SELECT * FROM tournaments WHERE ID = ?', ID);
+    //query() returns undefined on a DB error; destructuring that would be an
+    //unhandled rejection, which exits the process in PROD
+    const [tournament] = (await query('SELECT * FROM tournaments WHERE ID = ?', ID)) || [];
     if(!tournament) return null;
-    const participants = await query('SELECT *  FROM tournament_participant WHERE ID = ?', ID);
+    const participants = (await query('SELECT *  FROM tournament_participant WHERE ID = ?', ID)) || [];
 
     return {
         ...tournament,
@@ -122,10 +126,10 @@ export async function getTournaments({start = 0,limit = 99, filter = {organizer:
 }
 
 export async function getTournamentDataByCode(code){
-    const [data] = await query('SELECT * FROM tournaments WHERE code = ?', code);
+    const [data] = (await query('SELECT * FROM tournaments WHERE code = ?', code)) || [];
     if(!data) return null;
     const {ID, ...tournament} = data;
-    const participants = await query('SELECT *  FROM tournament_participant WHERE ID = ?', ID);
+    const participants = (await query('SELECT *  FROM tournament_participant WHERE ID = ?', ID)) || [];
     return {
         ID,
         ...tournament,

@@ -1,9 +1,11 @@
 import { Room } from "colyseus";
 import { Schema, ArraySchema, MapSchema, type } from "@colyseus/schema";
 import { PlayFabServer} from "playfab-sdk";
+import {resolvePlayer} from "./session-auth";
 import MESSAGE from "./mesages";
 import { ClientState } from "@colyseus/core";
 import {callDiscordHook} from "../../common/discord";
+import {redactError} from "../../common/redact";
 import {getNFTCoursesQuery} from "../../common/course-definitions/query-nft-courses";
 import fetch from "cross-fetch";
 import {sleep} from "../../common/utils";
@@ -102,6 +104,11 @@ export class GameLobbyRoom extends Room<LobbyState> {
         this.checkPassiveIncome = this.checkPassiveIncome.bind(this);
         setInterval(()=>this.checkPassiveIncome(), PASSIVE_INCOME_INTERVAL);
 
+        //the scene's HUD ping (scene/src/meta/game-lobby.ts)
+        this.onMessage(MESSAGE.PING, (client)=>{
+            client.send(MESSAGE.PONG);
+        });
+
         this.onMessage(MESSAGE.ACTIVE_GOLFCLUB, (client, id)=>{
             console.log("change", id)
             const player = this.state.players.get(client.sessionId)
@@ -157,12 +164,23 @@ export class GameLobbyRoom extends Room<LobbyState> {
         });
     }
 
-    onAuth(client, {PlayFabId, user}, request){
+    async onAuth(client, {PlayFabId, user, clientInfo}, request){
         console.log("onAuth", user?.displayName, PlayFabId);
+        //the session ticket must belong to the account the client claims
+        try {
+            const resolved = await resolvePlayer({clientInfo, user, PlayFabId});
+            if (resolved.PlayFabId !== PlayFabId) {
+                console.log("gameLobbyRoom onAuth: PlayFabId does not match the session", PlayFabId, resolved.PlayFabId);
+                return false;
+            }
+        } catch (error) {
+            console.log("gameLobbyRoom onAuth: cannot resolve player", error?.message);
+            return false;
+        }
         const already = this.state?.PlayFabSessions[PlayFabId];
         if(already){
             const foundClient = this.clients.find(c=>c.sessionId === already);
-            console.log("foundClient",foundClient)
+            console.log("gameLobbyRoom onAuth: replacing the previous session of", PlayFabId, !!foundClient)
             foundClient?.leave();
         }
         return {"ip":request.headers['x-forwarded-for'] || request.connection.remoteAddress};
@@ -224,7 +242,7 @@ export class GameLobbyRoom extends Room<LobbyState> {
                 console.log("golfclub idMap",idMap)
                 energyBonus += idMap? Object.keys(idMap).length :0;
             }catch (error){
-                console.error("fetch theGraph golfclubs error",error)
+                console.error("fetch theGraph golfclubs error",redactError(error))
             }
 
             if(energyBonus){

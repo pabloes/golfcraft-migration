@@ -2,6 +2,7 @@ import {getDifferentRandomInts, getRandomFromList, getRandomInt, removeValueFrom
 import namesRepo from "./random-names.json";
 import {PlayFabServer} from "playfab-sdk";
 import {promisify} from "util";
+import {isAllowedRandomRowQuery} from "./prisma-read-allow-list";
 const NUMBER_OF_GHOSTS = 3, NUMBER_OF_COURSES = 4;
 
 export const seasonsApi = (router, prisma) => {
@@ -290,6 +291,8 @@ export const seasonsApi = (router, prisma) => {
     router.post(`/api/get-random-row`, async (req, res)=>{
         try{
             const {query, table} = req.body;
+            //only the tables and filters its callers use (prisma-read-allow-list.ts)
+            if(!isAllowedRandomRowQuery(table, query)) return res.status(403).send({error:"forbidden"});
             const result = await pickRandomRow(query, table)
             return res.send(result||null);
         }catch(error){

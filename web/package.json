@@ -40,6 +40,7 @@
     "isomorphic-fetch": "^3.0.0",
     "jimp": "^0.16.2",
     "mysql": "^2.18.1",
+    "mysql2": "^3.11.5",
     "playfab-sdk": "^2.81.220118",
     "prisma": "^3.10.0",
     "react": "=16.14.0",
