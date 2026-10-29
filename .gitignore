@@ -28,3 +28,19 @@ deploy/*.tar
 scripts/.dev-logs/
 .idea/
 AGENTS.md
+
+# token for scripts/backend-logs.sh (LOGS_TOKEN in the CapRover apps)
+scripts/.logs-token
+
+# left by a pnpm install run at the repo root; the Studio client keeps its own
+# pnpm files in studio/, and the root is an npm package
+/pnpm-lock.yaml
+/pnpm-workspace.yaml
+
+# GDD working files of the dcl-gdd skill: only design/gdd.md is the submission,
+# and the Creator Success reviewers get access to this repo
+design/decisions.md
+design/ideas.md
+design/notes.md
+design/implementation-notes.md
+design/hypothesis-log.md
