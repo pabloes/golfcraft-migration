@@ -200,7 +200,7 @@ export const PartyScreen = () => {
           : null,
         p.tierName ? seatRank(px, fs, `party-rank-${i}`, i, 146, tierIndexByName(p.tierName), p.tierName) : null,
         p.eligible === false
-          ? text(px, fs, 'Above room level: plays for fun, no season points', x + 6, 166, SEAT_W - 12, 40, 10, C.yellow, 'middle-center', true)
+          ? text(px, fs, 'Above room level: plays free, no season points', x + 6, 166, SEAT_W - 12, 40, 10, C.yellow, 'middle-center', true)
           : text(px, fs, 'Scores season points', x + 6, 170, SEAT_W - 12, 16, 10, P.green, 'middle-center')
       ])
     )

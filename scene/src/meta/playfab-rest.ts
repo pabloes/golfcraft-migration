@@ -26,6 +26,7 @@ export type LoginResult = {
   InfoResultPayload?: {
     UserReadOnlyData?: { [key: string]: { Value: string } }
     UserData?: { [key: string]: { Value: string } }
+    AccountInfo?: { TitleInfo?: { DisplayName?: string } }
   }
 }
 
@@ -37,7 +38,7 @@ export async function loginWithCustomID(customId: string, createAccount = true):
       TitleId: TITLE_ID,
       CustomId: customId,
       CreateAccount: createAccount,
-      InfoRequestParameters: { GetUserReadOnlyData: true, GetUserData: true }
+      InfoRequestParameters: { GetUserReadOnlyData: true, GetUserData: true, GetUserAccountInfo: true }
     })
   })
   if (!response.ok) {
@@ -74,6 +75,24 @@ export async function getPlayerStatistic(
     out[s.StatisticName] = s.Value
   }
   return out
+}
+
+// Title-wide settings (PlayFab TitleData). SDK6 got them with every login;
+// the scene only needs a few keys, e.g. streamURL for the video screens.
+export async function getTitleData(sessionTicket: string, keys: string[]): Promise<{ [key: string]: string }> {
+  const response = await fetch(`${PLAYFAB_BASE}/Client/GetTitleData`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Authorization': sessionTicket
+    },
+    body: JSON.stringify({ Keys: keys })
+  })
+  if (!response.ok) {
+    throw new Error(`PlayFab GetTitleData failed (${response.status})`)
+  }
+  const json = (await response.json()) as PlayFabResponse<{ Data?: { [key: string]: string } }>
+  return json.data?.Data || {}
 }
 
 // Returns inventory + virtual currency + statistics in one round-trip, same
@@ -190,6 +209,10 @@ async function clientPost(sessionTicket: string, path: string, body: any): Promi
 // carries the explorer's display name (3-25 characters).
 export const updateUserTitleDisplayName = (sessionTicket: string, displayName: string) =>
   clientPost(sessionTicket, 'UpdateUserTitleDisplayName', { DisplayName: displayName })
+
+// Its answer when another account already holds the name: display names are
+// unique in this title.
+export const isNameNotAvailable = (err: unknown) => String(err).includes('NameNotAvailable')
 
 // SDK6 xLoginWithCustomID wrote UserData.address once per account.
 export const updateUserData = (sessionTicket: string, data: { [key: string]: string }) =>

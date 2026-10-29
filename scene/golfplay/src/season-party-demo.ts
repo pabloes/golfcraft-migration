@@ -17,6 +17,7 @@ import { engine, executeTask } from '@dcl/sdk/ecs'
 import { fadeInOverlay, fadeOutOverlay } from '../../src/components/ui/overlay'
 import { hideWaitPlayers } from '../../src/components/lobby/season-game-countdown'
 import { createOrShowNextGameUi } from '../../src/components/lobby/season-next-game-ui'
+import { getSessionTicket } from '../../src/meta/bootstrap'
 
 export const createSeasonPartyDemo = async (
   parent: any,
@@ -46,6 +47,7 @@ export const createSeasonPartyDemo = async (
       room = await colyseus.joinById(roomId, {
         user: { ...userData, avatar: undefined },
         userId: userData.userId,
+        clientInfo: { sessionTicket: getSessionTicket() },
         token
       })
       starting = false
@@ -69,7 +71,7 @@ export const createSeasonPartyDemo = async (
                 rewards,
                 rewardsBonus,
                 state.currentGame === 4 && eligible === false
-                  ? 'You played below your own rank, so this run gives no season points.'
+                  ? 'You played below your own rank: no season points, and no energy spent.'
                   : undefined,
                 // The members' rows are humans; the rest are ghosts.
                 room.state.players.map((p: any) => p.address)

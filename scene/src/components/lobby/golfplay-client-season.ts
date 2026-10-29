@@ -50,6 +50,7 @@ import { seasonCountdownState, seasonHoleState, hideSeasonHud } from '../../ui/s
 import { createBallOrbitCamera } from '../../../golfplay/src/components/orbit-camera'
 import { CAMERA_AIM_MODE } from '../../config/controls'
 import { mobileShootState } from '../../ui/mobile-shoot-state'
+import { reportPing } from '../../ui/ping-state'
 
 const REWARD_NAMES: any = {
   WD: 'wood',
@@ -317,6 +318,7 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
 
     function onMessagePong() {
       if (state.reconnecting) return
+      reportPing(Date.now() - lastPingTime)
       room.send(MESSAGE.PING2)
     }
 

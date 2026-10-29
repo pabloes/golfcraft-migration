@@ -15,7 +15,17 @@ export const getMusicForCollection = (_collectionId: number): string => {
   return track
 }
 
+// SDK6 skipped the music when TitleData.streamURL was set, so the stream's
+// audio is heard while playing. Here it follows the stream really playing
+// (stream-screens.ts), and stops the music if it goes live mid-course.
+let streamPlaying = false
+export const setStreamPlaying = (playing: boolean) => {
+  streamPlaying = playing
+  if (playing) stopMapMusic()
+}
+
 export const reproduceMapMusic = (track: string) => {
+  if (streamPlaying) return
   if (musicEntity === null) {
     musicEntity = engine.addEntity()
     Transform.create(musicEntity, { parent: engine.PlayerEntity })

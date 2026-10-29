@@ -20,6 +20,7 @@ import { getCatFromTier, getTierFromSub, getTierPercentiles } from '../../../../
 // @ts-ignore - season-tier-definitions has @ts-nocheck
 import { seasonTierDefinitions } from '../../../../../common/season-tier-definitions'
 import { guardGameStart } from '../../../services/game-window'
+import { getSessionTicket } from '../../../meta/bootstrap'
 import { returnToMenuIfRequested } from '../../../ui/lobby-menu-state'
 
 const MAX_PARTY_PLAYERS = 4
@@ -50,7 +51,8 @@ export const createSeasonParty = async (
   let waitingShown = false
 
   const lobby = await colyseus.joinOrCreate('season-party-lobby', {
-    user: { ...userData, avatar: undefined }
+    user: { ...userData, avatar: undefined },
+    clientInfo: { sessionTicket: getSessionTicket() }
   })
 
   lobby.onStateChange(() => syncUi())

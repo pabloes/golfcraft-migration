@@ -19,6 +19,7 @@ import { setupUI } from './ui'
 import { startGameWindow } from './services/game-window'
 import { returnToMenuIfRequested } from './ui/lobby-menu-state'
 import { joinGameLobby } from './meta/game-lobby'
+import { createStreamScreens } from './components/lobby/stream-screens/stream-screens'
 
 // Mission-1 production flow:
 //   1. bootstrap() -> PlayFab LoginWithCustomID, get user, realm, Colyseus client
@@ -131,6 +132,13 @@ export async function main() {
     }
 
     spawnLobby()
+    // SDK6 lobby.ts created them once with the lobby; they hide and show
+    // themselves around games, so a respawned lobby doesn't recreate them.
+    try {
+      createStreamScreens(globalStore.userData.getState().TitleData?.streamURL)
+    } catch (err) {
+      console.log('[main] stream screens failed:', err)
+    }
     console.log('[main] lobby spawned, ready')
   } catch (err: any) {
     console.log('[main] bootstrap failed:', err)

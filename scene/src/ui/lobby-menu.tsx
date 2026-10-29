@@ -23,6 +23,7 @@ import { TutorialView, WorkshopView, PrizesView, DailyMissionsView, SeasonView, 
 import { C, hex, fmt, materialIcon } from './ui-theme'
 import { fullLayout, scaler, type Px } from './ui-scale'
 import { P, at, img, imgW, imgBox, text, box, fullFrame, button2, imageButton, squareButton, sideCard, nextPrizeStrip, resIcon, rankBadge, border, energyChip } from './ui2'
+import { pingLabel } from './ping-label'
 import { seasonCatalog } from '../components/lobby/seasons/season-catalog'
 // @ts-ignore - common/utils has @ts-nocheck
 import { getCatFromTier, getPointsOnCurrentTier, getPointsToTier, getTierFromSub, seasonPointsPerCategory } from '../../../common/utils'
@@ -295,7 +296,10 @@ export const LobbyMenu = () => {
   // explorer's buttons and the X does it.
   const hint = isMobile() ? null : text(px, fs, 'Press E or F to close', 498, 338, 163, 16, 11, P.pale, 'middle-right')
 
-  return fullFrame(L, [...top, ...left, ...season, ...soon, ...moreGames, ...cards, hint])
+  // Bottom centre, under the bottom row: clear of the explorer's corners.
+  const ping = pingLabel(px, fs, 10, { ...at(px, 152, 355, 120, 16) })
+
+  return fullFrame(L, [...top, ...left, ...season, ...soon, ...moreGames, ...cards, hint, ping])
 }
 
 // Resource chip of the top bar: the game's icon and the amount.

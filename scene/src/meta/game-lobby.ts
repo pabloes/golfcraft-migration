@@ -11,8 +11,9 @@ import { getTierFromSub, sleep } from '../../../common/utils'
 import MESSAGE from '../../../server/rooms/mesages'
 import { globalStore } from '../services/globalStore/globalStore'
 import { clearAttachedGolfclubs, handleAttachedGolfclubs } from '../components/attached-golfclub'
-import { refreshUserData } from './bootstrap'
+import { getSessionTicket, refreshUserData } from './bootstrap'
 import { showMessage } from '../components/lobby/server-notification'
+import { reportPing } from '../ui/ping-state'
 
 type JoinOptions = { colyseus: any; user: any; PlayFabId: string; realm: string }
 
@@ -25,6 +26,7 @@ export async function joinGameLobby(opts: JoinOptions): Promise<void> {
         realm,
         user: { ...user, avatar: undefined },
         PlayFabId,
+        clientInfo: { sessionTicket: getSessionTicket() },
         gameId: 1,
         tier
       })
@@ -38,11 +40,33 @@ export async function joinGameLobby(opts: JoinOptions): Promise<void> {
       })
       lobbyRoom.onMessage('*', () => {})
 
+      // Round trip for the HUD's ping (GameLobbyRoom answers PING with PONG).
+      // Self-stopping like golfplay-client's: the sandbox's clearInterval is
+      // not reliable, so a flag ends the sends once the room is gone.
+      let pingSentAt = 0
+      let pingStopped = false
+      lobbyRoom.onMessage(MESSAGE.PONG, () => {
+        if (pingSentAt) reportPing(Date.now() - pingSentAt)
+      })
+      const sendPing = () => {
+        if (pingStopped) return
+        pingSentAt = Date.now()
+        try {
+          lobbyRoom.send(MESSAGE.PING)
+        } catch (_) {
+          pingStopped = true
+        }
+      }
+      sendPing()
+      const pingTimer = setInterval(sendPing, 5000)
+
       // The players map arrives with the first state patch.
       lobbyRoom.onStateChange.once(() => handleAttachedGolfclubs(lobbyRoom, { realm, address: user.publicKey || user.userId }))
 
       lobbyRoom.onLeave((code: number) => {
         console.log('[game-lobby] left', code)
+        pingStopped = true
+        clearInterval(pingTimer)
         clearAttachedGolfclubs()
         // 4000+ are the server's own closes (consented / kicked): stay out.
         if (code < 4000) {

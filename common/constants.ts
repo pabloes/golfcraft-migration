@@ -58,11 +58,11 @@ export const USE_REMOTE_SERVER = false;
 const SERVER_URL = USE_REMOTE_SERVER ? `ws.golfcraftgame.com` : `localhost:2567`;
 export const SERVER_HTTP_URL = USE_REMOTE_SERVER ? `https://${SERVER_URL}` : `http://${SERVER_URL}`;
 export const WS_HOST = USE_REMOTE_SERVER ? `wss://${SERVER_URL}` : `ws://${SERVER_URL}`;
-// Onchain materials subgraph (GolfcraftMaterials ERC1155 on Polygon). SDK6's
-// subgraph (owner Eibriel, id Ccskr6...) is dead ("no allocations"); this is a
-// fresh deploy on The Graph Studio (materials-only). Studio dev endpoint needs
-// no API key. Source lives in this repo at subgraph/golfcraft/.
-export const MATERIALS_SUBGRAPH_URL = `https://api.studio.thegraph.com/query/9782/golfcraft/v0.0.1`;
+// GolfcraftMaterials ERC1155 on Polygon (token ids 0..7, see bootstrap.ts).
+// SDK6 read balances from its subgraph, which died ("no allocations"); our
+// Studio replacement (subgraph/golfcraft/) answered "Not found" by 2026-10-27,
+// so the scene reads balanceOfBatch from the contract over POLYGON_RPC.
+export const MATERIALS_CONTRACT = `0xb50E29A3ccF7c0AB133ea7de46B09D0D8fEAfdF0`;
 // Golfcraft Golfclub ERC721 on Polygon. SDK6 resolved an equipped NFT club's
 // model via the subgraph; we read getGolfclubId(tokenId) (selector 0x1f56940f)
 // straight from the contract instead, over a public Polygon RPC.

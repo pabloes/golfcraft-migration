@@ -23,6 +23,7 @@ import { getTierFromSub } from '../../../common/utils'
 import { seasonTierDefinitions } from '../../../common/season-tier-definitions'
 import { fullLayout, scaler, type Layout, type Px } from './ui-scale'
 import { mobileShootState } from './mobile-shoot-state'
+import { pingLabel } from './ping-label'
 
 const HUD_BG = Color4.create(18 / 255, 22 / 255, 70 / 255, 0.88)
 const SHADOW_TEXT = hex('#1B2A6B')
@@ -208,6 +209,7 @@ export const MapFooter = () => {
       {gs.courseAuthor ? (
         <Label value={`by ${gs.courseAuthor}`} fontSize={fs(11)} color={P.pale} textAlign="middle-left" uiTransform={{ height: px(26), margin: { left: px(6) } }} textWrap="nowrap" />
       ) : null}
+      {pingLabel(px, fs, 10, { margin: { left: px(8) } })}
     </UiEntity>
   )
 }

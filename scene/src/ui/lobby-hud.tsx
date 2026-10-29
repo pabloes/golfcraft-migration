@@ -20,6 +20,7 @@ import { hudScale, scaler, type Px } from './ui-scale'
 import { isMobile } from '../services/platform'
 import { C, ExpandIcon, pointerState, pressable } from './ui-theme'
 import { lobbyMenuState, openLobbyMenu } from './lobby-menu-state'
+import { pingLabel } from './ping-label'
 import {
   MATERIAL_PANEL_W,
   MATERIAL_PANEL_H,
@@ -298,6 +299,12 @@ export const LobbyHud = () => {
           />
         </UiEntity>
       </UiEntity>
+
+      {/* Round trip to the game server, under the player panel. */}
+      {pingLabel(px, fs, 10, {
+        positionType: 'absolute',
+        position: { top: px(PLAYER_PANEL_TOP + PLAYER_PANEL_H + 2), right: px(MATERIAL_PANEL_RIGHT + 4) }
+      })}
 
       {/* Golf club card over the strip's golfclub box (SDK6 golfClubThumbnailDef
           /golfClubNameDef + mainBarDef GolfClubPower/Control/Aim at y≈-215).

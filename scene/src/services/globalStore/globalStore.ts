@@ -53,6 +53,8 @@ export const globalStore = {
         }
       }
     ],
-    activeGolfClubTokenId: null
+    activeGolfClubTokenId: null,
+    // PlayFab TitleData keys the scene reads (bootstrap.ts), e.g. streamURL
+    TitleData: {} as { [key: string]: string }
   })
 }

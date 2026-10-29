@@ -33,6 +33,7 @@ import { createFixBugButton as createFixBugButtonStub } from './golfplay-client-
 import { createBallOrbitCamera } from '../../../golfplay/src/components/orbit-camera'
 import { CAMERA_AIM_MODE } from '../../config/controls'
 import { mobileShootState } from '../../ui/mobile-shoot-state'
+import { reportPing } from '../../ui/ping-state'
 
 const REWARD_NAMES: any = {
   WD: 'wood',
@@ -280,6 +281,7 @@ const GolfplayClientFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: string })
 
     function onMessagePong() {
       lastPing = (Date.now() - lastPingTime) / 2
+      reportPing(Date.now() - lastPingTime)
       room.send(MESSAGE.PING2)
     }
     function onClientLog(data: any) {

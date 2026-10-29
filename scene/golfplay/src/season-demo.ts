@@ -6,6 +6,7 @@ import {fadeInOverlay, fadeOutOverlay} from "../../src/components/ui/overlay";
 import {hideWaitPlayers, showWaitForPlayers} from "../../src/components/lobby/season-game-countdown";
 import {formatTime, sleep} from "../../../common/utils";
 import {createOrShowNextGameUi} from "../../src/components/lobby/season-next-game-ui";
+import {getSessionTicket} from "../../src/meta/bootstrap";
 
 export const createSeasonDemo = async (
     parent: any,
@@ -64,7 +65,8 @@ export const createSeasonDemo = async (
                 {
                     user: {...userData, avatar:undefined},
                     userId,
-                    PlayFabId: undefined,//its calculated by address on SeasonRoom
+                    PlayFabId: undefined,//the server takes it from the session ticket
+                    clientInfo: {sessionTicket: getSessionTicket()},
                     roomInstanceId: Date.now()
                 },
             );

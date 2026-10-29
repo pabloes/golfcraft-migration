@@ -7,7 +7,7 @@ import * as Colyseus from 'colyseus.js'
 import {
   WS_HOST,
   USE_REMOTE_SERVER,
-  MATERIALS_SUBGRAPH_URL,
+  MATERIALS_CONTRACT,
   GOLF_CLUB_BONUSES,
   GOLFCLUB_CONTRACT,
   POLYGON_RPC
@@ -16,9 +16,11 @@ import { getLevelInfo } from '../../../common/utils'
 import {
   loginWithCustomID,
   getPlayerCombinedInfo,
+  getTitleData,
   executeCloudScript,
   updateUserData,
   updateUserTitleDisplayName,
+  isNameNotAvailable,
   CombinedInfo,
   LoginResult
 } from './playfab-rest'
@@ -31,6 +33,8 @@ import { globalStore } from '../services/globalStore/globalStore'
 // server bumps current_mission / rewards on completion. Mirrors SDK6
 // services/userData.ts:refreshUserData, which the storymode NPC calls onFinish.
 let sessionTicket: string | null = null
+// Lowercase wallet of a web3 player ('' for guests), for the NFT golf clubs.
+let nftWallet = ''
 
 // The golfclub board calls cloudscript handlers (upgradeGolfclub /
 // selectGolfClubTokenId), which need the same ticket.
@@ -112,6 +116,7 @@ async function resolvePlayFabCustomId(userId: string, hasConnectedWeb3: boolean)
   if (!hasConnectedWeb3) {
     // Guest player: no signed identity to send, use the userId directly so we
     // get a stable anonymous account.
+    recordGuestVisit(userId)
     return userId
   }
   const base = USE_REMOTE_SERVER ? 'https://golfcraftgame.com' : 'http://localhost:2569'
@@ -154,6 +159,25 @@ async function resolvePlayFabCustomId(userId: string, hasConnectedWeb3: boolean)
     console.log('[bootstrap] /api/get-login-id failed:', err)
     throw new Error(`Could not resolve your GolfCraft account (${err?.message || err})`)
   }
+}
+
+// golfcraftgame.com/stats counts wallet visits in /api/get-login-id, which
+// guests never call, so a guest's visit is reported here. Same transport as
+// get-login-id (signed in production, hand-built header locally); a failure
+// only costs one visit in the stats, so nothing waits for it.
+function recordGuestVisit(userId: string) {
+  const base = USE_REMOTE_SERVER ? 'https://golfcraftgame.com' : 'http://localhost:2569'
+  const url = `${base}/api/record-visit`
+  const request: Promise<unknown> = USE_REMOTE_SERVER
+    ? signedFetch({ url, init: { method: 'POST', headers: { 'Content-Type': 'application/json' } } })
+    : fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-identity-auth-chain-0': JSON.stringify({ type: 'SIGNER', payload: userId, signature: '' })
+        }
+      })
+  request.catch((err: any) => console.log('[bootstrap] record-visit failed:', err))
 }
 
 // The route answers {"valid":false,"error":"..."} when its checks fail; show
@@ -248,8 +272,9 @@ async function applyCombinedInfoToHud(info: CombinedInfo) {
     aim = Number(gc1?.CustomData?.attribute_aim || 0)
   }
 
-  const invModels = invGolfclubs.map((i) => Number(i.ItemId.replace('golfclub-', '')))
-  const bonus = computeTrainingBonus([...invModels, model], wearablesBonus, hasTrainingBoost)
+  const nftGolfclubs = await fetchNftGolfclubs(nftWallet, invGolfclubs)
+  const ownedModels = [...invGolfclubs, ...nftGolfclubs].map((i) => Number(i.ItemId.replace('golfclub-', '')))
+  const bonus = computeTrainingBonus([...ownedModels, model], wearablesBonus, hasTrainingBoost)
 
   console.log(
     '[bootstrap] golfclub:',
@@ -264,25 +289,23 @@ async function applyCombinedInfoToHud(info: CombinedInfo) {
     bonus
   })
 
-  // Publish the real inventory clubs + active token into the store, mirroring
-  // SDK6 services/userData.ts:95 (`golfclubs: [...filterInventoryGolfclubs(
-  // UserInventory), ...getNFTGolfClubs(address)]` + `activeGolfClubTokenId`
-  // from UserReadOnlyData). The golfclub board reads this to build its
-  // collection, and npc-storymode picks the club it starts a mission with.
-  // Deviation from SDK6: it kept ONLY `golfclub-1` from the inventory and
-  // re-added the NFT clubs from the subgraph with synthetic 5/5/5 attributes.
-  // That subgraph is dead (see CLAUDE.md), and our inventory already carries
-  // the NFT-backed clubs with their real tokenId/attributes, so we pass every
-  // Golfclub item straight through instead of dropping and re-synthesizing them.
+  // Publish the inventory clubs + the wallet's NFT clubs + active token into
+  // the store, mirroring SDK6 services/userData.ts:95 (`golfclubs:
+  // [...filterInventoryGolfclubs(UserInventory), ...getNFTGolfClubs(address)]`
+  // + `activeGolfClubTokenId` from UserReadOnlyData). The golfclub board and
+  // the WORKSHOP read this to build their collection, and the mission and
+  // Season clients pick the club they start with by its CustomData.tokenId.
+  // NFT clubs are NOT in the PlayFab inventory: without them a holder saw only
+  // the basic club + CocoBay promo and played with the basic club's stats.
   globalStore.userData.setState({
-    golfclubs: invGolfclubs,
+    golfclubs: [...invGolfclubs, ...nftGolfclubs],
     activeGolfClubTokenId: activeTokenId || null
   })
 }
 
-// Blockchain (Arbitrum subgraph) materials fetch. SDK6's material-balance.ts
-// hit a Graph endpoint with a wallet address and parsed materials per the
-// store-name mapping below. The IDs come back as "<address>-<id>" and the
+// On-chain materials. SDK6's material-balance.ts asked its subgraph for the
+// wallet's balances; both that subgraph and our Studio one are gone, so we
+// call the ERC1155's balanceOfBatch(wallet x8, ids 0..7) directly. The
 // id-to-name map mirrors SDK6 materialStoreNames.
 const MATERIAL_STORE_NAMES: Record<string, string> = {
   '0': 'FTChain',
@@ -296,23 +319,27 @@ const MATERIAL_STORE_NAMES: Record<string, string> = {
 }
 
 async function fetchBlockchainMaterials(address: string): Promise<Record<string, number>> {
-  const response = await fetch(MATERIALS_SUBGRAPH_URL, {
+  const ids = Object.keys(MATERIAL_STORE_NAMES)
+  const n = (x: number) => word(x.toString(16))
+  // balanceOfBatch(address[],uint256[]): two offsets, then each array as length + items
+  const data =
+    '0x4e1273f4' + n(64) + n(64 + 32 * (ids.length + 1)) +
+    n(ids.length) + ids.map(() => word(address)).join('') +
+    n(ids.length) + ids.map((id) => n(Number(id))).join('')
+  const response = await fetch(POLYGON_RPC, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      query: `{ account(id:"${address}") { materials { id, balance } } }`,
-      variables: null
-    })
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_call', params: [{ to: MATERIALS_CONTRACT, data }, 'latest'] })
   })
-  if (!response.ok) throw new Error(`subgraph ${response.status}`)
+  if (!response.ok) throw new Error(`rpc ${response.status}`)
   const json = await response.json()
-  const materials = json?.data?.account?.materials || []
+  // returns uint256[]: offset, length, then one word per id
+  const hex = String(json?.result || '').replace(/^0x/, '')
+  if (hex.length < 128 + 64 * ids.length) throw new Error(`balanceOfBatch failed: ${JSON.stringify(json?.error || json)}`)
   const out: Record<string, number> = {}
-  for (const m of materials) {
-    const id = String(m.id).replace(`${address}-`, '')
-    const storeName = MATERIAL_STORE_NAMES[id]
-    if (storeName) out[storeName] = Number(m.balance) || 0
-  }
+  ids.forEach((id, i) => {
+    out[MATERIAL_STORE_NAMES[id]] = parseInt(hex.slice(128 + 64 * i, 192 + 64 * i), 16) || 0
+  })
   return out
 }
 
@@ -370,10 +397,62 @@ async function resolveActiveGolfclubModel(tokenId: string): Promise<number | nul
   }
 }
 
+// SDK6 services/golfclubs.ts:getNFTGolfClubs listed the wallet's NFT clubs
+// from the (now dead) subgraph as synthetic 5/5/5 items. We read the same from
+// the Golfclub ERC721: balanceOf, then tokenOfOwnerByIndex and getGolfclubId
+// per token, each step one JSON-RPC batch. Tokens the inventory already
+// carries are skipped. Guests have no wallet; any failure lists none.
+const MAX_NFT_GOLFCLUBS = 100
+const word = (hex: string) => hex.replace(/^0x/, '').padStart(64, '0')
+
+async function golfclubCalls(datas: string[]): Promise<number[]> {
+  const response = await fetch(POLYGON_RPC, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(
+      datas.map((data, id) => ({ jsonrpc: '2.0', id, method: 'eth_call', params: [{ to: GOLFCLUB_CONTRACT, data }, 'latest'] }))
+    )
+  })
+  const json = await response.json()
+  if (!Array.isArray(json)) throw new Error('RPC batch not supported')
+  const out: number[] = []
+  for (const r of json) {
+    if (!r?.result || r.result === '0x') throw new Error(`eth_call ${r?.id} failed`)
+    out[r.id] = parseInt(r.result, 16)
+  }
+  return out
+}
+
+async function fetchNftGolfclubs(address: string, inventory: any[]): Promise<any[]> {
+  if (!/^0x[0-9a-f]{40}$/.test(address)) return []
+  try {
+    const [balance] = await golfclubCalls(['0x70a08231' + word(address)])
+    const count = Math.min(balance || 0, MAX_NFT_GOLFCLUBS)
+    if (!count) return []
+    const indexes = Array.from({ length: count }, (_, i) => i)
+    const tokenIds = await golfclubCalls(indexes.map((i) => '0x2f745c59' + word(address) + word(i.toString(16))))
+    const models = await golfclubCalls(tokenIds.map((t) => '0x1f56940f' + word(t.toString(16))))
+    const known = new Set(inventory.map((i) => String(i.CustomData?.tokenId || '')))
+    const clubs = tokenIds
+      .map((tokenId, i) => ({ tokenId: String(tokenId), model: models[i] }))
+      .filter((c) => !known.has(c.tokenId))
+      .map(({ tokenId, model }) => ({
+        ItemId: `golfclub-${model}`,
+        ItemClass: 'GolfClub',
+        DisplayName: GOLF_CLUB_NAMES[model] || 'GOLF CLUB',
+        CustomData: { tokenId, attribute_aim: '5', attribute_power: '5', attribute_control: '5', xp: 9999999 }
+      }))
+    console.log('[bootstrap] NFT golf clubs:', clubs.map((c) => `${c.CustomData.tokenId}:${c.ItemId}`).join(' ') || 'none')
+    return clubs
+  } catch (err) {
+    console.log('[bootstrap] NFT golf clubs RPC failed:', err)
+    return []
+  }
+}
+
 // Compute the lobby TrainingBonus %: SDK6 getBonusFromUserState = +100 per
 // trainingBoost, + Σ GOLF_CLUB_BONUSES over the player's unique club models,
-// + min(wearablesBonus, 50). (SDK6 sourced the NFT clubs from the subgraph; we
-// use the PlayFab inventory clubs ∪ the active club model instead.)
+// + min(wearablesBonus, 50). Models = inventory clubs ∪ NFT clubs ∪ active.
 function computeTrainingBonus(models: number[], wearablesBonus: number, hasTrainingBoost: boolean): number {
   let bonus = hasTrainingBoost ? 100 : 0
   const seen = new Set<number>()
@@ -420,14 +499,34 @@ async function initializePlayerAccount(
       console.log('[bootstrap] UpdateUserData address failed:', err)
     }
   }
+  // PlayFab display names are unique in this title and Decentraland's are not
+  // (an unclaimed name belongs to any wallet that picks it), so a taken name
+  // left the account nameless (39CB55A781056A71 vs another "Kairos"). Then we
+  // use Decentraland's own form for unclaimed names: name#<last 4 of wallet>.
+  const currentName = payload.AccountInfo?.TitleInfo?.DisplayName || ''
   const displayName = String(user.displayName || '').slice(0, 25)
-  if (displayName.length >= 3) {
+  if (displayName.length >= 3 && displayName !== currentName) {
     try {
       await updateUserTitleDisplayName(login.SessionTicket, displayName)
     } catch (err) {
-      console.log('[bootstrap] UpdateUserTitleDisplayName failed:', err)
+      const suffixed = withWalletSuffix(displayName, address)
+      if (!isNameNotAvailable(err) || suffixed === displayName) {
+        console.log('[bootstrap] UpdateUserTitleDisplayName failed:', err)
+      } else if (suffixed !== currentName) {
+        try {
+          await updateUserTitleDisplayName(login.SessionTicket, suffixed)
+          console.log('[bootstrap] display name taken, using', suffixed)
+        } catch (err2) {
+          console.log('[bootstrap] UpdateUserTitleDisplayName failed:', err2)
+        }
+      }
     }
   }
+}
+
+const withWalletSuffix = (name: string, address: string) => {
+  const suffix = `#${address.slice(-4)}`
+  return name.endsWith(suffix) ? name : name.slice(0, 25 - suffix.length) + suffix
 }
 
 export const bootstrap = async (): Promise<BootstrapResult> => {
@@ -447,6 +546,7 @@ export const bootstrap = async (): Promise<BootstrapResult> => {
       displayName: userData.displayName
     }
     console.log('[bootstrap] user:', user.userId, 'web3:', user.hasConnectedWeb3)
+    nftWallet = user.hasConnectedWeb3 ? String(user.publicKey || user.userId).toLowerCase() : ''
 
     const realmResponse = await getRealm({})
     const realm = realmResponse.realmInfo?.realmName || 'localhost'
@@ -459,7 +559,24 @@ export const bootstrap = async (): Promise<BootstrapResult> => {
     sessionTicket = login.SessionTicket
     playFabIdForMissions = login.PlayFabId
     console.log('[bootstrap] PlayFab login OK:', login.PlayFabId, 'newly created:', login.NewlyCreated)
+    // SDK6 kept the identity in the user store; several readers still take it
+    // from there (the Season reward claim, the in-game "you" row). Without it
+    // claim-season-reward got an empty body and no tier wearable was ever sent.
+    globalStore.userData.setState({
+      PlayFabId: login.PlayFabId,
+      userId: user.userId,
+      displayName: user.displayName
+    })
     await initializePlayerAccount(login, user)
+    // SDK6 read TitleData.streamURL (lobby.ts) for the video screens and to
+    // keep the course music quiet during a stream. Non-fatal: no screens.
+    try {
+      const TitleData = await getTitleData(login.SessionTicket, ['streamURL'])
+      globalStore.userData.setState({ TitleData })
+      console.log('[bootstrap] streamURL:', TitleData.streamURL || 'none')
+    } catch (err) {
+      console.log('[bootstrap] GetTitleData failed:', err)
+    }
 
     // Stash on engine so other modules (golfplay-client) can read the base
     // resource URL for golfplay GLBs/sounds. SDK6 meta.ts set this to

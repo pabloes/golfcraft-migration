@@ -16,6 +16,7 @@ import { powerBarState, controlHintState } from './shoot-hud-state'
 import { seasonClockState, seasonResultsState, seasonCountdownState, seasonHoleState, SeasonResultRow } from './season-hud-state'
 import { C, hex, mmss } from './ui-theme'
 import { P, border, initialAvatar, rankBadge } from './ui2'
+import { pingLabel } from './ping-label'
 // @ts-ignore - common/utils has @ts-nocheck
 import { getTierFromSub } from '../../../common/utils'
 // @ts-ignore - season-tier-definitions has @ts-nocheck
@@ -331,6 +332,7 @@ export const MapFooter = () => {
       {gs.courseAuthor ? (
         <Label value={`by ${gs.courseAuthor}`} fontSize={fs(13)} color={P.pale} textAlign="middle-right" uiTransform={{ height: px(20) }} textWrap="nowrap" />
       ) : null}
+      {pingLabel(px, fs, 12)}
     </UiEntity>
   )
 }
