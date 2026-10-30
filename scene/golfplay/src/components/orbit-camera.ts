@@ -37,6 +37,7 @@ import {
 } from '../../../src/config/controls'
 import { mobileShootState } from '../../../src/ui/mobile-shoot-state'
 import { isMobile } from '../../../src/services/platform'
+import { createCameraOcclusion } from './camera-occlusion'
 
 type Vec3Like = { x: number; y: number; z: number }
 
@@ -92,6 +93,8 @@ export const createBallOrbitCamera = (
     lookAtEntity: ballEntity,
     defaultTransition: { transitionMode: { $case: 'time', time: 0.4 } }
   })
+  // While aiming, the parts between the camera and the ball step aside.
+  const occlusion = createCameraOcclusion(camera, ballEntity, () => distance)
 
   function place() {
     const yawRad = (yaw * Math.PI) / 180
@@ -196,6 +199,7 @@ export const createBallOrbitCamera = (
     if (released) return
     released = true
     engine.removeSystem(update)
+    occlusion.dispose()
     mobileShootState.zoomable = false
     mobileShootState.zoomHold = 0
     if (MainCamera.getOrNull(engine.CameraEntity)?.virtualCameraEntity === camera) {

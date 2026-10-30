@@ -8,7 +8,8 @@ import {
   Material,
   Animator,
   AudioSource,
-  VisibilityComponent
+  VisibilityComponent,
+  ColliderLayer
 } from '@dcl/sdk/ecs'
 import { Vector3, Quaternion } from '@dcl/sdk/math'
 import ExpressionStorage from '../../../../../lib/expression-storage/_expression-storage'
@@ -43,6 +44,12 @@ const ANIMATION = {
 // SDK6 had @Component("MovingPartComponent") for tagging. SDK7 equivalent
 // is a flag component, declared once and re-used across entities.
 export const MovingPartComponent = engine.defineComponent('MovingPartComponent', {})
+
+// Model parts collide on this layer only (no physics, no pointer), so the
+// camera can find the ones standing between it and the ball
+// (camera-occlusion.ts). Each registers how to hide itself for that reason.
+export const OCCLUSION_LAYER = ColliderLayer.CL_CUSTOM1
+export const occludableParts = new Map<Entity, (occluded: boolean) => void>()
 
 const reactiveSwitch = (entity: Entity, partDefinition: any) => {
   const baseUrl: string = (engine as any)['__COURSE_MODELS_BASE__'] || ''
@@ -96,6 +103,8 @@ const createVisualPart = (
   // relied on setParent(null) + engine.removeEntity to cascade-clean
   // children; SDK7 does not cascade — orphaned children keep rendering.
   const ownedEntities: Entity[] = [entity]
+  let shownByCourse = true
+  let occluded = false
 
   if (animation) {
     MovingPartComponent.create(entity, {})
@@ -127,7 +136,12 @@ const createVisualPart = (
     ownedEntities.push(textPart)
   } else {
     const shape = getGLTFShape(`${baseUrl}models/${subtype || type}.gltf`)
-    GltfContainer.create(entity, { src: shape.src })
+    GltfContainer.create(entity, { src: shape.src, visibleMeshesCollisionMask: OCCLUSION_LAYER })
+    occludableParts.set(entity, (value) => {
+      if (value === occluded) return
+      occluded = value
+      applyVisibility()
+    })
   }
 
   const listeningVariables: string[] = []
@@ -167,8 +181,15 @@ const createVisualPart = (
   // switch back to visible could never restore it — the wall stayed gone
   // visually while physics correctly re-appeared). Toggle VisibilityComponent
   // on every owned entity (entity + text/image sub-parts) instead.
-  const setVisible = (v: boolean) => {
+  // Two reasons hide a part: the course's own hide-condition and the camera
+  // (while the part blocks the view of the ball); it shows when neither does.
+  function applyVisibility() {
+    const v = shownByCourse && !occluded
     for (const e of ownedEntities) VisibilityComponent.createOrReplace(e, { visible: v })
+  }
+  const setVisible = (v: boolean) => {
+    shownByCourse = v
+    applyVisibility()
   }
 
   const hiddenExpr: string | undefined =
@@ -188,6 +209,7 @@ const createVisualPart = (
   }
 
   const disposeAll = () => {
+    occludableParts.delete(entity)
     for (const e of ownedEntities) {
       try {
         engine.removeEntity(e)
