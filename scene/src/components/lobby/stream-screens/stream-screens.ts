@@ -33,15 +33,19 @@ const RETRY_MS = 30000
 // the lobby screens; the rest stay visible while playing
 const LOBBY_SCREENS = 3
 
+// SDK6's yaw + 180: an SDK7 plane shows the video mirrored from the side SDK6
+// pointed at the room (seen in the World, 2026-10-30), so each screen turns
+// round to face it with its front.
+const FACE_ROOM = 180
 const SCREENS = [
   // Floor 0
-  { position: Vector3.create(5, 3.9, 20), scale: Vector3.create(48 * 0.2, 27 * 0.2, 1), rotation: Quaternion.fromEulerDegrees(0, 90 - 10, 0) },
+  { position: Vector3.create(5, 3.9, 20), scale: Vector3.create(48 * 0.2, 27 * 0.2, 1), rotation: Quaternion.fromEulerDegrees(0, 90 - 10 + FACE_ROOM, 0) },
   // Floor 1
-  { position: Vector3.create(13, 11, 15), scale: Vector3.create(48 * 0.1, 27 * 0.1, 1), rotation: Quaternion.fromEulerDegrees(0, -10, 0) },
+  { position: Vector3.create(13, 11, 15), scale: Vector3.create(48 * 0.1, 27 * 0.1, 1), rotation: Quaternion.fromEulerDegrees(0, -10 + FACE_ROOM, 0) },
   // Floor 3
-  { position: Vector3.create(24, 26 + 4, 47.5), scale: Vector3.create(48 * 0.25, 27 * 0.25, 1), rotation: Quaternion.fromEulerDegrees(0, 180, 0) },
+  { position: Vector3.create(24, 26 + 4, 47.5), scale: Vector3.create(48 * 0.25, 27 * 0.25, 1), rotation: Quaternion.fromEulerDegrees(0, 180 + FACE_ROOM, 0) },
   // Above the courses
-  { position: Vector3.create(9.5, 40, 9.5), scale: Vector3.create(48 * 0.3, 27 * 0.3, 1), rotation: Quaternion.fromEulerDegrees(0, 45, 0) }
+  { position: Vector3.create(9.5, 40, 9.5), scale: Vector3.create(48 * 0.3, 27 * 0.3, 1), rotation: Quaternion.fromEulerDegrees(0, 45 + FACE_ROOM, 0) }
 ]
 
 let state: VideoState = VideoState.VS_NONE
