@@ -7,7 +7,7 @@ import { Entity } from '@dcl/sdk/ecs'
 import { Quaternion, Vector3 } from '@dcl/sdk/math'
 
 import { globalStore } from '../../services/globalStore/globalStore'
-import { getSessionTicket, refreshUserData } from '../../meta/bootstrap'
+import { COCOBAY_PROMO, getSessionTicket, refreshUserData } from '../../meta/bootstrap'
 import { executeCloudScript } from '../../meta/playfab-rest'
 import { showMessage } from './server-notification'
 import { BoardGolfclub, createGolfclubBoard } from './golfclub-screen/golfclub-screen-ui'
@@ -56,8 +56,8 @@ export function deserializeGolfclubs(golfclubs: any[]): BoardGolfclub[] {
     })
     .concat([
       {
-        tokenId: '999999',
-        golfclubId: 9,
+        tokenId: COCOBAY_PROMO.tokenId,
+        golfclubId: COCOBAY_PROMO.golfclubId,
         xp: 0,
         attributes: { power: 5, control: 5, aim: 5 },
         DisplayName: 'CocoBay x Golfcraft',

@@ -254,11 +254,21 @@ async function applyCombinedInfoToHud(info: CombinedInfo) {
   const activeTokenId = info.UserReadOnlyData?.activeGolfClubTokenId?.Value || ''
   const wearablesBonus = Number(info.UserReadOnlyData?.wearablesBonus?.Value || 0)
 
-  // Active club model. NFT clubs aren't in the PlayFab inventory; SDK6 found
-  // them via the subgraph. We read getGolfclubId(tokenId) from the contract;
-  // SDK6 defaults to the basic club (id 1) when the token can't be resolved.
-  let model = await resolveActiveGolfclubModel(activeTokenId)
-  if (model === null) model = 1
+  // Active club model, as SDK6 getGolfclubIdFromTokenId: from the player's own
+  // clubs (inventory + the wallet's NFT clubs) by tokenId. The CocoBay promo is
+  // not a real token, and the contract answers 0 (Star trail) for it, so it
+  // maps to its own model; anything else asks the contract. SDK6 defaults to
+  // the basic club (id 1) when the token can't be resolved.
+  const nftGolfclubs = await fetchNftGolfclubs(nftWallet, invGolfclubs)
+  const listed = activeTokenId
+    ? [...invGolfclubs, ...nftGolfclubs].find((i) => String(i.CustomData?.tokenId ?? '') === String(activeTokenId))
+    : undefined
+  let model: number | null = listed
+    ? Number(listed.ItemId.replace('golfclub-', ''))
+    : activeTokenId === COCOBAY_PROMO.tokenId
+      ? COCOBAY_PROMO.golfclubId
+      : await resolveActiveGolfclubModel(activeTokenId)
+  if (model === null || isNaN(model)) model = 1
 
   // Attributes: SDK6 controller assumes maxed (5/5/5) for any NFT club (id != 1);
   // the basic club (id 1) shows its real inventory attributes.
@@ -272,7 +282,6 @@ async function applyCombinedInfoToHud(info: CombinedInfo) {
     aim = Number(gc1?.CustomData?.attribute_aim || 0)
   }
 
-  const nftGolfclubs = await fetchNftGolfclubs(nftWallet, invGolfclubs)
   const ownedModels = [...invGolfclubs, ...nftGolfclubs].map((i) => Number(i.ItemId.replace('golfclub-', '')))
   const bonus = computeTrainingBonus([...ownedModels, model], wearablesBonus, hasTrainingBoost)
 
@@ -355,6 +364,10 @@ async function fetchConfig(): Promise<Record<string, any>> {
   if (!response.ok) throw new Error(`/api/config ${response.status}`)
   return response.json()
 }
+
+// The "CocoBay x Golfcraft" promo club that SDK6 lobby-training.ts
+// deserializeGolfclubs offers everyone: not an NFT, shown with the CocoBay model.
+export const COCOBAY_PROMO = { tokenId: '999999', golfclubId: 9 }
 
 // Golf club model id → display name (SDK6 golfclubCatalog / GOLF_CLUB_NAME).
 // Models not listed (1, 4) fall back to the generic "GOLF CLUB".
