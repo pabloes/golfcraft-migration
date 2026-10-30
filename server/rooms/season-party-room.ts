@@ -221,7 +221,8 @@ export class SeasonPartyRoom extends Room<SeasonPartyRoomState> {
         if (!player) return;
         try {
             if (consented) throw new Error("consented leave " + player.displayName);
-            player.client = await this.allowReconnection(client, 10);
+            //the scene retries for ~17 s (room-reconnect.ts)
+            player.client = await this.allowReconnection(client, 20);
         } catch (error) {
             await this.markLeft(player);
         }

@@ -98,6 +98,10 @@ app.use(express.json());
 const gameServer = new Server({
     server: createServer(app),
     pingInterval: process.env.PROD ? 1500 : 0,
+    //SDK6 kept the default 2, which drops a client after ~4.5 s without a
+    //pong: the Decentraland desktop client stalls that long while it loads a
+    //neighbouring scene, and the Season run was lost. 6 tolerates ~10 s.
+    pingMaxRetries: 6,
 });
 
 gameServer.define('validate-room', ValidateRoom)

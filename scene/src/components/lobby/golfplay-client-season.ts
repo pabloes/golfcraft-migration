@@ -51,6 +51,7 @@ import { createBallOrbitCamera } from '../../../golfplay/src/components/orbit-ca
 import { CAMERA_AIM_MODE } from '../../config/controls'
 import { mobileShootState } from '../../ui/mobile-shoot-state'
 import { reportPing } from '../../ui/ping-state'
+import { reconnectRoom } from './room-reconnect'
 
 const REWARD_NAMES: any = {
   WD: 'wood',
@@ -359,14 +360,22 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
     function onLeave(code: number) {
       console.log('[season] onLeave', code)
       if (code < 4000 && code !== 1000) {
-        const roomId = room.id
-        const sessionId = room.sessionId
         state.reconnecting = true
-        colyseus.reconnect(roomId, sessionId).then((_room: any) => {
-          state.reconnecting = false
-          room = _room
-          listenRoom()
-        })
+        reconnectRoom(
+          colyseus,
+          room.id,
+          room.sessionId,
+          (_room: any) => {
+            state.reconnecting = false
+            room = _room
+            listenRoom()
+          },
+          () => {
+            state.reconnecting = false
+            showAvatars()
+            callbacks.onFinish && callbacks.onFinish(code)
+          }
+        )
       } else {
         showAvatars()
         callbacks.onFinish && callbacks.onFinish(code)

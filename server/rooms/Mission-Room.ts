@@ -296,7 +296,8 @@ export class MissionRoom extends Room<TrainingRaceState> {
             if(consented){
                 throw new Error('consented leave');
             }
-            await this.allowReconnection(client, 10);
+            //the scene retries for ~17 s (room-reconnect.ts); SDK6 gave 10
+            await this.allowReconnection(client, 20);
         } catch(error){
             this.golfPlay.dispose();
         }

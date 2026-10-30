@@ -856,7 +856,8 @@ console.log("accumulatedValue", JSON.stringify(sortedAccumulatedResult,null, "  
             if (consented) {
                 throw new Error('consented leave ' + this.user?.displayName);
             }
-            await this.allowReconnection(client, 10);
+            //the scene retries for ~17 s (room-reconnect.ts); SDK6 gave 10
+            await this.allowReconnection(client, 20);
         } catch (error) {
             if(this.state.currentGame >= 2){
                 const copiedResults = cloneJSON(this.state.results);
