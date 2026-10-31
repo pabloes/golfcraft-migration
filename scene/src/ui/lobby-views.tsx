@@ -825,7 +825,8 @@ export const DailyMissionsView = () => {
 // Other Decentraland games by the team. GO leaves GolfCraft for the game's
 // World through changeRealm, which the explorer confirms with the player. A
 // game that only runs on desktop shows a red notice on phones instead of GO.
-const ROADSTER = { name: 'ELON ROADSTER RACE', realm: 'lowpol.dcl.eth', desktopOnly: false }
+// lowpol.dcl.eth is the game's test World; xrace.dcl.eth is production.
+const ROADSTER = { name: 'ELON RACE', realm: 'xrace.dcl.eth', desktopOnly: false }
 const GAME_CARD_BG = hex('#08101F')
 const RACING_TAG = hex('#3FE0FF')
 const GAME_TAGLINE = hex('#B9E9F5')
