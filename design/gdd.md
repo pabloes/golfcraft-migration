@@ -6,25 +6,25 @@
 
 **Decentraland Creator Success Program**
 
-| | |
-|---|---|
-| Public experience title | OhMyGolf, a new fork of Golfcraft (this name is used in this document only; the deployed scene is still titled Golfcraft) — IP & [Content Policy](https://decentraland.org/content/) status: owner declaration: the applicant owns the Golfcraft IP, and OhMyGolf is their own fork of it; name screening: concern found (2026-10-29): "Oh My Golf" is also a Unity browser game listed on GamePix (released June 2024, no developer named), an iOS app "OhMyGolf HD" (reviewed in 2013) and an indoor golf simulator in Morzine, France; unresolved: whether to keep the name given those matches, and the deployed scene and World still carry the Golfcraft title |
-| Deployment target | Genesis City, 47,-45: https://decentraland.org/places/place/47,-45, where the game is live (owner). The program's page asks for the test scene in the applicant's own World; the same build deploys there with `scripts/deploy-scene-world.sh`. [OPEN: whether to add a World deploy, and under which NAME] |
-| Studio / team name | pablo.dcl.eth |
-| Date | 2026-10-30 |
-| Contact (Discord + email) | pabloest + estornut@gmail.com |
+| |                                                                            |
+|---|----------------------------------------------------------------------------|
+| Public experience title | OhMyGolf, a new fork of Golfcraft, with improvements and adapted to mobile |
+| Deployment target | Genesis City, 47,-45: https://decentraland.org/places/place/47,-45         |
+| Studio / team name | pablo                                                              |
+| Date | 2026-10-30                                                                 |
+| Contact (Discord + email) | pabloest + estornut@gmail.com                                              |
 
 ---
 
 ## 0. TL;DR
 
-| | |
-|---|---|
+| |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+|---|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **Player promise** | You play minigolf against other players (recorded runs) and climb to win the season rewards. Players can create custom maps and organize their own tournaments. |
-| **Primary player** | For players who already enjoy short competitive rounds (minigolf, racing ghosts, ranked ladders), arriving alone or with one friend, looking for a 10-minute run with something to climb. [agent-decided] |
-| **Current status** | Playable core loop live in Decentraland. OhMyGolf is a new fork of Golfcraft, the owner's minigolf game live since 2020 (owner). Golfcraft's record: about 220,000 finished games since 2022, 837 community-made maps, and 1,759 tournaments created by 33 organizers (from our database). The SDK7 version already plays: many playable holes, the tutorial missions, Ranked Season against recorded players, Ranked with friends (2–4 players) and the 20 wearables to earn each season (owner; Ranked Season is being verified end to end before next week). Mobile support goes public with the relaunch on November 1, 2026, together with @cocobayworld. The V0 slice, community tournaments (live and async) created, listed and played from the game menu, ran in the old SDK6 version with in-world panels and the website, and is not in SDK7 yet (from the repo). Playable link: https://decentraland.org/places/place/47,-45. Phone screenshots (Decentraland mobile app, iPhone SE): [a Ranked hole with the live ranking](screenshots/phone-ranked-hole.webp) and [the season prizes by rank](screenshots/phone-prizes-by-rank.webp). |
-| **Requested round** | V0 |
-| **Live at end of the round** | A player can find or create a community tournament, async or live, from the game menu on a phone, and play it beside the Ranked runs that already work. [agent-decided] |
+| **Primary player** | For casual players who like a relaxed, social round of minigolf anyone understands, arriving alone or with a friend, and for the organizers who run tournaments and the creative builders who make the maps.              |
+| **Current status** | Playable core loop live in Decentraland. OhMyGolf is a new fork of Golfcraft, the owner's minigolf game live since 2020. Golfcraft's record: about 220,000 finished games since 2022, 837 community-made maps, and 1,759 tournaments created by 33 organizers (from our database). Those 837 maps were built by players with Golfcraft’s in-world map editor (build a course from parts, play it to validate it, publish it); the editor is not in SDK7 yet and comes back in v2, after the tournaments of the four-week plan. Playable link: https://decentraland.org/places/place/47,-45. Phone screenshots (Decentraland mobile app, iPhone SE): [a Ranked hole with the live ranking](screenshots/phone-ranked-hole.webp) and [the season prizes by rank](screenshots/phone-prizes-by-rank.webp). |
+| **Requested round** | V0                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| **Live at end of the round** | Ranked runs, Ranked with friends and the phone layout, as live today, tested with the community in a public event and polished from what that event shows; the tournaments in the game menu are the four-week v1 plan (Section 9).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 
 ---
 
@@ -44,7 +44,7 @@ You play minigolf against other players (recorded runs) and climb to win the sea
 | **5–10 seconds** | You tap it. The menu opens on the Season card: your tier, WOOD 5, the next wearable to win, a big PLAY. The goal is clear: climb the season. |
 | **10–60 seconds** | PLAY loads the first map. Three balls wait beside yours, other players' recordings. You aim with the arrows, set the power, tap SHOOT. Your ball rolls; theirs roll too. Shots and seconds count. |
 | **1–3 minutes** | Your ball drops in. The hole result ranks the four of you by shots and time, and the next hole loads. Four holes make a run. |
-| **3–10 minutes** | After the fourth hole, the run-complete screen: season points won or lost, your tier, materials, xp, and the next wearable's distance. You choose: play again, Play together with friends, or a tournament. |
+| **3–10 minutes** | After the fourth hole, the run-complete screen: season points won or lost, your tier, materials, xp, and the next wearable's distance. You choose: play again, Play together with friends, or, from v1, a tournament. |
 | **Natural stopping point** | A run costs one energy; you get 10 a day. The menu shows the energy left, your tier and the points still needed for the next prize: tomorrow's 10 runs are the way to it. |
 
 The 5/10 rule (80% act within 5 s and can state the goal within 10 s) is untested [HYPOTHESIS H1-01].
@@ -97,7 +97,7 @@ The core loop is a **Ranked run**: you can always play alone, without waiting fo
 |---|---|---|---|
 | **End of first session** | Your tier moved (50 tiers, WOOD 5 to SUPREME), season points, materials and xp in the workshop, and your run is recorded as an opponent for others | Tomorrow's 10 runs; the first golf club upgrade with the materials | Your recording shows up, by name, in other players' runs [agent-decided] |
 | **End of first week** | A higher tier category (STONE or IRON), the first season wearable claimed, an upgraded golf club | Harder maps and shorter countdowns; a party with friends at your level; joining a tournament | The season wearable on your avatar, anywhere in Decentraland; your name in the Season top 10 [agent-decided] |
-| **Week 3+ — what takes more than two weeks?** | The upper tiers (GOLD and above) and the full set of 20 wearables; an organizer record from the tournaments you ran | Organizing tournaments and map contests; the organizer milestones (100, 250, 500 points) that reward emotes | A full-set outfit, your name as organizer on the tournament list [agent-decided] |
+| **Week 3+ — what takes more than two weeks?** | The upper tiers (GOLD and above) and the full set of 20 wearables; an organizer record from the tournaments you ran | Organizing tournaments and map contests; the organizer milestones (100, 250, 500 points) that reward emotes | A full-set outfit; your name as organizer on the tournament list and as builder on the HUD of your maps, which you announce yourself because your rewards grow with every player who plays them [agent-decided] |
 
 You open the menu after the daily refill and your tier reads STONE 3, two above where you ended on day one. The next prize bar is almost full, so you play a run against three recordings at your new level, and the countdowns are tighter than last week. The run-complete screen flips the bar: the first wearable is yours, and it is on your avatar when you walk out of the clubhouse. A friend's party is waiting in the menu, so you join for one more. [agent-decided]
 
@@ -108,7 +108,7 @@ Currency or tradable rewards: energy is earned at 10 a day and spent 1 per run; 
 | Selected hook | Exact trigger or timing | What the player anticipates | Reminder channel + no-reminder fallback |
 |---|---|---|---|
 | **1.** Season track — tiers and 20 wearables | Energy refills to 10 every day; each run moves season points; a wearable is sent at each tier milestone until the season ends (season length: TBD), and the season's top 10 earn diamonds when it closes | The next wearable, and the tier they left the day before | Discord and the Event listing on season launches; fallback: the next-prize bar and the energy count on the Season card [agent-decided] |
-| **2.** Community tournaments — async and live, with their leaderboards | An async tournament stays open from its start date to its end date; a live one has its start time; both appear in the menu's tournament list | A tournament they entered is still open, or its final board; the next one on the list | Discord posts when a tournament is created and when it ends (already automated); fallback: the tournament list in the menu [agent-decided, replaces the brief's "weekly leaderboard history"] |
+| **2.** Community tournaments (v1): async and live, with their leaderboards | An async tournament stays open from its start date to its end date; a live one has its start time; both appear in the menu's tournament list | A tournament they entered is still open, or its final board; the next one on the list | Discord posts when a tournament is created and when it ends (already automated); fallback: the tournament list in the menu [agent-decided, replaces the brief's "weekly leaderboard history"] |
 
 ---
 
@@ -116,7 +116,7 @@ Currency or tradable rewards: energy is earned at 10 a day and spent 1 per run; 
 
 | | |
 |---|---|
-| **The repeatable social loop** | Player A creates a party (Play together) or a tournament → Player B joins from the menu list → they play the same 4 maps at once, seeing each other's balls, and the shared scoreboard ranks everyone → the board, and the organizer's record, are the reason to regroup for the next run or the next tournament. [agent-decided] |
+| **The repeatable social loop** | Player A creates a party (Play together) or, from v1, a tournament → Player B joins from the menu list → they play the same 4 maps at once, seeing each other's balls, and the shared scoreboard ranks everyone → the board, and the organizer's record, are the reason to regroup for the next run or the next tournament. [agent-decided] |
 | **The disappearance test** | Ranked keeps working: the recordings stay, so a solo run always has three opponents. Play together, live tournaments and new async tournaments break; existing async tournaments become empty boards. [agent-decided] |
 | **From strangers to a group** | The menu's tournament list shows each tournament's name, maps, players in and closing time, and the party button reads "JOIN PARTY (2/4)" with a countdown; one tap joins, no chat or shared language needed. [agent-decided; the list's exact fields are part of the slice] |
 | **Recognition & continuity** | Names and faces (from the Decentraland profile) sit on every party seat and scoreboard; recorded opponents are shown by name in the live ranking; every map credits its builder by name on the HUD ("jungle 12 by Satori"); the Season top 10 and the tournament organizer names persist. A rivalry with a named player is not designed yet: TBD. [agent-decided] |
@@ -124,7 +124,7 @@ Currency or tradable rewards: energy is earned at 10 a day and spent 1 per run; 
 | **Drop-in / drop-out** | A late party member starts late on the same clock; a leaver's row stays and counts as done, so the others finish. Async tournaments have no dependency on who is online. [agent-decided] |
 | **Visible play (the bystander test)** | Four coloured balls racing across a floating course, with a ranking column at the side. [agent-decided] |
 | **Shareable play (the memorable moment)** | The run-complete screen where the next-prize bar flips and a new wearable is claimed, or a hole-in-one against three live friends. [agent-decided] |
-| **Bring-a-friend** | The moment you reach a tier whose maps you cannot beat alone: a party plays at the lowest member's level, and a friend above it pays no energy, so bringing a stronger friend costs them nothing and shows you the lines. [agent-decided] |
+| **Bring-a-friend** | The moment you reach a tier whose maps you cannot beat alone: you create the party, it plays at your level, and a friend above it pays no energy and earns no points, so bringing a stronger friend costs them nothing and shows you the lines. Organizers and map builders invite players too, because their rewards grow with each one who takes part. [agent-decided] |
 
 ---
 
@@ -169,15 +169,15 @@ Flat, high-contrast colours: the courses are bright themed tiles floating over t
 
 **Primary player + arrival context.**
 
-For players who already enjoy short competitive rounds (minigolf, racing ghosts, ranked ladders), arriving alone or with one friend, looking for a 10-minute run with something to climb. [agent-decided]
+For casual players who like a relaxed, social round of minigolf, a game anyone understands, arriving alone or with one friend, looking for a 10-minute run with something to climb. Around them, two kinds of regulars the game grows: the organizers who run tournaments and the builders who make the maps.
 
 **How the first group arrives.**
 
-The first group is Golfcraft's existing community: the players who have run Season since 2023 and the Discord where tournaments are announced, brought back by the November 1 relaunch with @cocobayworld. Two of them in the menu at once already make a party, so the social threshold is reached whenever a tournament is announced. [agent-decided]
+The first group is Golfcraft's existing community: the players who have run Season since 2023 and the Discord where tournaments are announced, brought back by the November 1 relaunch with @cocobayworld. Map builders and tournament organizers bring players themselves: their rewards grow with the number of players who play their maps or enter their tournaments, so they announce them on their own channels. Two of them in the menu at once already make a party, so the social threshold is reached whenever a tournament is announced. [agent-decided]
 
 **Deliberately not for.**
 
-Players looking for a realistic golf simulation or a long story; runs are short and the game is about the climb and the people on the board. [agent-decided]
+Players who want a realistic golf simulation, a long story or a hardcore ladder: runs are short, the rules fit in three lines, and the game is about climbing at your own pace with the people on the board. [agent-decided]
 
 ### Comparables
 
@@ -193,14 +193,14 @@ Players looking for a realistic golf simulation or a long story; runs are short 
 
 **The slice: community tournaments in the game menu** (owner). Two formats, as Golfcraft had them: **async**, where a tournament stays open between a start and an end date and each player plays its maps when they can, against the others' results; and **live**, where everyone in the room plays the same maps at the same time and sees the other balls. What changes is where they live: created, listed and played from the 2D game menu instead of in-world panels and the website, so they work on a phone. No tournaments start on their own for now (owner).
 
-If the application is confirmed, within four weeks the game has both the in-world map editor and these tournaments, and we run map-building contests for the COCOBAY season with them (owner). [OPEN: which of the two is the V0 slice agreed with the program, and which comes after it]
+V0, this application, is the game as it is live today: Ranked runs, Ranked with friends and the phone layout, tested with the community in a public event and polished from what it shows. The four weeks of v1 add the tournaments described here. The in-world map editor, and the map-building contests for the COCOBAY season that need it, come in v2 (owner).
 
 | Week | What is playable / done |
 |---|---|
 | 1 — Prototype definition | The tournament list and the create screen in the menu (async format first), on the phone layout; joining an async tournament by tapping it [agent-decided] |
 | 2 — Core interaction + first-group test | An async tournament played end to end from the menu, with its leaderboard; first test with the community: one tournament announced on Discord [agent-decided] |
-| 3 — Core systems refinement | Live tournaments in the menu: room, waiting screen, live scoreboard; the in-world map editor brought to SDK7 [agent-decided] |
-| 4 — Playable release, including testing and deployment | The COCOBAY map contest: maps built with the editor, played as a tournament; mobile playtest at 4–8 players; deploy to the parcels and the World [agent-decided] |
+| 3 — Core systems refinement | Live tournaments in the menu: room, waiting screen, live scoreboard; organizer and map-creator rewards shown on the results screen [agent-decided] |
+| 4 — Playable release, including testing and deployment | A COCOBAY season tournament event with the community on the existing maps, played from the menu; mobile playtest at 4–8 players; deploy to the parcels [agent-decided] |
 
 **What keeps the experience changing after launch.**
 
@@ -211,11 +211,11 @@ If the application is confirmed, within four weeks the game has both the in-worl
 
 **Not building in v1.**
 
-Moving the other SDK6 features to SDK7 is not part of this slice (owner): Crafting, Chain Bridge, Lucky Balls, Fashion Shop, Chests, Notifications, Multiplayer Demo, the Voxters pet, the DCL Awards minigame and the 3D lobby panels. If v1 hits its numbers, the first to come back is Notifications (in-game messages). [agent-decided]
+Moving the other SDK6 features to SDK7 is not part of this slice (owner): the in-world map editor, Crafting, Chain Bridge, Lucky Balls, Fashion Shop, Chests, Notifications, Multiplayer Demo, the Voxters pet, the DCL Awards minigame and the 3D lobby panels. If v1 hits its numbers, the first to come back is the in-world map editor, with the map-building contests for the COCOBAY season (v2).
 
 **Top risk + fallback.**
 
-Top risk: the in-world map editor is the largest SDK6 feature left to migrate, and the COCOBAY contest depends on it. Fallback: the tournaments ship first; if the editor slips past week 3, the contest runs on the 837 existing community maps, chosen by vote, and the editor follows. [agent-decided]
+Top risk: live tournaments are the largest piece of v1 (the SDK6 live client, with its lobby, room and every ball visible, is not in SDK7 yet) and they also need players online at the same hour. Fallback: async tournaments ship first (week 2) and are the v1 deliverable; if live slips past week 3, v1 closes with async in the menu plus one dated live event announced on Discord, and open live creation follows in v2. [agent-decided]
 
 ---
 
