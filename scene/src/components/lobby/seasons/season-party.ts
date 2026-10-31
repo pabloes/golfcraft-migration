@@ -192,9 +192,9 @@ export const createSeasonParty = async (
     }
 
     const members = lobby.state.members
-    // The room plays at the lowest member's level (the server decides this the
-    // same way); showing it up front is what makes the rule obvious.
-    const roomTierSub = Math.min(...members.map((m: any) => Number(m.tierSub) || 0))
+    // The room plays at the host's level (members[0]; the server decides this
+    // the same way); showing it up front is what makes the rule obvious.
+    const roomTierSub = Number(members[0]?.tierSub) || 0
     const tierName = seasonTierDefinitions[getTierFromSub(roomTierSub) || 0]?.name || ''
     const secondsLeft = lobby.state.secondsLeft || 0
 
@@ -207,12 +207,13 @@ export const createSeasonParty = async (
       members.length > 1
         ? `Starts in ${secondsLeft}s · playing at ${tierName} level`
         : `Cancels in ${secondsLeft}s if nobody joins`
-    // The same rule the room applies (CLAUDE.md §12): a member is "at the
-    // room's level" when their tier shares its category and percentile band.
+    // The same rule the room applies (CLAUDE.md §12): a member earns season
+    // points at the room's level (same category and percentile band) or below.
     const roomTier = getTierFromSub(roomTierSub) || 0
     const sameLevel = (tier: number) =>
-      getCatFromTier(tier) === getCatFromTier(roomTier) &&
-      JSON.stringify(getTierPercentiles(tier)) === JSON.stringify(getTierPercentiles(roomTier))
+      tier < roomTier ||
+      (getCatFromTier(tier) === getCatFromTier(roomTier) &&
+        JSON.stringify(getTierPercentiles(tier)) === JSON.stringify(getTierPercentiles(roomTier)))
     seasonWaitState.players = members.map((m: any, index: number) => {
       const tier = getTierFromSub(Number(m.tierSub) || 0) || 0
       return {

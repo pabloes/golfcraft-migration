@@ -245,7 +245,10 @@ export class SeasonPartyRoom extends Room<SeasonPartyRoomState> {
     }
 
     private async prepare() {
-        //fresh tier-sub for every member: the room plays at the lowest one
+        //fresh tier-sub for every member. The room plays at the host's level
+        //(players[0], the lobby's members[0]: the creator, or whoever took the
+        //seat). Each player is scored against the recorded players only, so
+        //those at that level or below earn season points; higher ones don't.
         for (const player of this.state.players) {
             player.tierSub = await promisify(PlayFabServer.GetPlayerStatistics)({
                 PlayFabId: player.PlayFabId,
@@ -255,12 +258,12 @@ export class SeasonPartyRoom extends Room<SeasonPartyRoomState> {
                 return 0;
             });
         }
-        const roomTierSub = Math.max(0, Math.min(...this.state.players.map(p => p.tierSub)));
+        const roomTierSub = Math.max(0, this.state.players[0].tierSub);
         const roomTier = getTierFromSub(roomTierSub);
         this.state.playerTierSub = roomTierSub;
         this.roomCat = Math.max(0, getCatFromTier(roomTier));
         this.state.players.forEach(player => {
-            player.eligible = isSameDifficulty(getTierFromSub(player.tierSub), roomTier);
+            player.eligible = isAtOrBelowRoomLevel(getTierFromSub(player.tierSub), roomTier);
         });
         console.log("season-party-room prepare", {
             roomTierSub,
@@ -827,6 +830,12 @@ function isSameDifficulty(playerTier: number, roomTier: number) {
     const [playerMin, playerMax] = getTierPercentiles(playerTier);
     const [roomMin, roomMax] = getTierPercentiles(roomTier);
     return getCatFromTier(playerTier) === getCatFromTier(roomTier) && playerMin === roomMin && playerMax === roomMax;
+}
+
+//a player at the room's level (same category and band) or below it plays for
+//season points; above it they would face easier players than their own
+function isAtOrBelowRoomLevel(playerTier: number, roomTier: number) {
+    return playerTier < roomTier || isSameDifficulty(playerTier, roomTier);
 }
 
 //Season-Room setScoresAtRound ordering, returning the scores by row index

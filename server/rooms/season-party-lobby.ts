@@ -16,9 +16,14 @@ import {resolvePlayer} from "./session-auth";
 //   - 1 member and no change for PARTY_IDLE_MS -> cancelled.
 //   - 2+ members and no change in the count for PARTY_IDLE_MS -> started.
 //   - The host can start at any time with 2+ members.
+//   - The party plays at the host's level (season-party-room.ts).
+//   - When a party is cancelled, or its last member leaves, its host can't
+//     create another for CREATE_LOCK_MS: nobody holds the only slot by
+//     re-creating it over and over.
 // On start the slot is freed right away, so a new party can form.
 const MAX_PARTY_PLAYERS = 4;
 const PARTY_IDLE_MS = 60000;
+const CREATE_LOCK_MS = 5000;
 
 class PartyMemberState extends Schema {
     @type("string")
@@ -69,6 +74,8 @@ class PartyError extends Error {}
 export class SeasonPartyLobbyRoom extends Room<SeasonPartyLobbyState> {
     private interval: ReturnType<typeof setInterval>;
     private users = new Map<string, any>();
+    //address -> time until which it can't create a party
+    private createLocks = new Map<string, number>();
 
     onCreate() {
         this.setState(new SeasonPartyLobbyState());
@@ -76,6 +83,8 @@ export class SeasonPartyLobbyRoom extends Room<SeasonPartyLobbyState> {
         this.onMessage(MESSAGE.PARTY_CREATE, (client) => this.handle(client, async () => {
             if (this.isSlotTaken()) throw new PartyError("A party is already waiting, join it or wait until it starts");
             const member = await this.resolveMember(client);
+            const lockedMs = (this.createLocks.get(member.address) || 0) - Date.now();
+            if (lockedMs > 0) throw new PartyError(`Wait ${Math.ceil(lockedMs / 1000)}s before creating another party`);
             //re-check after the PlayFab round trip: another CREATE may have won
             if (this.isSlotTaken()) throw new PartyError("A party is already waiting, join it or wait until it starts");
             this.state.members.push(member);
@@ -150,8 +159,9 @@ export class SeasonPartyLobbyRoom extends Room<SeasonPartyLobbyState> {
         const index = this.state.members.findIndex(m => m.client === client);
         if (index === -1) return;
         //removing members[0] makes the next one the host
-        this.state.members.splice(index, 1);
+        const [removed] = this.state.members.splice(index, 1);
         if (!this.state.members.length) {
+            this.lockCreate(removed.address);
             this.reset();
         } else {
             this.touch();
@@ -161,10 +171,17 @@ export class SeasonPartyLobbyRoom extends Room<SeasonPartyLobbyState> {
     private cancelParty(reason: string) {
         console.log("season-party-lobby cancel", reason);
         this.state.members.forEach(m => safeSend(m.client, MESSAGE.PARTY_CANCELLED, {reason}));
+        if (this.state.members[0]) this.lockCreate(this.state.members[0].address);
         this.reset();
     }
 
+    private lockCreate(address: string) {
+        this.createLocks.set(address, Date.now() + CREATE_LOCK_MS);
+    }
+
     private checkIdle() {
+        const now = Date.now();
+        this.createLocks.forEach((until, address) => until <= now && this.createLocks.delete(address));
         if (!this.state.open || this.state.starting) return;
         const elapsed = Date.now() - this.state.lastCountChange;
         this.state.secondsLeft = Math.max(0, Math.ceil((PARTY_IDLE_MS - elapsed) / 1000));
