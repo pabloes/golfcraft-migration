@@ -14,12 +14,13 @@ import * as desktopHud from './game-hud-desktop'
 import { LobbyHud } from './lobby-hud'
 import { ATLAS, spriteUvs } from './sprites'
 import { JoiningScreen, PartyScreen, HoleResultScreen, RunCompleteScreen } from './season-screens'
-import { containLayout, scaler, isSmallCanvas } from './ui-scale'
+import { containLayout, fullLayout, scaler, isSmallCanvas } from './ui-scale'
+import { serverNotificationState } from '../components/lobby/server-notification'
 import { MobileShootControls } from './mobile-shoot-controls'
 import { isMobile } from '../services/platform'
 import { dismissGameClosedNotice, formatOpeningDay, gameWindowState, showClosedNoticeOnce } from '../services/game-window'
 import { C, pressable } from './ui-theme'
-import { P, img, border } from './ui2'
+import { P, img, border, placeAt } from './ui2'
 
 // SDK6 game.ts called initializeIntroScreen() on startup. It used UICanvas +
 // UIImage from the legacy DCL UI; here we port the same flow to ReactEcs.
@@ -59,6 +60,25 @@ const ui = () => {
       <RunCompleteScreen />
       <CenterPopup />
       <hud.EndingBanner />
+      <ServerNotification />
+    </UiEntity>
+  )
+}
+
+// showMessage() (components/lobby/server-notification.ts): top centre of the
+// full-screen grid, clear of the explorer's avatar and chat (top-left), and
+// last so it reads over the menus and the black fade alike.
+const ServerNotification = () => {
+  const { message, until } = serverNotificationState
+  if (!message || Date.now() > until) return null
+  const L = fullLayout()
+  const { px, fs } = scaler(L.scale)
+  return (
+    <UiEntity
+      uiTransform={{ ...placeAt(L, px, 153, 58, 361, 50), borderRadius: px(12), justifyContent: 'center', alignItems: 'center', padding: { left: px(12), right: px(12) } }}
+      uiBackground={{ color: Color4.create(0, 0, 0, 0.78) }}
+    >
+      <Label value={message} fontSize={fs(13)} color={Color4.White()} textAlign="middle-center" textWrap="wrap" uiTransform={{ width: '100%', height: '100%' }} />
     </UiEntity>
   )
 }

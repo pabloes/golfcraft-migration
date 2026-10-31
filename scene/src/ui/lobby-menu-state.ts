@@ -111,12 +111,15 @@ export const seasonPlayState = () => {
   const friendsLabel = lobbyMenuState.actions.friendsLabel ? (friendsAction === 'leave' ? 'LEAVE PARTY' : lobbyMenuState.actions.friendsLabel()) : ''
   const canFriends = canPlay && !!lobbyMenuState.actions.playWithFriends && friendsLabel !== ''
   const roomTier = lobbyMenuState.actions.friendsRoomTier ? lobbyMenuState.actions.friendsRoomTier() : -1
+  // A party member can't start a solo run as well (the 3D board hides its
+  // PLAY too): LEAVE PARTY first.
+  const inParty = friendsAction === 'leave'
   return {
     energy,
     gameOpen,
-    canPlay,
+    canPlay: canPlay && !inParty,
     canFriends,
-    playCaption: connecting ? 'connecting...' : !gameOpen ? 'closed' : energy > 0 ? '1 energy' : 'no energy',
+    playCaption: connecting ? 'connecting...' : !gameOpen ? 'closed' : inParty ? 'in a party' : energy > 0 ? '1 energy' : 'no energy',
     friendsCaption: canFriends ? friendsLabel : friendsConnecting && gameOpen ? 'CONNECTING...' : 'PLAY\nWITH FRIENDS',
     // The FRIENDS button shows the waiting party's rank in place of its icon.
     friendsRoomTier: canFriends ? roomTier : -1,
@@ -172,12 +175,22 @@ export const closeOrBack = () => {
   else closeLobbyMenu()
 }
 
+let menuClosedAt = 0
+
 export const closeLobbyMenu = () => {
   lobbyMenuState.visible = false
   lobbyMenuState.view = 'lobby'
+  menuClosedAt = Date.now()
   // Closing with E while the pointer is over a button means no onMouseLeave.
   clearPointerState()
 }
+
+// On a phone a tap on the dialog also reaches the world behind it as a pointer
+// press (CLAUDE.md §6 #25), so WITH FRIENDS could also press the 3D Season
+// board's PLAY: the ws log shows a solo run started and cancelled with each
+// CREATE PARTY tap from an iPad. World buttons ignore presses while the dialog
+// is open and right after it closed.
+export const isDialogPress = () => lobbyMenuState.visible || Date.now() - menuClosedAt < 700
 
 // The same read-only stock query the prizes board uses; cached for a minute so
 // reopening the menu is free.

@@ -26,7 +26,7 @@ import { getGLTFShape } from '../../../../golfplay/services/resource-repo'
 import { seasonCatalog } from './season-catalog'
 import { claimSeasonReward, getSeasonActionStatus } from './season-rewards-bridge'
 import { lobbyHudState } from '../../../ui/lobby-hud-state'
-import { lobbyMenuState } from '../../../ui/lobby-menu-state'
+import { isDialogPress, lobbyMenuState } from '../../../ui/lobby-menu-state'
 import { showMessage } from '../server-notification'
 import { canStartGame, formatUtc, gameWindowState, guardGameStart, onGameWindowChange } from '../../../services/game-window'
 
@@ -157,7 +157,13 @@ export const createSeasonMenu = async (
     if (!guardGameStart()) return
     seasonGame.startGame()
   }
-  playButton.onClick(playSeason)
+  // The board's own buttons; a tap meant for the lobby dialog can land here
+  // too on a phone (isDialogPress).
+  const fromWorld = (fn: () => void) => () => {
+    if (isDialogPress()) return
+    fn()
+  }
+  playButton.onClick(fromWorld(playSeason))
   // The lobby menu dialog (ui/lobby-menu.tsx) drives the same run.
   lobbyMenuState.actions.playSeason = playSeason
   const stopWindowListener = onGameWindowChange(() => refresh())
@@ -186,8 +192,8 @@ export const createSeasonMenu = async (
       // so it only repaints the button, not the whole panel.
       onChange: () => refreshFriendsButton()
     })
-    friendsButton.onClick(() => seasonParty.click())
-    cancelButton.onClick(() => seasonParty.cancel())
+    friendsButton.onClick(fromWorld(() => seasonParty.click()))
+    cancelButton.onClick(fromWorld(() => seasonParty.cancel()))
     lobbyMenuState.actions.playWithFriends = () => seasonParty.click()
     lobbyMenuState.actions.friendsLabel = () => seasonParty.getLabel()
     lobbyMenuState.actions.friendsAction = () => seasonParty.getAction()

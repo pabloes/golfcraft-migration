@@ -80,7 +80,7 @@ export class SeasonPartyLobbyRoom extends Room<SeasonPartyLobbyState> {
     onCreate() {
         this.setState(new SeasonPartyLobbyState());
 
-        this.onMessage(MESSAGE.PARTY_CREATE, (client) => this.handle(client, async () => {
+        this.onMessage(MESSAGE.PARTY_CREATE, (client) => this.handle(client, "create", async () => {
             if (this.isSlotTaken()) throw new PartyError("A party is already waiting, join it or wait until it starts");
             const member = await this.resolveMember(client);
             const lockedMs = (this.createLocks.get(member.address) || 0) - Date.now();
@@ -92,7 +92,7 @@ export class SeasonPartyLobbyRoom extends Room<SeasonPartyLobbyState> {
             this.touch();
         }));
 
-        this.onMessage(MESSAGE.PARTY_JOIN, (client) => this.handle(client, async () => {
+        this.onMessage(MESSAGE.PARTY_JOIN, (client) => this.handle(client, "join", async () => {
             if (!this.state.open || this.state.starting) throw new PartyError("There is no party waiting");
             const member = await this.resolveMember(client);
             if (!this.state.open || this.state.starting) throw new PartyError("There is no party waiting");
@@ -102,16 +102,16 @@ export class SeasonPartyLobbyRoom extends Room<SeasonPartyLobbyState> {
             this.touch();
         }));
 
-        this.onMessage(MESSAGE.PARTY_LEAVE, (client) => this.handle(client, async () => {
+        this.onMessage(MESSAGE.PARTY_LEAVE, (client) => this.handle(client, "leave", async () => {
             this.removeMember(client);
         }));
 
-        this.onMessage(MESSAGE.PARTY_CANCEL, (client) => this.handle(client, async () => {
+        this.onMessage(MESSAGE.PARTY_CANCEL, (client) => this.handle(client, "cancel", async () => {
             if (!this.isHost(client) || this.state.starting) return;
             this.cancelParty("host");
         }));
 
-        this.onMessage(MESSAGE.PARTY_START, (client) => this.handle(client, async () => {
+        this.onMessage(MESSAGE.PARTY_START, (client) => this.handle(client, "start", async () => {
             if (!this.isHost(client)) return;
             if (this.state.members.length < 2) throw new PartyError("Wait for at least one friend to join");
             await this.startParty();
@@ -122,9 +122,11 @@ export class SeasonPartyLobbyRoom extends Room<SeasonPartyLobbyState> {
 
     onJoin(client: Client, {user, clientInfo}: any = {}) {
         this.users.set(client.sessionId, {user, clientInfo});
+        console.log("season-party-lobby connected", user?.displayName, client.sessionId);
     }
 
-    onLeave(client: Client) {
+    onLeave(client: Client, consented?: boolean) {
+        console.log("season-party-lobby disconnected", this.nameOf(client), client.sessionId, consented ? "consented" : "dropped");
         this.users.delete(client.sessionId);
         this.removeMember(client);
     }
@@ -250,13 +252,22 @@ export class SeasonPartyLobbyRoom extends Room<SeasonPartyLobbyState> {
         });
     }
 
-    private async handle(client: Client, fn: () => Promise<void>) {
+    //every request and its outcome is logged, refusals included: a refusal
+    //the client failed to show was invisible otherwise
+    private async handle(client: Client, action: string, fn: () => Promise<void>) {
+        const name = this.nameOf(client);
         try {
             await fn();
+            console.log("season-party-lobby", action, name, `members ${this.state.members.length}`);
         } catch (error) {
-            if (!(error instanceof PartyError)) console.log("season-party-lobby error", error);
+            if (error instanceof PartyError) console.log("season-party-lobby", action, "refused", name, error.message);
+            else console.log("season-party-lobby", action, "error", name, error);
             safeSend(client, MESSAGE.PARTY_ERROR, error instanceof PartyError ? error.message : "Something went wrong");
         }
+    }
+
+    private nameOf(client: Client) {
+        return this.users.get(client.sessionId)?.user?.displayName || client.sessionId;
     }
 }
 
