@@ -83,7 +83,7 @@ export const createSeasonParty = async (
 
   syncUi()
 
-  return { click, cancel, getLabel, getCancelLabel, getAction, isBusy, isHost, dispose }
+  return { click, cancel, getLabel, getCancelLabel, getAction, getRoomTier, isBusy, isHost, dispose }
 
   // The first state patch can land after the join resolves, so nothing may read
   // lobby.state without this guard.
@@ -166,6 +166,14 @@ export const createSeasonParty = async (
     return 'CREATE PARTY'
   }
 
+  // The room plays at the host's level (members[0]; the server decides this
+  // the same way), so the party button and the waiting screen show it to
+  // members and to whoever is about to join. -1 while no party is waiting.
+  function getRoomTier(): number {
+    if (!hasState() || !lobby.state.members.length) return -1
+    return getTierFromSub(Number(lobby.state.members[0].tierSub) || 0) || 0
+  }
+
   // The season panel hides its solo Play button while the player is committed
   // to a party.
   function isBusy() {
@@ -192,10 +200,8 @@ export const createSeasonParty = async (
     }
 
     const members = lobby.state.members
-    // The room plays at the host's level (members[0]; the server decides this
-    // the same way); showing it up front is what makes the rule obvious.
-    const roomTierSub = Number(members[0]?.tierSub) || 0
-    const tierName = seasonTierDefinitions[getTierFromSub(roomTierSub) || 0]?.name || ''
+    const roomTier = getRoomTier()
+    const tierName = seasonTierDefinitions[roomTier]?.name || ''
     const secondsLeft = lobby.state.secondsLeft || 0
 
     seasonWaitState.visible = true
@@ -209,7 +215,6 @@ export const createSeasonParty = async (
         : `Cancels in ${secondsLeft}s if nobody joins`
     // The same rule the room applies (CLAUDE.md §12): a member earns season
     // points at the room's level (same category and percentile band) or below.
-    const roomTier = getTierFromSub(roomTierSub) || 0
     const sameLevel = (tier: number) =>
       tier < roomTier ||
       (getCatFromTier(tier) === getCatFromTier(roomTier) &&

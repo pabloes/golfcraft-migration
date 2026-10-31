@@ -204,7 +204,15 @@ export const SeasonView = () => {
         shadowColor: st.canFriends ? P.lavenderShadow : C.dark, disabled: !st.canFriends, onClick: st.startFriends, row: false
       },
       [
-        img(px, 'ic_people_n', undefined, undefined, 0.42),
+        // While a party waits, its rank (the host's) takes the icon's place.
+        st.friendsRoomTier >= 0 ? (
+          <UiEntity uiTransform={{ flexDirection: 'row', alignItems: 'center', height: px(16) }}>
+            {rankBadge(px, st.friendsRoomTier, 16)}
+            <Label value={st.friendsRoomTierName} fontSize={fs(10)} color={P.ink} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(16), margin: { left: px(3) } }} />
+          </UiEntity>
+        ) : (
+          img(px, 'ic_people_n', undefined, undefined, 0.42)
+        ),
         <Label value="FRIENDS" fontSize={fs(14)} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(16) }} />,
         <Label value={friendsSub} fontSize={fs(10)} color={P.ink} textAlign="middle-center" textWrap="wrap" uiTransform={{ width: px(106), height: px(14) }} />
       ]

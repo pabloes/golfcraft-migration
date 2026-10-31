@@ -103,7 +103,7 @@ export const LobbyMenu = () => {
   const currentMission = Number(userData['statistic_current_mission'] || 1)
   const tutorialDone = currentMission > TUTORIAL_STEPS
   // PLAY / FRIENDS state, shared with the SEASON view.
-  const { energy, gameOpen, canPlay, canFriends, playCaption, friendsCaption, startSeason, startFriends } = seasonPlayState()
+  const { energy, gameOpen, canPlay, canFriends, playCaption, friendsCaption, friendsRoomTier, friendsRoomTierName, startSeason, startFriends } = seasonPlayState()
 
   const nextPrize = nextSeasonPrize(tierSubMax)
   const toNextPrize = nextPrize ? Math.max(0, nextPrize.tierReward - tierSub) : 0
@@ -228,7 +228,15 @@ export const LobbyMenu = () => {
         shadowColor: canFriends ? P.lavenderShadow : C.dark, disabled: !canFriends, onClick: startFriends, row: false
       },
       [
-        img(px, 'ic_people_n', undefined, undefined, 0.45),
+        // While a party waits, its rank (the host's) takes the icon's place.
+        friendsRoomTier >= 0 ? (
+          <UiEntity uiTransform={{ flexDirection: 'row', alignItems: 'center', height: px(16) }}>
+            {rankBadge(px, friendsRoomTier, 16)}
+            <Label value={friendsRoomTierName} fontSize={fs(10)} color={P.ink} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(16), margin: { left: px(3) } }} />
+          </UiEntity>
+        ) : (
+          img(px, 'ic_people_n', undefined, undefined, 0.45)
+        ),
         <Label value="FRIENDS" fontSize={fs(16)} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(18) }} />,
         <Label
           value={friendsCaption.indexOf('\n') >= 0 ? 'Play together' : friendsCaption}

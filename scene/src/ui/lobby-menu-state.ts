@@ -13,6 +13,8 @@ import { lobbyHudState } from './lobby-hud-state'
 import { canStartGame } from '../services/game-window'
 // @ts-ignore - common/constants has @ts-nocheck
 import { USE_REMOTE_SERVER } from '../../../common/constants'
+// @ts-ignore - season-tier-definitions has @ts-nocheck
+import { seasonTierDefinitions } from '../../../common/season-tier-definitions'
 
 export type SeasonPrize = {
   name: string
@@ -64,6 +66,8 @@ export const lobbyMenuState: {
     // does right now ('create' | 'join' | 'leave' | 'busy').
     friendsLabel: (() => string) | null
     friendsAction: (() => string) | null
+    // The waiting party's rank (it plays at the host's level), -1 when none.
+    friendsRoomTier: (() => number) | null
   }
 } = {
   visible: false,
@@ -77,7 +81,7 @@ export const lobbyMenuState: {
   prizesTab: null,
   leaderboard: [],
   leaderboardFetchedAt: 0,
-  actions: { playSeason: null, playWithFriends: null, friendsLabel: null, friendsAction: null }
+  actions: { playSeason: null, playWithFriends: null, friendsLabel: null, friendsAction: null, friendsRoomTier: null }
 }
 
 const PRIZES_TTL_MS = 60 * 1000
@@ -106,6 +110,7 @@ export const seasonPlayState = () => {
   // While in a party the button is the way out; the 3D board says the same.
   const friendsLabel = lobbyMenuState.actions.friendsLabel ? (friendsAction === 'leave' ? 'LEAVE PARTY' : lobbyMenuState.actions.friendsLabel()) : ''
   const canFriends = canPlay && !!lobbyMenuState.actions.playWithFriends && friendsLabel !== ''
+  const roomTier = lobbyMenuState.actions.friendsRoomTier ? lobbyMenuState.actions.friendsRoomTier() : -1
   return {
     energy,
     gameOpen,
@@ -113,6 +118,9 @@ export const seasonPlayState = () => {
     canFriends,
     playCaption: connecting ? 'connecting...' : !gameOpen ? 'closed' : energy > 0 ? '1 energy' : 'no energy',
     friendsCaption: canFriends ? friendsLabel : friendsConnecting && gameOpen ? 'CONNECTING...' : 'PLAY\nWITH FRIENDS',
+    // The FRIENDS button shows the waiting party's rank in place of its icon.
+    friendsRoomTier: canFriends ? roomTier : -1,
+    friendsRoomTierName: canFriends && roomTier >= 0 ? seasonTierDefinitions[roomTier]?.name || '' : '',
     startSeason: () => {
       closeLobbyMenu()
       markStartedFromMenu()

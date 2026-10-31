@@ -191,6 +191,7 @@ export const createSeasonMenu = async (
     lobbyMenuState.actions.playWithFriends = () => seasonParty.click()
     lobbyMenuState.actions.friendsLabel = () => seasonParty.getLabel()
     lobbyMenuState.actions.friendsAction = () => seasonParty.getAction()
+    lobbyMenuState.actions.friendsRoomTier = () => seasonParty.getRoomTier()
   } catch (err) {
     console.log('[season] party lobby unavailable', err)
   }
@@ -349,7 +350,11 @@ export const createSeasonMenu = async (
       }
       friendsButton.show()
     }
-    setFriendsLabel(seasonParty.getLabel())
+    // A second line with the room's rank, for whoever is about to join and
+    // for the members waiting (the room plays at the host's level).
+    const roomTier = seasonParty.getRoomTier()
+    const roomTierName = roomTier >= 0 ? seasonTierDefinitions[roomTier]?.name : ''
+    setFriendsLabel(roomTierName ? `${seasonParty.getLabel()}\n${roomTierName} ROOM` : seasonParty.getLabel())
 
     if (seasonParty.isBusy()) {
       playButton.hide()
@@ -389,6 +394,7 @@ export const createSeasonMenu = async (
     lobbyMenuState.actions.playWithFriends = null
     lobbyMenuState.actions.friendsLabel = null
     lobbyMenuState.actions.friendsAction = null
+    lobbyMenuState.actions.friendsRoomTier = null
     seasonParty?.dispose()
     emblem.dispose()
     playButton.dispose()

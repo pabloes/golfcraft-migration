@@ -224,10 +224,12 @@ export const PartyScreen = () => {
     ...seats,
 
     box(px, 'party-level', 152, 222, 340, 66, { color: P.rankBox, radius: 14, border: 2, borderColor: P.rankEdge, align: 'center', padding: { left: px(12) } }, [
-      roomTier >= 0 && !alone ? rankBadge(px, roomTier, 42) : null,
+      // The room plays at the host's level from the first second, so its rank
+      // shows even while the host waits alone.
+      roomTier >= 0 ? rankBadge(px, roomTier, 42) : null,
       <UiEntity uiTransform={{ flexDirection: 'column', margin: { left: px(10) } }}>
-        <Label value={alone ? 'Waiting for a friend to join' : `Playing at ${w.roomTierName} level`} fontSize={fs(16)} color={P.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(22) }} />
-        <Label value="the lowest rank in the room" fontSize={fs(11)} color={RANK_TEXT} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(16) }} />
+        <Label value={`${w.roomTierName} room`} fontSize={fs(16)} color={P.white} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(22) }} />
+        <Label value="the host's rank, same or lower scores" fontSize={fs(11)} color={RANK_TEXT} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(16) }} />
       </UiEntity>
     ]),
 
