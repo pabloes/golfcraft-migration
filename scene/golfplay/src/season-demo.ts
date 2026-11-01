@@ -95,11 +95,18 @@ export const createSeasonDemo = async (
                                 rewards,
                                 rewardsBonus
                             );
-                            fadeOutOverlay(1);
                             if(state.currentGame < 4){
-                                await createGame(state.currentGame);
-                                golfplay.ready()
+                                // The next course loads behind the black overlay:
+                                // fading out first showed the empty ground while
+                                // it loaded (SDK6 faded out first).
+                                try{
+                                    await createGame(state.currentGame);
+                                    golfplay.ready()
+                                }finally{
+                                    fadeOutOverlay(1);
+                                }
                             }else{
+                                fadeOutOverlay(1);
                                 console.log("FINISH")
                                 //TODO restore everything
                                 callbacks.onFinish && callbacks.onFinish();
@@ -122,11 +129,15 @@ export const createSeasonDemo = async (
                                 console.log("hideWait", waitResult)
                                 await sleep(3000);
                                 hideWaitPlayers();
-                                await fadeOutOverlay(1);
                                 if(waitResult.cancelled) return;
                                 console.log("READY")
-                                await createGame(state.currentGame);
-                                golfplay.ready();
+                                // Same as between holes: the course loads behind the black overlay.
+                                try{
+                                    await createGame(state.currentGame);
+                                    golfplay.ready();
+                                }finally{
+                                    await fadeOutOverlay(1);
+                                }
 
                             }catch(error){
                                 console.log("showwait try error",error)

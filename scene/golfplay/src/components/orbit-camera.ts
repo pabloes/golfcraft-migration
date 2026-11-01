@@ -3,8 +3,9 @@
 // A VirtualCamera that circles the ball for the whole hole, whether the ball is
 // still or rolling. The player turns it, and its heading IS the aim: the shoot
 // control reads getYaw() instead of having its own rotation step. While it is
-// active InputModifier keeps the avatar still; release() hands back both the
-// camera and the legs as soon as the hole is over for this player.
+// active InputModifier keeps the avatar still; release() hands back the camera
+// as soon as the hole is over for this player, and the legs too unless a Season
+// run holds them (lockAvatarForRun).
 //
 // A VirtualCamera takes no input from the explorer, so the scene reads it:
 //   - the pointer, from PrimaryPointerInfo on the root entity;
@@ -61,6 +62,38 @@ const ORBIT_TOUCH_EASE = 9
 // again from each tee.
 let distance = ORBIT_DISTANCE
 let pitch = ORBIT_PITCH
+
+// A Season run keeps the avatar still from its first tee to the end of the run,
+// not only while a hole's camera is up. With the legs handed back when the ball
+// holed, a player could walk out of the 48 m scene while the others finished,
+// during the hole result or while the next course loaded (W/S and A/D are the
+// aim keys): outside it the explorer draws none of the scene's UI and ignores
+// its movePlayerTo, so the next hole started without them (CLAUDE.md §6 #34).
+// unlockAvatar() ends it; a run that ends without telling us (a lost room the
+// run never closes) is freed by the watchdog once no camera has been up for
+// RUN_LOCK_MAX_MS.
+const RUN_LOCK_MAX_MS = 180000
+let lockedForRun = false
+let activeCameras = 0
+let lastReleaseAt = 0
+let watchdogAdded = false
+
+export const lockAvatarForRun = () => {
+  lockedForRun = true
+  if (watchdogAdded) return
+  watchdogAdded = true
+  engine.addSystem(() => {
+    if (lockedForRun && !activeCameras && Date.now() - lastReleaseAt > RUN_LOCK_MAX_MS) {
+      console.log('[orbit] run lock timed out, freeing the avatar')
+      unlockAvatar()
+    }
+  })
+}
+
+export const unlockAvatar = () => {
+  lockedForRun = false
+  if (!activeCameras) InputModifier.deleteFrom(engine.PlayerEntity)
+}
 
 export const createBallOrbitCamera = (
   parent: Entity,
@@ -193,11 +226,14 @@ export const createBallOrbitCamera = (
   })
   engine.addSystem(update)
   mobileShootState.zoomable = true
+  activeCameras++
 
   let released = false
   function release() {
     if (released) return
     released = true
+    activeCameras--
+    lastReleaseAt = Date.now()
     engine.removeSystem(update)
     occlusion.dispose()
     mobileShootState.zoomable = false
@@ -205,7 +241,8 @@ export const createBallOrbitCamera = (
     if (MainCamera.getOrNull(engine.CameraEntity)?.virtualCameraEntity === camera) {
       MainCamera.deleteFrom(engine.CameraEntity)
     }
-    InputModifier.deleteFrom(engine.PlayerEntity)
+    // Inside a Season run the legs stay locked until unlockAvatar().
+    if (!lockedForRun && !activeCameras) InputModifier.deleteFrom(engine.PlayerEntity)
   }
 
   return {

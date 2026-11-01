@@ -76,11 +76,16 @@ export const createSeasonPartyDemo = async (
                 // The members' rows are humans; the rest are ghosts.
                 room.state.players.map((p: any) => p.address)
               )
-              fadeOutOverlay(1)
               if (state.currentGame < 4) {
-                await createGame(state.currentGame)
-                golfplay.ready()
+                // The next course loads behind the black overlay, like the first round.
+                try {
+                  await createGame(state.currentGame)
+                  golfplay.ready()
+                } finally {
+                  fadeOutOverlay(1)
+                }
               } else {
+                fadeOutOverlay(1)
                 callbacks.onFinish && callbacks.onFinish()
                 room.leave()
               }

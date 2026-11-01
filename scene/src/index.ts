@@ -20,6 +20,7 @@ import { startGameWindow } from './services/game-window'
 import { returnToMenuIfRequested } from './ui/lobby-menu-state'
 import { joinGameLobby } from './meta/game-lobby'
 import { createStreamScreens } from './components/lobby/stream-screens/stream-screens'
+import { unlockAvatar } from '../golfplay/src/components/orbit-camera'
 
 // Mission-1 production flow:
 //   1. bootstrap() -> PlayFab LoginWithCustomID, get user, realm, Colyseus client
@@ -75,22 +76,29 @@ export async function main() {
           // Note it is GAME_SPAWN.TRAINING (the season/training wall), not
           // MISSION — that one is the storymode NPC's spot.
           onFinish: async () => {
-            await fadeInOverlay(1)
-            // handleLeavePlay also clears `playing` (and courseId). Without it
-            // the bottom-right course footer stays up in the lobby, and
-            // createNpcTest bails out, so the scientist never comes back. It
-            // must happen before spawnLobby, which creates the NPC.
-            const gameState = globalStore.game.getState()
-            gameState.playing = false
-            gameState.courseId = null
-            spawnLobby()
-            await refreshUserData()
-            await sleep(500)
-            const [spawnPos, spawnCam] = GAME_SPAWN.TRAINING
-            await movePlayerTo({
-              newRelativePosition: Vector3.create(spawnPos.x, spawnPos.y, spawnPos.z),
-              cameraTarget: Vector3.create(spawnCam.x, spawnCam.y, spawnCam.z)
-            })
+            try {
+              await fadeInOverlay(1)
+              // handleLeavePlay also clears `playing` (and courseId). Without it
+              // the bottom-right course footer stays up in the lobby, and
+              // createNpcTest bails out, so the scientist never comes back. It
+              // must happen before spawnLobby, which creates the NPC.
+              const gameState = globalStore.game.getState()
+              gameState.playing = false
+              gameState.courseId = null
+              spawnLobby()
+              await refreshUserData()
+              await sleep(500)
+              const [spawnPos, spawnCam] = GAME_SPAWN.TRAINING
+              await movePlayerTo({
+                newRelativePosition: Vector3.create(spawnPos.x, spawnPos.y, spawnPos.z),
+                cameraTarget: Vector3.create(spawnCam.x, spawnCam.y, spawnCam.z)
+              })
+            } finally {
+              // The run held the avatar still from its first tee
+              // (orbit-camera.ts); only free it once it is back in the lobby,
+              // or it could walk out of the scene before the teleport.
+              unlockAvatar()
+            }
             await fadeOutOverlay(1)
             // Started from the lobby dialog: show it again.
             returnToMenuIfRequested()

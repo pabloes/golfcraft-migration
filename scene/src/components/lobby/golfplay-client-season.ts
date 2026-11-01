@@ -47,7 +47,7 @@ import { showMessage } from './server-notification'
 import { hideWaitPlayers } from './season-game-countdown'
 import { createInGameResultsUi, createInGameTime } from './ingame-ui'
 import { seasonCountdownState, seasonHoleState, hideSeasonHud } from '../../ui/season-hud-state'
-import { createBallOrbitCamera } from '../../../golfplay/src/components/orbit-camera'
+import { createBallOrbitCamera, lockAvatarForRun, unlockAvatar } from '../../../golfplay/src/components/orbit-camera'
 import { CAMERA_AIM_MODE } from '../../config/controls'
 import { mobileShootState } from '../../ui/mobile-shoot-state'
 import { reportPing } from '../../ui/ping-state'
@@ -178,6 +178,9 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
           initialRotation: ballSpawnDefinition.rotation
         })
       : null
+    // The avatar stays still until the run ends (index.ts onFinish), also
+    // between holes, so nobody walks out of the scene meanwhile.
+    if (orbitCam) lockAvatarForRun()
 
     const control = createShootControl(parent, {
       position: Vector3.create(
@@ -373,11 +376,14 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
           () => {
             state.reconnecting = false
             showAvatars()
+            // The room is gone for good and the run may never close: free the legs.
+            unlockAvatar()
             callbacks.onFinish && callbacks.onFinish(code)
           }
         )
       } else {
         showAvatars()
+        unlockAvatar()
         callbacks.onFinish && callbacks.onFinish(code)
       }
     }
