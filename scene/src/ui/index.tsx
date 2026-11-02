@@ -16,6 +16,7 @@ import { ATLAS, spriteUvs } from './sprites'
 import { JoiningScreen, PartyScreen, HoleResultScreen, RunCompleteScreen } from './season-screens'
 import { containLayout, fullLayout, scaler, isSmallCanvas } from './ui-scale'
 import { serverNotificationState } from '../components/lobby/server-notification'
+import { GiveawayCard, GiveawayPoster, giveawayInputSystem } from './giveaway'
 import { MobileShootControls } from './mobile-shoot-controls'
 import { isMobile } from '../services/platform'
 import { dismissGameClosedNotice, formatOpeningDay, gameWindowState, showClosedNoticeOnce } from '../services/game-window'
@@ -33,6 +34,7 @@ const ui = () => {
   return (
     <UiEntity uiTransform={{ width: '100%', height: '100%' }}>
       <LobbyHud />
+      <GiveawayCard />
       <hud.MissionTimer />
       <hud.HoleStats />
       <hud.LiveRanking />
@@ -46,6 +48,7 @@ const ui = () => {
       <BootErrorDialog />
       <GameClosedNotice />
       <NpcUtilsUi />
+      <GiveawayPoster />
       <Overlay />
       {/* These three sit AFTER <Overlay /> on purpose: later siblings paint on
           top, and all of them are meant to be read WHILE the screen is faded to
@@ -362,6 +365,7 @@ export const setupUI = () => {
   if (!systemsRegistered) {
     engine.addSystem(introInputSystem)
     engine.addSystem(lobbyMenuInputSystem)
+    engine.addSystem(giveawayInputSystem)
     engine.addSystem(lobbyHudVisibilitySystem)
     engine.addSystem(centerPanelSystem)
     systemsRegistered = true
