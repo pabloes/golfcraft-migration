@@ -1,9 +1,9 @@
 // The giveaway in the lobby HUD (services/giveaway.ts): a small card of the
 // poster in the bottom-right corner, left of the HUD's sprite strip (which
 // runs down the right edge) and, on a phone, above the explorer's E / F / +
-// / jump buttons, which own that corner (CLAUDE.md §4). The poster opens
-// full-screen when the card, the Season card of the lobby dialog or the sign
-// by the Season wall is clicked. E / F or a click close it.
+// / jump buttons, which own that corner (CLAUDE.md §4). The card opens the
+// lobby dialog; the poster opens full-screen from the dialog's Season card or
+// the sign by the Season wall. E / F or a click close it.
 import ReactEcs, { Label, UiEntity } from '@dcl/sdk/react-ecs'
 import { InputAction, PointerEventType, inputSystem } from '@dcl/sdk/ecs'
 import { Color4 } from '@dcl/sdk/math'
@@ -11,7 +11,7 @@ import { globalStore } from '../services/globalStore/globalStore'
 import { GIVEAWAY, isGiveawayActive } from '../services/giveaway'
 import { giveawayUiState } from './giveaway-state'
 import { lobbyHudState } from './lobby-hud-state'
-import { lobbyMenuState } from './lobby-menu-state'
+import { lobbyMenuState, openLobbyMenu } from './lobby-menu-state'
 import { fullLayout, hudScale, scaler } from './ui-scale'
 import { HUD_H, STRIP_W } from './lobby-hud-layout'
 import { isMobile } from '../services/platform'
@@ -53,9 +53,9 @@ export const GiveawayCard = () => {
     <UiEntity
       uiTransform={{ positionType: 'absolute', position: { left, top }, width: px(CARD), height: px(CARD), borderRadius: px(12), padding: px(BORDER) }}
       uiBackground={{ color: Color4.White() }}
-      onMouseDown={() => {
-        giveawayUiState.open = true
-      }}
+      // the HUD card opens the lobby dialog (user, 2026-11-02); its Season
+      // card shows the poster and opens it big
+      onMouseDown={openLobbyMenu}
     >
       <UiEntity
         uiTransform={{ width: '100%', height: '100%', borderRadius: px(10) }}
