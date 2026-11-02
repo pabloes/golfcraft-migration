@@ -194,6 +194,11 @@ model player_game {
   evaluated    Int?      @db.UnsignedTinyInt
   subType      Int?      @default(1) @db.UnsignedTinyInt
   time         Int?      @db.MediumInt
+
+  //the stats page reads this table by time range and by wallet (added at
+  //web startup, 2026-11-02)
+  @@index([startTime], map: "idx_player_game_startTime")
+  @@index([address], map: "idx_player_game_address")
 }
 
 model confessions {
@@ -269,16 +274,19 @@ model daily_guest_visit {
   @@id([day, address])
 }
 
-//holes begun per UTC day, game mode and explorer bucket ('' when the player's
-//explorer is not known), bumped by the game server through /api/hole-start;
-//the stats page shows the sum after Games completed and one per explorer
-model daily_hole_start {
-  day      DateTime @db.Date
-  gameMode String   @db.VarChar(16)
-  explorer String   @default("") @db.VarChar(16)
-  n        Int      @default(0) @db.UnsignedInt
+//one row per hole begun and player (the wallet, or the PlayFabId of an account
+//without one, lowercase; '' for holes an older game server reported with no
+//player), written by the game server through /api/hole-start; explorer is the
+//bucket the player logged in with that day ('' when unknown)
+model hole_start {
+  ID        BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  startedAt DateTime @db.DateTime(0)
+  address   String   @default("") @db.VarChar(45)
+  gameMode  String   @db.VarChar(16)
+  explorer  String   @default("") @db.VarChar(16)
 
-  @@id([day, gameMode, explorer])
+  @@index([startedAt], map: "idx_hole_start_startedAt")
+  @@index([address, startedAt], map: "idx_hole_start_address")
 }
 
 model recorded_game {

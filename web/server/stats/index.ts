@@ -25,12 +25,13 @@ import {redactedMessage} from "../../../common/redact";
 //     the scene reports them through /api/record-visit.
 // Unique visitors = every PlayFab account (one per wallet or guest that ever
 // logged in, since 2021), counted from a daily "All Players" segment export.
-// Holes started (the bracket after Games completed) = daily_hole_start, one
-// counter per UTC day, game mode and explorer, bumped by the game server's
-// /api/hole-start when a hole begins (server/hole-start.ts); the page sums a
-// few hundred rows, never counts holes. Nothing before its first deploy.
-// The explorer of a hole or a finished game is the one its player logged in
-// with that UTC day (the visit tables), '' / unmatched when none is known.
+// Holes started (the bracket after Games completed, per explorer and per
+// visitor) = hole_start, one row per hole and player, written by the game
+// server's /api/hole-start when a hole begins (server/hole-start.ts); indexed
+// by time and by (address, time), a few thousand rows a month. Nothing before
+// its first deploy (2026-11-02). The explorer of a hole or a finished game is
+// the one its player logged in with that UTC day (the visit tables), '' /
+// unmatched when none is known.
 const DAY = 1000 * 60 * 60 * 24;
 const DAYS = 365;
 const CACHE_MS = 60 * 1000;
@@ -77,14 +78,17 @@ export function statsApi(router, prisma: PrismaClient){
         PRIMARY KEY (day, address)
     )`).then(() => addLaterColumns(prisma, table))
         .catch(error => console.log(`${table} table error`, error?.message)));
-    prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS daily_hole_start (
-        day DATE NOT NULL,
+    prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS hole_start (
+        ID BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        startedAt DATETIME NOT NULL,
+        address VARCHAR(45) NOT NULL DEFAULT '',
         gameMode VARCHAR(${HOLE_MODE_MAX}) NOT NULL,
         explorer VARCHAR(16) NOT NULL DEFAULT '',
-        n INT UNSIGNED NOT NULL DEFAULT 0,
-        PRIMARY KEY (day, gameMode, explorer)
-    )`).then(() => addHoleExplorerColumn(prisma))
-        .catch(error => console.log("daily_hole_start table error", error?.message));
+        INDEX idx_hole_start_startedAt (startedAt),
+        INDEX idx_hole_start_address (address, startedAt)
+    )`).then(() => migrateDailyHoleStart(prisma))
+        .catch(error => console.log("hole_start table error", error?.message));
+    addPlayerGameIndexes(prisma).catch(error => console.log("player_game indexes error", error?.message));
 
     loadPlayFabAccounts(prisma).then(() => refreshPlayFabAccounts(prisma));
     setInterval(() => refreshPlayFabAccounts(prisma), 60 * 60 * 1000);
@@ -138,18 +142,17 @@ export function statsApi(router, prisma: PrismaClient){
             if(!mode) return res.status(400).send({error: "invalid gameMode"});
             const players = (Array.isArray(addresses) ? addresses : [])
                 .map(a => String(a || "").trim().toLowerCase().slice(0, 45)).filter(Boolean).slice(0, HOLE_COUNT_MAX);
-            const byExplorer: {[explorer: string]: number} = {};
+            let holes: {address: string, explorer: string}[];
             if(players.length){
                 const known = await explorersToday(prisma, players);
-                players.forEach(a => byExplorer[known[a] || ""] = (byExplorer[known[a] || ""] || 0) + 1);
+                holes = players.map(address => ({address, explorer: known[address] || ""}));
             }else{
-                byExplorer[""] = Math.min(HOLE_COUNT_MAX, Math.max(1, Math.floor(Number(count) || 1)));
+                //an older game server: so many holes, of nobody in particular
+                const n = Math.min(HOLE_COUNT_MAX, Math.max(1, Math.floor(Number(count) || 1)));
+                holes = Array.from({length: n}, () => ({address: "", explorer: ""}));
             }
-            for(const explorer of Object.keys(byExplorer)){
-                const n = byExplorer[explorer];
-                await prisma.$executeRaw`INSERT INTO daily_hole_start (day, gameMode, explorer, n) VALUES (UTC_DATE(), ${mode}, ${explorer}, ${n})
-                        ON DUPLICATE KEY UPDATE n = n + ${n}`;
-            }
+            await prisma.$executeRaw`INSERT INTO hole_start (startedAt, address, gameMode, explorer) VALUES
+                    ${Prisma.join(holes.map(h => Prisma.sql`(UTC_TIMESTAMP(), ${h.address}, ${mode}, ${h.explorer})`))}`;
             return res.send({ok: true});
         }catch(error){
             console.log("/api/hole-start error", error?.message);
@@ -236,15 +239,42 @@ async function explorersToday(prisma: PrismaClient, addresses: string[]): Promis
     return known;
 }
 
-//daily_hole_start was first created without the explorer (2026-11-02, hours
-//before this): add it to the key, its rows become "explorer unknown"
-async function addHoleExplorerColumn(prisma: PrismaClient){
-    const found: any[] = await prisma.$queryRaw`SELECT COUNT(*) AS n FROM information_schema.COLUMNS
-            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'daily_hole_start' AND COLUMN_NAME = 'explorer'`;
-    if(Number(found[0]?.n)) return;
-    await prisma.$executeRawUnsafe(`ALTER TABLE daily_hole_start ADD COLUMN explorer VARCHAR(16) NOT NULL DEFAULT '',
-            DROP PRIMARY KEY, ADD PRIMARY KEY (day, gameMode, explorer)`);
-    console.log("daily_hole_start: explorer column added");
+//The first hours of 2026-11-02 counted holes in daily_hole_start, one counter
+//per day, mode and explorer, with no player: those become hole_start rows of
+//nobody ('' address) at the start of their day, and the counter table goes.
+async function migrateDailyHoleStart(prisma: PrismaClient){
+    const found: any[] = await prisma.$queryRaw`SELECT COUNT(*) AS n FROM information_schema.TABLES
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'daily_hole_start'`;
+    if(!Number(found[0]?.n)) return;
+    const rows: any[] = await prisma.$queryRaw`SELECT DATE_FORMAT(day, '%Y-%m-%d') AS day, gameMode, explorer, n FROM daily_hole_start`;
+    const holes = [];
+    rows.forEach(({day, gameMode, explorer, n}) => {
+        for(let i = 0; i < Math.min(HOLE_COUNT_MAX * 100, Number(n) || 0); i++) holes.push({day: String(day), gameMode: String(gameMode), explorer: String(explorer || "")});
+    });
+    if(holes.length){
+        await prisma.$executeRaw`INSERT INTO hole_start (startedAt, address, gameMode, explorer) VALUES
+                ${Prisma.join(holes.map(h => Prisma.sql`(TIMESTAMP(${h.day}), '', ${h.gameMode}, ${h.explorer})`))}`;
+    }
+    await prisma.$executeRawUnsafe(`DROP TABLE daily_hole_start`);
+    console.log(`daily_hole_start: ${holes.length} holes moved to hole_start, table dropped`);
+}
+
+//player_game (220K rows in 2026) had no index but its ID, so every stats
+//query scanned it: a time range and a wallet lookup are index reads now.
+//MySQL 8 builds them online, a second or two, once.
+const PLAYER_GAME_INDEXES: [string, string][] = [
+    ["idx_player_game_startTime", "startTime"],
+    ["idx_player_game_address", "address"]
+];
+async function addPlayerGameIndexes(prisma: PrismaClient){
+    for(const [name, columns] of PLAYER_GAME_INDEXES){
+        const found: any[] = await prisma.$queryRaw`SELECT COUNT(*) AS n FROM information_schema.STATISTICS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'player_game' AND INDEX_NAME = ${name}`;
+        if(Number(found[0]?.n)) continue;
+        const started = Date.now();
+        await prisma.$executeRawUnsafe(`CREATE INDEX ${name} ON player_game (${columns})`);
+        console.log(`player_game: index ${name} created in ${Date.now() - started} ms`);
+    }
 }
 
 //tables created before a column existed; MySQL 8 has no ADD COLUMN IF NOT EXISTS
@@ -283,21 +313,25 @@ async function computeVisitors(prisma: PrismaClient, from: Date, to: Date){
     const [rows, guests]: any[] = await Promise.all([
         //grouped as bytes (collations differ), returned as text: Prisma 3 sends BINARY as base64
         //the device is the explorer of the latest visit in the range that
-        //reported one (GROUP_CONCAT skips NULLs: games and old rows have none)
+        //reported one (GROUP_CONCAT skips NULLs: games, holes and old rows have
+        //none); a hole started counts as a visit too, like a finished game
         prisma.$queryRaw`SELECT CONVERT(v.address USING utf8mb4) AS address,
                 DATE_FORMAT(MAX(CASE WHEN v.exact = 1 THEN v.seen END), '%Y-%m-%dT%H:%i:%sZ') AS lastExact,
                 DATE_FORMAT(MAX(CASE WHEN v.exact = 0 THEN v.seen END), '%Y-%m-%dT00:00:00Z') AS lastDay,
-                SUM(v.game) AS games,
+                SUM(v.game) AS games, SUM(v.hole) AS holes,
                 SUBSTRING_INDEX(GROUP_CONCAT(v.explorer ORDER BY v.seen DESC SEPARATOR '|'), '|', 1) AS explorer,
                 SUBSTRING_INDEX(GROUP_CONCAT(v.explorerAgent ORDER BY v.seen DESC SEPARATOR '|'), '|', 1) AS explorerAgent FROM (
-                SELECT CAST(address AS BINARY) AS address, lastSeen AS seen, 1 AS exact, 0 AS game, explorer, explorerAgent FROM daily_visit
+                SELECT CAST(address AS BINARY) AS address, lastSeen AS seen, 1 AS exact, 0 AS game, 0 AS hole, explorer, explorerAgent FROM daily_visit
                     WHERE lastSeen >= ${from} AND lastSeen <= ${to}
                 UNION ALL
-                SELECT CAST(address AS BINARY), TIMESTAMP(day), 0, 0, explorer, explorerAgent FROM daily_visit
+                SELECT CAST(address AS BINARY), TIMESTAMP(day), 0, 0, 0, explorer, explorerAgent FROM daily_visit
                     WHERE lastSeen IS NULL AND day >= DATE(${from}) AND day <= DATE(${to})
                 UNION ALL
-                SELECT CAST(LOWER(address) AS BINARY), startTime, 1, 1, NULL, NULL FROM player_game
+                SELECT CAST(LOWER(address) AS BINARY), startTime, 1, 1, 0, NULL, NULL FROM player_game
                     WHERE startTime >= ${from} AND startTime <= ${to} AND address IS NOT NULL
+                UNION ALL
+                SELECT CAST(address AS BINARY), startedAt, 1, 0, 1, NULL, NULL FROM hole_start
+                    WHERE startedAt >= ${from} AND startedAt <= ${to} AND address <> ''
             ) v GROUP BY v.address
             ORDER BY GREATEST(COALESCE(lastExact, ''), COALESCE(lastDay, '')) DESC
             LIMIT ${VISITORS_MAX_ROWS + 1}`,
@@ -313,7 +347,8 @@ async function computeVisitors(prisma: PrismaClient, from: Date, to: Date){
         //a day-level row only wins over an exact time of an earlier day
         const dayOnly = !!day && (!exact || day.getTime() > exact.getTime());
         const explorer = row.explorer ? String(row.explorer) : null;
-        return {address, lastSeen: (dayOnly ? day : exact).toISOString(), dayOnly, games: Number(row.games || 0),
+        return {address, lastSeen: (dayOnly ? day : exact).toISOString(), dayOnly,
+            games: Number(row.games || 0), holes: Number(row.holes || 0),
             explorer, explorerAgent: explorer && row.explorerAgent ? String(row.explorerAgent) : null};
     });
     const names = await lookupNames(list.map(v => v.address));
@@ -387,9 +422,8 @@ async function computeStats(prisma: PrismaClient){
         prisma.$queryRaw`SELECT DATE_FORMAT(startTime, '%Y-%m-%d') AS day, COUNT(*) AS games FROM player_game
                 WHERE startTime >= ${since} GROUP BY day ORDER BY day`,
         computeExplorers(prisma, since30),
-        //one row per day and mode: a sum, not a count of holes
-        prisma.$queryRaw`SELECT SUM(n) AS total, SUM(IF(day >= ${since30}, n, 0)) AS last30,
-                DATE_FORMAT(MIN(day), '%Y-%m-%d') AS since FROM daily_hole_start`
+        prisma.$queryRaw`SELECT COUNT(*) AS total, SUM(startedAt >= ${since30}) AS last30,
+                DATE_FORMAT(MIN(startedAt), '%Y-%m-%d') AS since FROM hole_start`
             .catch(error => (console.log("/api/stats holes error", error?.message), []))
     ]);
     const days: {[day: string]: {day: string, wallets: number, guests: number, games: number}} = {};
@@ -457,7 +491,7 @@ async function computeExplorers(prisma: PrismaClient, since30: Date): Promise<{b
                     ) v ON v.day = DATE(g.startTime) AND CAST(LOWER(v.address) AS BINARY) = CAST(LOWER(g.address) AS BINARY)
                     WHERE g.startTime >= ${since30} AND g.address IS NOT NULL GROUP BY v.explorer`
                 .catch(error => (console.log("/api/stats explorer games error", error?.message), [])),
-            prisma.$queryRaw`SELECT explorer, SUM(n) AS n FROM daily_hole_start WHERE day >= ${since30} GROUP BY explorer`
+            prisma.$queryRaw`SELECT explorer, COUNT(*) AS n FROM hole_start WHERE startedAt >= ${since30} GROUP BY explorer`
                 .catch(error => (console.log("/api/stats explorer holes error", error?.message), []))
         ]);
         const counts: {[bucket: string]: ExplorerRow} = {};

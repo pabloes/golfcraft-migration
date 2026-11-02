@@ -304,7 +304,7 @@
           <th>Wallet</th>
           <th><button type="button" class="sort" data-sort="device" title="Sort by device">Device<span class="arrow" aria-hidden="true"></span></button></th>
           <th><button type="button" class="sort" data-sort="seen" title="Sort by last seen">Last seen<span class="arrow" aria-hidden="true"></span></button></th>
-          <th class="num"><button type="button" class="sort" data-sort="games" title="Sort by games played">Games<span class="arrow" aria-hidden="true"></span></button></th>
+          <th class="num"><button type="button" class="sort" data-sort="games" title="Sort by games completed, then holes started">Games (holes)<span class="arrow" aria-hidden="true"></span></button></th>
         </tr></thead>
         <tbody id="visitors-body"></tbody>
       </table>
@@ -646,7 +646,7 @@
       " Unique visitors are every player account since 2021, updated once a day." +
       " Games completed counts finished Season runs, tournaments, competitions and training; the number in brackets is every hole begun in any mode, tutorial included" +
       (d.holesTrackedSince ? ", counted since " + formatDay(d.holesTrackedSince) + "." : " (none counted yet).") +
-      " Who visited shows each wallet shortened, with its public Decentraland name; guests are only counted.";
+      " Who visited shows each wallet shortened, with its public Decentraland name and its games completed (holes started) in the range; guests are only counted.";
     $("updated").textContent = "Updated " + new Date(d.updatedAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
     $("status-dot").className = "live-dot";
     renderExplorers(d);
@@ -731,7 +731,8 @@
         if (!da !== !db) return da ? -1 : 1;
         cmp = da.localeCompare(db, "en", { sensitivity: "base" });
       } else {
-        cmp = (Number(a.v.games) || 0) - (Number(b.v.games) || 0);
+        cmp = (Number(a.v.games) || 0) - (Number(b.v.games) || 0) ||
+          (Number(a.v.holes) || 0) - (Number(b.v.holes) || 0);
       }
       return cmp ? cmp * sign : a.i - b.i;
     });
@@ -797,7 +798,8 @@
         ? formatDay(v.lastSeen.slice(0, 10), { month: "short", day: "numeric" })
         : relativeTime(Date.parse(v.lastSeen)));
       seen.title = v.dayOnly ? "Only the day is known for this visit" : utcTime(v.lastSeen);
-      html("td", { "class": "num" }, tr, fullCount(v.games));
+      var play = html("td", { "class": "num" }, tr, fullCount(v.games) + " (" + fullCount(v.holes || 0) + ")");
+      play.title = fullCount(v.games) + " games completed · " + fullCount(v.holes || 0) + " holes started in this range";
     });
     showVisitorsMessage(list.length ? "" : "Nobody with a wallet visited in this range.");
     var wallets = list.length === 1 ? "1 wallet" : fullCount(list.length) + " wallets";
