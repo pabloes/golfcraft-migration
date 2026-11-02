@@ -16,6 +16,7 @@ import {createFrameReproduction} from "../../common/frame-reproductor";
 import fetch from "cross-fetch";
 import MESSAGES from "./mesages";
 import {getGameAccessFor} from "../game-window-gate";
+import {recordHoleStart} from "../hole-start";
 
 const playfabServerApiKey = process.env.PLAYFAB_API_KEY;
 class TrainingRaceState extends Gameplay {
@@ -28,6 +29,7 @@ class TrainingRaceState extends Gameplay {
 
 export class MissionRoom extends Room<TrainingRaceState> {
     private interval:ReturnType<typeof setInterval>;
+    private holeStarted = false;//counted once, whatever READY does after a reconnect
     private gameDefinition:GameDefinition;
     private golfPlay;
     private courseDefinition;
@@ -133,6 +135,10 @@ export class MissionRoom extends Room<TrainingRaceState> {
             this.state.startTime = Date.now();
             this.state.duration = MissionRoom.MAX_ROOM_DURATION_S;
             this.lastShootTime = Date.now();
+            if(!this.holeStarted){
+                this.holeStarted = true;
+                recordHoleStart("mission");
+            }
             client.send(MESSAGES.START, {
                 startTime: this.state.startTime,
                 serverTime: Date.now(),

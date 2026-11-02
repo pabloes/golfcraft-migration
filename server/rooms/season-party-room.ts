@@ -4,6 +4,7 @@ import fetch from "cross-fetch";
 import {promisify} from "util";
 import {PlayFabServer} from "playfab-sdk";
 import {tryFetch} from "../utils/try-fetch";
+import {recordHoleStart} from "../hole-start";
 import {creatServerGolfPlay} from "./golfplay-server";
 import {Gameplay, Vector3} from "./GamePlayState";
 import {getCourseDefinition} from "../../common/course-definitions/course-definition-repository";
@@ -557,6 +558,8 @@ export class SeasonPartyRoom extends Room<SeasonPartyRoomState> {
         if (!this.state.started && Date.now() > this.state.startTime) {
             console.log("season-party STARTED = TRUE", this.state.currentGame);
             this.state.started = true;
+            //one hole per member still in the party, like their player_game rows
+            recordHoleStart("season", this.state.players.filter(p => this.isActive(p)).length);
             this.state.players.forEach(player => {
                 if (!this.isActive(player) || !player.golfPlay) return;
                 player.lastRecordedFrameTime = Date.now();

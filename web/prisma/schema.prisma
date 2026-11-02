@@ -269,6 +269,16 @@ model daily_guest_visit {
   @@id([day, address])
 }
 
+//holes begun per UTC day and game mode, bumped by the game server through
+///api/hole-start; the stats page shows the sum after Games completed
+model daily_hole_start {
+  day      DateTime @db.Date
+  gameMode String   @db.VarChar(16)
+  n        Int      @default(0) @db.UnsignedInt
+
+  @@id([day, gameMode])
+}
+
 model recorded_game {
   ID            BigInt    @id @unique(map: "ID_UNIQUE") @default(autoincrement()) @db.UnsignedBigInt
   address       String?   @db.VarChar(45)

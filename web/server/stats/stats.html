@@ -78,6 +78,8 @@
 
   .tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
   .tile .value { font-size: 34px; font-weight: 600; line-height: 1.1; margin: 10px 0 6px; letter-spacing: -0.5px; }
+  /* the holes started, in brackets after the games completed */
+  .tile .value small { font-size: 17px; font-weight: 500; color: var(--text-3); letter-spacing: 0; white-space: nowrap; }
 
   .explorers { margin-top: 16px; }
   .explorers[hidden] { display: none; }
@@ -220,8 +222,8 @@
         <div class="sub" id="unique-sub">&nbsp;</div>
       </div>
       <div class="card tile">
-        <div class="label">Games played</div>
-        <div class="value" id="games">–</div>
+        <div class="label">Games completed (holes started)</div>
+        <div class="value" id="games-value"><span id="games">–</span><small id="holes"></small></div>
         <div class="sub" id="games-sub">&nbsp;</div>
       </div>
       <div class="card tile">
@@ -253,7 +255,7 @@
         <h2 id="chart-title">Daily visitors</h2>
         <div class="switch" role="group" aria-label="Chart shows">
           <button type="button" data-metric="visitors" aria-pressed="true">Visitors</button>
-          <button type="button" data-metric="games" aria-pressed="false">Games played</button>
+          <button type="button" data-metric="games" aria-pressed="false">Games completed</button>
         </div>
       </div>
       <div class="sub" id="chart-sub">&nbsp;</div>
@@ -329,8 +331,8 @@
       { key: "wallets", color: "var(--series)", name: "With wallet", unit: "with wallet" },
       { key: "guests", color: "var(--series-2)", name: "Guests", unit: "guests" }
     ] },
-    games: { title: "Daily games played", lines: [
-      { key: "games", color: "var(--series-3)", name: "Games played", unit: "games" }
+    games: { title: "Daily games completed", lines: [
+      { key: "games", color: "var(--series-3)", name: "Games completed", unit: "games" }
     ] }
   };
 
@@ -613,9 +615,14 @@
     $("unique-sub").textContent = d.uniqueVisitorsFrom === "playfab"
       ? "Players since September 2021, with and without wallet"
       : "Different wallets since 2022";
+    var holes = d.holesStarted == null ? null : d.holesStarted;
     $("games").textContent = formatCount(d.gamesPlayed);
-    $("games").title = fullCount(d.gamesPlayed);
-    $("games-sub").textContent = fullCount(d.gamesLast30Days) + " in the last 30 days";
+    $("holes").textContent = holes == null ? "" : " (" + formatCount(holes) + ")";
+    $("games-value").title = fullCount(d.gamesPlayed) + " games completed" +
+      (holes == null ? "" : " · " + fullCount(holes) + " holes started" +
+        (d.holesTrackedSince ? " since " + formatDay(d.holesTrackedSince) : ""));
+    $("games-sub").textContent = fullCount(d.gamesLast30Days) +
+      (holes == null ? "" : " (" + fullCount(d.holesStartedLast30Days) + ")") + " in the last 30 days";
     $("maps").textContent = formatCount(d.mapsCreated);
     $("maps-sub").textContent = fullCount(d.seasonMaps) + " in the Season pool";
     var tracked = d.visitorsTrackedSince || {};
@@ -625,7 +632,8 @@
         : "Until visit tracking starts, only wallets that finished a game are counted") +
       (tracked.guests ? ", and guests are counted from " + formatDay(tracked.guests) + "." : ", and guests are not counted yet.") +
       " Unique visitors are every player account since 2021, updated once a day." +
-      " Games played counts Season runs, tournaments, competitions and training." +
+      " Games completed counts finished Season runs, tournaments, competitions and training; the number in brackets is every hole begun in any mode, tutorial included" +
+      (d.holesTrackedSince ? ", counted since " + formatDay(d.holesTrackedSince) + "." : " (none counted yet).") +
       " Who visited shows each wallet shortened, with its public Decentraland name; guests are only counted.";
     $("updated").textContent = "Updated " + new Date(d.updatedAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
     $("status-dot").className = "live-dot";

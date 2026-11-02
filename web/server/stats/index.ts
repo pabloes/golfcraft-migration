@@ -25,6 +25,10 @@ import {redactedMessage} from "../../../common/redact";
 //     the scene reports them through /api/record-visit.
 // Unique visitors = every PlayFab account (one per wallet or guest that ever
 // logged in, since 2021), counted from a daily "All Players" segment export.
+// Holes started (the bracket after Games completed) = daily_hole_start, one
+// counter per UTC day and game mode, bumped by the game server's
+// /api/hole-start when a hole begins (server/hole-start.ts); the page sums a
+// few hundred rows, never counts holes. Nothing before its first deploy.
 const DAY = 1000 * 60 * 60 * 24;
 const DAYS = 365;
 const CACHE_MS = 60 * 1000;
@@ -41,6 +45,10 @@ const EXPLORER_RAW_MAX = 48;
 type ExplorerBucket = "desktop" | "web" | "mobile" | "vr" | "other";
 const EXPLORER_BUCKETS: ExplorerBucket[] = ["desktop", "web", "mobile", "vr", "other"];
 type VisitTable = "daily_visit" | "daily_guest_visit";
+//hole-start: the game mode as the rooms name it ("season", "mission", ...),
+//and at most one party's worth of holes per call
+const HOLE_MODE_MAX = 16;
+const HOLE_COUNT_MAX = 16;
 //columns added after the tables existed, in order; MySQL 8 has no ADD COLUMN IF NOT EXISTS
 const LATER_COLUMNS: [string, string][] = [
     ["lastSeen", "DATETIME NULL"],
@@ -67,6 +75,12 @@ export function statsApi(router, prisma: PrismaClient){
         PRIMARY KEY (day, address)
     )`).then(() => addLaterColumns(prisma, table))
         .catch(error => console.log(`${table} table error`, error?.message)));
+    prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS daily_hole_start (
+        day DATE NOT NULL,
+        gameMode VARCHAR(${HOLE_MODE_MAX}) NOT NULL,
+        n INT UNSIGNED NOT NULL DEFAULT 0,
+        PRIMARY KEY (day, gameMode)
+    )`).catch(error => console.log("daily_hole_start table error", error?.message));
 
     loadPlayFabAccounts(prisma).then(() => refreshPlayFabAccounts(prisma));
     setInterval(() => refreshPlayFabAccounts(prisma), 60 * 60 * 1000);
@@ -105,6 +119,24 @@ export function statsApi(router, prisma: PrismaClient){
         }catch(error){
             console.log("/api/stats/visitors error", error?.message || error);
             return res.status(500).send({error: "visitors unavailable"});
+        }
+    });
+
+    //the game server reports a hole that just began: {apiKey, gameMode, count}
+    //(count = the members of a party, 1 otherwise), like /api/player-game
+    router.post("/api/hole-start", async (req, res) => {
+        try{
+            const {apiKey, gameMode, count} = req.body || {};
+            if(apiKey !== process.env.GOLF_API_KEY) return res.status(400).send({error: "NON AUTH"});
+            const mode = String(gameMode || "").trim().toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, HOLE_MODE_MAX);
+            const n = Math.min(HOLE_COUNT_MAX, Math.max(1, Math.floor(Number(count) || 1)));
+            if(!mode) return res.status(400).send({error: "invalid gameMode"});
+            await prisma.$executeRaw`INSERT INTO daily_hole_start (day, gameMode, n) VALUES (UTC_DATE(), ${mode}, ${n})
+                    ON DUPLICATE KEY UPDATE n = n + ${n}`;
+            return res.send({ok: true});
+        }catch(error){
+            console.log("/api/hole-start error", error?.message);
+            return res.status(500).send({error: "not recorded"});
         }
     });
 
@@ -286,7 +318,7 @@ async function computeStats(prisma: PrismaClient){
     const since30 = new Date(Date.now() - 30 * DAY);
     //player_game is an old table with another collation than daily_visit, and
     //UNION refuses to mix them ("Illegal mix of collations"): compare as bytes
-    const [wallets, guests, unique, games, tracking, mapsCreated, seasonMaps, online, dailyGames, explorers]: any[] = await Promise.all([
+    const [wallets, guests, unique, games, tracking, mapsCreated, seasonMaps, online, dailyGames, explorers, holes]: any[] = await Promise.all([
         prisma.$queryRaw`SELECT DATE_FORMAT(v.day, '%Y-%m-%d') AS day, COUNT(DISTINCT v.address) AS visitors FROM (
                 SELECT DATE(startTime) AS day, CAST(LOWER(address) AS BINARY) AS address FROM player_game
                     WHERE startTime >= ${since} AND address IS NOT NULL
@@ -309,7 +341,11 @@ async function computeStats(prisma: PrismaClient){
         fetchOnline(),
         prisma.$queryRaw`SELECT DATE_FORMAT(startTime, '%Y-%m-%d') AS day, COUNT(*) AS games FROM player_game
                 WHERE startTime >= ${since} GROUP BY day ORDER BY day`,
-        computeExplorers(prisma, since30)
+        computeExplorers(prisma, since30),
+        //one row per day and mode: a sum, not a count of holes
+        prisma.$queryRaw`SELECT SUM(n) AS total, SUM(IF(day >= ${since30}, n, 0)) AS last30,
+                DATE_FORMAT(MIN(day), '%Y-%m-%d') AS since FROM daily_hole_start`
+            .catch(error => (console.log("/api/stats holes error", error?.message), []))
     ]);
     const days: {[day: string]: {day: string, wallets: number, guests: number, games: number}} = {};
     const at = (day) => days[day] = days[day] || {day, wallets: 0, guests: 0, games: 0};
@@ -326,6 +362,10 @@ async function computeStats(prisma: PrismaClient){
         uniqueVisitorsFrom: playFabAccounts ? "playfab" : "wallets",
         gamesPlayed: Number(games[0]?.total || 0),
         gamesLast30Days: Number(games[0]?.last30 || 0),
+        //holes begun in any mode (tutorial included), counted since holesTrackedSince
+        holesStarted: Number(holes[0]?.total || 0),
+        holesStartedLast30Days: Number(holes[0]?.last30 || 0),
+        holesTrackedSince: holes[0]?.since || null,
         mapsCreated,
         seasonMaps,
         visitorsTrackedSince: {wallets: tracking[0]?.wallets || null, guests: tracking[0]?.guests || null},

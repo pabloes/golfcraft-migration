@@ -17,6 +17,7 @@ import MESSAGE from "./mesages";
 import { sleep } from "../../common/utils";
 import fetch from "cross-fetch";
 import {withoutSecrets} from "../../common/redact";
+import {recordHoleStart} from "../hole-start";
 
 var fs = require("fs");
 if(!fs.existsSync(`shoots.log`)){
@@ -181,7 +182,8 @@ export class CompetitionGroupRoom extends Room<CompetitionGroupState> {
         this.interval = setInterval(() => this.clockCheck({client, userId, PlayFabId}), 300); 
         this.setSimulationInterval((deltaTime) => this.update(deltaTime/1000), 15);
         this.broadcast(MESSAGES.START, {startTime:this.state.startTime, duration:this.state.duration, serverTime:Date.now()});
-        
+        recordHoleStart("competition");
+
          this.golfPlay.onUpdate(({ball, movingParts})=>{
             //if(ball) this.state.ball.updateFromCANNON(ball);
             if(movingParts) {

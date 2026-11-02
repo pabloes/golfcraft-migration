@@ -16,6 +16,7 @@ import {createFrameReproduction} from "../../common/frame-reproductor";
 import fetch from "cross-fetch";
 import {fetchRemoteCoursesData, RemoteCourseData} from "../../common/fetch-remote-courses";
 import {withoutSecrets} from "../../common/redact";
+import {recordHoleStart} from "../hole-start";
 const apiKey = process.env.GOLF_API_KEY;
 const playfabServerApiKey = process.env.PLAYFAB_API_KEY;
 class TrainingRaceState extends Gameplay {
@@ -96,7 +97,8 @@ export class TrainingRace extends Room<TrainingRaceState> {
         
         this.clock.start();
         this.broadcast(MESSAGE.START, {startTime:this.state.startTime, duration:this.state.duration, serverTime:Date.now()});
-        this.update = this.update.bind(this);        
+        recordHoleStart("training");
+        this.update = this.update.bind(this);
         this.setSimulationInterval((deltaTime) => this.update(deltaTime/1000), 30);
         this.interval = setInterval(() => this.clockCheck({client, userId, PlayFabId}), 100); 
         this.golfPlay.onUpdate(({ball, movingParts}) => {

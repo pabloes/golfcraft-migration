@@ -16,6 +16,7 @@ import {deserializeRecipe, getRandomInt, sleep, waitFor, defaultChestRewardChanc
 import fetch from "cross-fetch";
 import {callDiscordHook} from "../../common/discord";
 import {pushChests} from "./chests-generator";
+import {recordHoleStart} from "../hole-start";
 import MESSAGES from "./mesages";
 import {withoutSecrets} from "../../common/redact";
 
@@ -37,6 +38,7 @@ class CompetitionGroupState extends Gameplay {
 
 export class TournamentRoom extends Room<CompetitionGroupState> {
     private interval:ReturnType<typeof setInterval>;
+    private holeStarted = false;//counted once, whatever READY does after a reconnect
     private golfPlay;
     private gameDefinition;
     private courseDefinition;
@@ -311,6 +313,10 @@ export class TournamentRoom extends Room<CompetitionGroupState> {
             console.log("READY");
             await waitFor(()=>this.courseDefinition)
             this.state.startTime = Date.now() + 12000;
+            if(!this.holeStarted){
+                this.holeStarted = true;
+                recordHoleStart("tournament");
+            }
             this.clock.start();
             this.update = this.update.bind(this);
             this.interval = setInterval(() => this.clockCheck({client, userId, PlayFabId}), 300);

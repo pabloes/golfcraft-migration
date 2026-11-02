@@ -24,6 +24,7 @@ import {
 import fetch from "cross-fetch";
 import {promisify} from "util";
 import {PlayFabAdmin, PlayFabServer} from "playfab-sdk";
+import {recordHoleStart} from "../hole-start";
 import {resolvePlayer} from "./session-auth";
 import IPlayFabError = PlayFabModule.IPlayFabError;
 import {CURRENCY} from "../../common/currency-codes";
@@ -428,6 +429,7 @@ export class SeasonRoom extends Room<SeasonRoomState> {
         if (!this.state.started && this.state.startTime && Date.now() > this.state.startTime) {
             console.log("STARTED = TRUE");
             this.state.started = true;
+            recordHoleStart("season");
 
             this.lastRecordedFrameTime = Date.now();
             const position = this.golfPlay.getPhysicBall().body.position;
