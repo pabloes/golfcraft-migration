@@ -216,8 +216,9 @@ export const coursesApi = (router, app, prisma)=>{
 
             const authchain0 = await JSON.parse(req.header(`x-identity-auth-chain-0`));
             const address= authchain0.payload.toLowerCase();
-            //every scene login passes here: the daily visitors of /stats
-            recordVisit(prisma, address);
+            //every scene login passes here: the daily visitors of /stats, with
+            //the explorer the scene runs in ("<agent>/<platform>", optional)
+            recordVisit(prisma, address, req.header("x-golfcraft-explorer"));
             const [{PlayFabId}] = await promisify(PlayFabServer.GetPlayFabIDsFromGenericIDs)({
                 "GenericIDs": [
                     {

@@ -1,6 +1,6 @@
 import path from "path";
 import fetch from "cross-fetch";
-import {PrismaClient} from "@prisma/client";
+import {Prisma, PrismaClient} from "@prisma/client";
 import {SERVER_HTTP_URL} from "../../../common/constants";
 import {runChecks} from "../../../chain-playfab/security/securityChecks";
 import {authenticateSessionTicket} from "../auth/session-ticket";
@@ -13,7 +13,10 @@ import {redactedMessage} from "../../../common/redact";
 // "0x27f...57". Full wallets and guests' identities never do.
 //
 // Visitors, one row per address and UTC day, with the time of the last visit
-// that day (lastSeen, NULL in rows written before it existed):
+// that day (lastSeen, NULL in rows written before it existed) and the explorer
+// the scene reported (explorer = the bucket desktop/web/mobile/vr/other,
+// explorerAgent = the raw "<agent>/<platform>"; both NULL before 2026-11-02
+// and for Studio logins):
 //   - daily_visit: wallets, written by every scene login (/api/get-login-id).
 //     It starts empty, so the wallet series also includes every wallet that
 //     finished a game (player_game, kept since 2022): before tracking began
@@ -33,6 +36,17 @@ const VISITORS_MAX_ROWS = 300;
 const PROFILES_URL = "https://peer-lb.decentraland.org/lambdas/profiles";
 const PROFILES_TIMEOUT_MS = 5000;
 const PROFILE_CACHE_MS = 60 * 60 * 1000;
+//the scene's explorer tag ("<agent>/<platform>", scene/src/services/platform.ts)
+const EXPLORER_RAW_MAX = 48;
+type ExplorerBucket = "desktop" | "web" | "mobile" | "vr" | "other";
+const EXPLORER_BUCKETS: ExplorerBucket[] = ["desktop", "web", "mobile", "vr", "other"];
+type VisitTable = "daily_visit" | "daily_guest_visit";
+//columns added after the tables existed, in order; MySQL 8 has no ADD COLUMN IF NOT EXISTS
+const LATER_COLUMNS: [string, string][] = [
+    ["lastSeen", "DATETIME NULL"],
+    ["explorer", "VARCHAR(16) NULL"],
+    ["explorerAgent", `VARCHAR(${EXPLORER_RAW_MAX}) NULL`]
+];
 
 let cached: {at: number, data: Promise<any>} = null;
 //per range (rounded to the minute), for CACHE_MS
@@ -44,12 +58,14 @@ let playFabAccounts: {count: number, updatedAt: string} = null;
 let countingAccounts = false;
 
 export function statsApi(router, prisma: PrismaClient){
-    ["daily_visit", "daily_guest_visit"].forEach(table => prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS ${table} (
+    (["daily_visit", "daily_guest_visit"] as VisitTable[]).forEach(table => prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS ${table} (
         day DATE NOT NULL,
         address VARCHAR(45) NOT NULL,
         lastSeen DATETIME NULL,
+        explorer VARCHAR(16) NULL,
+        explorerAgent VARCHAR(${EXPLORER_RAW_MAX}) NULL,
         PRIMARY KEY (day, address)
-    )`).then(() => addLastSeenColumn(prisma, table))
+    )`).then(() => addLaterColumns(prisma, table))
         .catch(error => console.log(`${table} table error`, error?.message)));
 
     loadPlayFabAccounts(prisma).then(() => refreshPlayFabAccounts(prisma));
@@ -93,7 +109,7 @@ export function statsApi(router, prisma: PrismaClient){
     });
 
     //a guest's scene login: signed like get-login-id, the address is the
-    //guest's own (ephemeral) identity
+    //guest's own (ephemeral) identity; the body may carry the explorer
     router.post("/api/record-visit", async (req, res) => {
         try{
             let address;
@@ -108,9 +124,7 @@ export function statsApi(router, prisma: PrismaClient){
                 }
                 address = JSON.parse(req.header("x-identity-auth-chain-0")).payload.toLowerCase();
             }
-            await prisma.$executeRaw`INSERT INTO daily_guest_visit (day, address, lastSeen)
-                    VALUES (UTC_DATE(), ${address}, UTC_TIMESTAMP()) ON DUPLICATE KEY UPDATE lastSeen = UTC_TIMESTAMP()`
-                .catch(() => prisma.$executeRaw`INSERT IGNORE INTO daily_guest_visit (day, address) VALUES (UTC_DATE(), ${address})`);
+            await recordVisit(prisma, address, req.body?.explorer, "daily_guest_visit");
             return res.send({ok: true});
         }catch(error){
             console.log("/api/record-visit error", error?.message);
@@ -119,21 +133,52 @@ export function statsApi(router, prisma: PrismaClient){
     });
 }
 
-//the old INSERT IGNORE is the fallback while the lastSeen column is missing
-export function recordVisit(prisma: PrismaClient, address: string){
-    prisma.$executeRaw`INSERT INTO daily_visit (day, address, lastSeen)
-            VALUES (UTC_DATE(), ${address}, UTC_TIMESTAMP()) ON DUPLICATE KEY UPDATE lastSeen = UTC_TIMESTAMP()`
-        .catch(() => prisma.$executeRaw`INSERT IGNORE INTO daily_visit (day, address) VALUES (UTC_DATE(), ${address})`)
-        .catch(error => console.log("recordVisit error", error?.message));
+//One visit of `address` today, with the explorer it came from when known (the
+//scene's x-golfcraft-explorer header or record-visit's `explorer`; a later
+//visit the same day with a known explorer overwrites it). The inserts fall
+//back column by column while the table is older than the code: without the
+//explorer columns, then without lastSeen (the original INSERT IGNORE).
+export function recordVisit(prisma: PrismaClient, address: string, explorer?: unknown, table: VisitTable = "daily_visit"): Promise<void> {
+    const t = Prisma.raw(table);
+    const parsed = parseExplorer(explorer);
+    const bucket = parsed?.bucket || null;
+    const agent = parsed?.raw || null;
+    return prisma.$executeRaw`INSERT INTO ${t} (day, address, lastSeen, explorer, explorerAgent)
+            VALUES (UTC_DATE(), ${address}, UTC_TIMESTAMP(), ${bucket}, ${agent})
+            ON DUPLICATE KEY UPDATE lastSeen = UTC_TIMESTAMP(),
+                explorer = COALESCE(${bucket}, explorer), explorerAgent = COALESCE(${agent}, explorerAgent)`
+        .catch(() => prisma.$executeRaw`INSERT INTO ${t} (day, address, lastSeen)
+                VALUES (UTC_DATE(), ${address}, UTC_TIMESTAMP()) ON DUPLICATE KEY UPDATE lastSeen = UTC_TIMESTAMP()`)
+        .catch(() => prisma.$executeRaw`INSERT IGNORE INTO ${t} (day, address) VALUES (UTC_DATE(), ${address})`)
+        .then(() => undefined, error => console.log("recordVisit error", error?.message));
 }
 
-//tables created before lastSeen existed; MySQL 8 has no ADD COLUMN IF NOT EXISTS
-async function addLastSeenColumn(prisma: PrismaClient, table: string){
-    const found: any[] = await prisma.$queryRaw`SELECT COUNT(*) AS n FROM information_schema.COLUMNS
-            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ${table} AND COLUMN_NAME = 'lastSeen'`;
-    if(Number(found[0]?.n)) return;
-    await prisma.$executeRawUnsafe(`ALTER TABLE ${table} ADD COLUMN lastSeen DATETIME NULL`);
-    console.log(`${table}: lastSeen column added`);
+//The scene reports "<agent>/<platform>" (e.g. "unity-explorer/desktop",
+//"bevy-web/web", "godot-explorer/mobile"): the agent decides the bucket when
+//it is a known explorer, else the platform does. Anything that is not a
+//printable string of at most EXPLORER_RAW_MAX chars is ignored (null).
+export function parseExplorer(value: unknown): {bucket: ExplorerBucket, raw: string} {
+    if(typeof value !== "string") return null;
+    const raw = value.trim().replace(/[^\x20-\x7e]/g, "").slice(0, EXPLORER_RAW_MAX);
+    if(!raw) return null;
+    const [agent = "", platform = ""] = raw.toLowerCase().split("/");
+    let bucket: ExplorerBucket = "other";
+    if(/godot/.test(agent)) bucket = "mobile";
+    else if(/unity/.test(agent)) bucket = "desktop";
+    else if(/bevy/.test(agent) && (/web|wasm/.test(agent) || platform === "web")) bucket = "web";
+    else if((EXPLORER_BUCKETS as string[]).includes(platform) && platform !== "other") bucket = platform as ExplorerBucket;
+    return {bucket, raw};
+}
+
+//tables created before a column existed; MySQL 8 has no ADD COLUMN IF NOT EXISTS
+async function addLaterColumns(prisma: PrismaClient, table: VisitTable){
+    for(const [column, ddl] of LATER_COLUMNS){
+        const found: any[] = await prisma.$queryRaw`SELECT COUNT(*) AS n FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ${table} AND COLUMN_NAME = ${column}`;
+        if(Number(found[0]?.n)) continue;
+        await prisma.$executeRawUnsafe(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+        console.log(`${table}: ${column} column added`);
+    }
 }
 
 //a valid {from, to}: `to` no later than now (up to the end of this minute), at
@@ -235,7 +280,7 @@ async function computeStats(prisma: PrismaClient){
     const since30 = new Date(Date.now() - 30 * DAY);
     //player_game is an old table with another collation than daily_visit, and
     //UNION refuses to mix them ("Illegal mix of collations"): compare as bytes
-    const [wallets, guests, unique, games, tracking, mapsCreated, seasonMaps, online, dailyGames]: any[] = await Promise.all([
+    const [wallets, guests, unique, games, tracking, mapsCreated, seasonMaps, online, dailyGames, explorers]: any[] = await Promise.all([
         prisma.$queryRaw`SELECT DATE_FORMAT(v.day, '%Y-%m-%d') AS day, COUNT(DISTINCT v.address) AS visitors FROM (
                 SELECT DATE(startTime) AS day, CAST(LOWER(address) AS BINARY) AS address FROM player_game
                     WHERE startTime >= ${since} AND address IS NOT NULL
@@ -257,7 +302,8 @@ async function computeStats(prisma: PrismaClient){
         prisma.courses.count({where: {isSeason: 1}}),
         fetchOnline(),
         prisma.$queryRaw`SELECT DATE_FORMAT(startTime, '%Y-%m-%d') AS day, COUNT(*) AS games FROM player_game
-                WHERE startTime >= ${since} GROUP BY day ORDER BY day`
+                WHERE startTime >= ${since} GROUP BY day ORDER BY day`,
+        computeExplorers(prisma, since30)
     ]);
     const days: {[day: string]: {day: string, wallets: number, guests: number, games: number}} = {};
     const at = (day) => days[day] = days[day] || {day, wallets: 0, guests: 0, games: 0};
@@ -277,8 +323,43 @@ async function computeStats(prisma: PrismaClient){
         mapsCreated,
         seasonMaps,
         visitorsTrackedSince: {wallets: tracking[0]?.wallets || null, guests: tracking[0]?.guests || null},
+        //unique visitors per explorer in the last 30 days, biggest first, and
+        //the first day with an explorer: the scene only reports it since the
+        //2026-11-02 deploy, so there is no history before that
+        explorers: explorers.buckets,
+        explorersSince: explorers.since,
         daily: Object.values(days).sort((a, b) => (a.day < b.day ? -1 : 1))
     };
+}
+
+//{buckets: [{bucket, wallets, guests, total}] (only buckets with visitors),
+//since: "YYYY-MM-DD" | null}; empty while the explorer columns are missing
+async function computeExplorers(prisma: PrismaClient, since30: Date): Promise<{buckets: any[], since: string}> {
+    try{
+        const [wallets, guests, first]: any[] = await Promise.all([
+            prisma.$queryRaw`SELECT explorer, COUNT(DISTINCT address) AS n FROM daily_visit
+                    WHERE day >= ${since30} AND explorer IS NOT NULL GROUP BY explorer`,
+            prisma.$queryRaw`SELECT explorer, COUNT(DISTINCT address) AS n FROM daily_guest_visit
+                    WHERE day >= ${since30} AND explorer IS NOT NULL GROUP BY explorer`,
+            prisma.$queryRaw`SELECT DATE_FORMAT(MIN(day), '%Y-%m-%d') AS since FROM (
+                    SELECT MIN(day) AS day FROM daily_visit WHERE explorer IS NOT NULL
+                    UNION ALL
+                    SELECT MIN(day) FROM daily_guest_visit WHERE explorer IS NOT NULL
+                ) d`
+        ]);
+        const counts: {[bucket: string]: {bucket: string, wallets: number, guests: number, total: number}} = {};
+        const at = (bucket: string) => counts[bucket] = counts[bucket] || {bucket, wallets: 0, guests: 0, total: 0};
+        wallets.forEach(({explorer, n}) => at(String(explorer)).wallets = Number(n));
+        guests.forEach(({explorer, n}) => at(String(explorer)).guests = Number(n));
+        const buckets = Object.values(counts)
+            .map(c => ({...c, total: c.wallets + c.guests}))
+            .filter(c => c.total > 0)
+            .sort((a, b) => b.total - a.total || EXPLORER_BUCKETS.indexOf(a.bucket as ExplorerBucket) - EXPLORER_BUCKETS.indexOf(b.bucket as ExplorerBucket));
+        return {buckets, since: first[0]?.since || null};
+    }catch(error){
+        console.log("/api/stats explorers error", error?.message);
+        return {buckets: [], since: null};
+    }
 }
 
 //the ws server's /online; null (shown as "-") when it doesn't answer in time

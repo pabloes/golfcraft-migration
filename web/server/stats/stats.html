@@ -79,6 +79,23 @@
   .tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
   .tile .value { font-size: 34px; font-weight: 600; line-height: 1.1; margin: 10px 0 6px; letter-spacing: -0.5px; }
 
+  .explorers { margin-top: 16px; }
+  .explorers[hidden] { display: none; }
+  .explorers .chart-head { margin-bottom: 4px; }
+  .explorer-row { display: grid; grid-template-columns: minmax(120px, 200px) minmax(0, 1fr) 72px; align-items: center; gap: 14px; padding: 9px 0; }
+  .explorer-row + .explorer-row { border-top: 1px solid var(--card-edge); }
+  .explorer-name { font-weight: 500; }
+  .explorer-name small { display: block; color: var(--text-3); font-size: 12px; font-weight: 400; }
+  .explorer-bar { height: 8px; border-radius: 4px; background: var(--chip); overflow: hidden; }
+  .explorer-bar i { display: block; height: 100%; border-radius: 4px; background: var(--series); }
+  .explorer-count { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .explorer-count small { display: block; color: var(--text-3); font-size: 12px; font-weight: 400; }
+  .explorers .note { margin-top: 10px; }
+  @media (max-width: 420px) {
+    .explorer-row { grid-template-columns: minmax(0, 1fr) 72px; }
+    .explorer-bar { grid-column: 1 / -1; }
+  }
+
   .filters { display: flex; gap: 6px; margin: 28px 0 12px; flex-wrap: wrap; }
   .chips { display: flex; gap: 6px; margin: 0 0 12px; flex-wrap: wrap; }
   .filters button, .chips button {
@@ -212,6 +229,15 @@
         <div class="sub" id="maps-sub">&nbsp;</div>
       </div>
     </div>
+  </section>
+
+  <section class="card explorers" id="explorers" aria-labelledby="explorers-title" hidden>
+    <div class="chart-head">
+      <h2 id="explorers-title">Explorers · last 30 days</h2>
+      <div class="sub" id="explorers-sub">&nbsp;</div>
+    </div>
+    <div id="explorer-rows"></div>
+    <p class="note" id="explorers-note"></p>
   </section>
 
   <div class="filters" role="group" aria-label="Date range">
@@ -530,6 +556,44 @@
     });
   }
 
+  // Unique visitors of the last 30 days per explorer, wallets and guests
+  // together. The scene only reports its explorer since the day in
+  // explorersSince, so while that is less than 30 days ago the block says so.
+  var EXPLORER_NAMES = {
+    desktop: { name: "Desktop", detail: "Decentraland desktop explorer" },
+    web: { name: "Web browser", detail: "bevy-web" },
+    mobile: { name: "Mobile", detail: "Godot explorer" },
+    vr: { name: "VR", detail: "" },
+    other: { name: "Other", detail: "" }
+  };
+  function renderExplorers(d) {
+    var section = $("explorers");
+    var list = d.explorers || [];
+    if (!list.length) { section.hidden = true; return; }
+    section.hidden = false;
+    var rows = $("explorer-rows");
+    clear(rows);
+    var max = 0, sum = 0;
+    list.forEach(function (e) { max = Math.max(max, e.total); sum += e.total; });
+    list.forEach(function (e) {
+      var info = EXPLORER_NAMES[e.bucket] || { name: e.bucket, detail: "" };
+      var row = html("div", { "class": "explorer-row" }, rows);
+      row.title = fullCount(e.wallets) + " with wallet · " + fullCount(e.guests) + (e.guests === 1 ? " guest" : " guests");
+      var name = html("div", { "class": "explorer-name" }, row, info.name);
+      if (info.detail) html("small", {}, name, info.detail);
+      var bar = html("div", { "class": "explorer-bar", role: "img", "aria-label": info.name + ": " + fullCount(e.total) }, row);
+      html("i", { style: "width:" + (max ? (e.total / max) * 100 : 0).toFixed(1) + "%" }, bar);
+      var count = html("div", { "class": "explorer-count" }, row, fullCount(e.total));
+      html("small", {}, count, sum ? Math.round((e.total / sum) * 100) + "%" : "");
+    });
+    var since = d.explorersSince;
+    var windowStart = utcDay(Date.now() - 30 * DAY_MS);
+    var partial = since && since > windowStart;
+    $("explorers-sub").textContent = partial ? "Since " + formatDay(since) : "Unique visitors";
+    $("explorers-note").textContent = "Unique visitors by the explorer they used, wallets and guests together" +
+      (since ? ", counted since " + formatDay(since) + ", when the scene started reporting it" : "") + ".";
+  }
+
   function render() {
     var d = state.data;
     var online = d.online;
@@ -563,6 +627,7 @@
       " Who visited shows each wallet shortened, with its public Decentraland name; guests are only counted.";
     $("updated").textContent = "Updated " + new Date(d.updatedAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
     $("status-dot").className = "live-dot";
+    renderExplorers(d);
     drawChart();
   }
 

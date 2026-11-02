@@ -27,6 +27,7 @@ import {
 import { decorateRemotePhysicParts } from '../../golfplay/physics/course-element-loader'
 import { updateLobbyResources, lobbyHudState } from '../ui/lobby-hud-state'
 import { globalStore } from '../services/globalStore/globalStore'
+import { explorerTag } from '../services/platform'
 
 // PlayFab session ticket from the last login, kept so refreshUserData() can
 // re-fetch player data (resources + current_mission) after a mission — the
@@ -112,11 +113,16 @@ let bootstrapPromise: Promise<BootstrapResult> | null = null
 // only needs the wallet in x-identity-auth-chain-0, and its signature check
 // (runChecks) is gated behind process.env.PROD, which is unset in local dev.
 // So we hand-build that header and use a plain fetch (which allows http).
+//
+// Both visit calls carry the explorer ("<agent>/<platform>", see
+// services/platform.ts) so golfcraftgame.com/stats can count visitors per
+// explorer; it is waited for at most 2 s and left out when unknown.
 async function resolvePlayFabCustomId(userId: string, hasConnectedWeb3: boolean): Promise<string> {
+  const explorer = await explorerTag()
   if (!hasConnectedWeb3) {
     // Guest player: no signed identity to send, use the userId directly so we
     // get a stable anonymous account.
-    recordGuestVisit(userId)
+    recordGuestVisit(userId, explorer)
     return userId
   }
   const base = USE_REMOTE_SERVER ? 'https://golfcraftgame.com' : 'http://localhost:2569'
@@ -126,7 +132,7 @@ async function resolvePlayFabCustomId(userId: string, hasConnectedWeb3: boolean)
     if (USE_REMOTE_SERVER) {
       const response = await signedFetch({
         url,
-        init: { method: 'POST', headers: { 'Content-Type': 'application/json' } }
+        init: { method: 'POST', headers: { 'Content-Type': 'application/json', ...explorerHeader(explorer) } }
       })
       if (!response.ok) {
         console.log('[bootstrap] /api/get-login-id non-OK', response.status, response.body)
@@ -140,7 +146,8 @@ async function resolvePlayFabCustomId(userId: string, hasConnectedWeb3: boolean)
           'Content-Type': 'application/json',
           // The route does JSON.parse(header).payload.toLowerCase() to get the
           // wallet. Match the auth-chain entry-0 shape so it parses cleanly.
-          'x-identity-auth-chain-0': JSON.stringify({ type: 'SIGNER', payload: userId, signature: '' })
+          'x-identity-auth-chain-0': JSON.stringify({ type: 'SIGNER', payload: userId, signature: '' }),
+          ...explorerHeader(explorer)
         }
       })
       if (!response.ok) {
@@ -165,19 +172,26 @@ async function resolvePlayFabCustomId(userId: string, hasConnectedWeb3: boolean)
 // guests never call, so a guest's visit is reported here. Same transport as
 // get-login-id (signed in production, hand-built header locally); a failure
 // only costs one visit in the stats, so nothing waits for it.
-function recordGuestVisit(userId: string) {
+function recordGuestVisit(userId: string, explorer: string) {
   const base = USE_REMOTE_SERVER ? 'https://golfcraftgame.com' : 'http://localhost:2569'
   const url = `${base}/api/record-visit`
+  const body = JSON.stringify(explorer ? { explorer } : {})
   const request: Promise<unknown> = USE_REMOTE_SERVER
-    ? signedFetch({ url, init: { method: 'POST', headers: { 'Content-Type': 'application/json' } } })
+    ? signedFetch({ url, init: { method: 'POST', headers: { 'Content-Type': 'application/json' }, body } })
     : fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-identity-auth-chain-0': JSON.stringify({ type: 'SIGNER', payload: userId, signature: '' })
-        }
+        },
+        body
       })
   request.catch((err: any) => console.log('[bootstrap] record-visit failed:', err))
+}
+
+// The stats header for the visit calls; nothing when the explorer is unknown
+function explorerHeader(explorer: string): { [key: string]: string } {
+  return explorer ? { 'x-golfcraft-explorer': explorer } : {}
 }
 
 // The route answers {"valid":false,"error":"..."} when its checks fail; show
