@@ -170,6 +170,7 @@
   .visitors td.name { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .visitors td.wallet { font: 400 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--text-2); white-space: nowrap; }
   .visitors td.seen { color: var(--text-2); white-space: nowrap; }
+  .visitors td.device { color: var(--text-2); white-space: nowrap; }
   .visitors .muted { color: var(--text-3); }
   .visitors .empty { color: var(--text-3); font-size: 13px; padding: 12px 0 4px; }
   .visitors .empty[hidden] { display: none; }
@@ -296,6 +297,7 @@
         <thead><tr>
           <th><button type="button" class="sort" data-sort="name" title="Sort by name">Name<span class="arrow" aria-hidden="true"></span></button></th>
           <th>Wallet</th>
+          <th><button type="button" class="sort" data-sort="device" title="Sort by device">Device<span class="arrow" aria-hidden="true"></span></button></th>
           <th><button type="button" class="sort" data-sort="seen" title="Sort by last seen">Last seen<span class="arrow" aria-hidden="true"></span></button></th>
           <th class="num"><button type="button" class="sort" data-sort="games" title="Sort by games played">Games<span class="arrow" aria-hidden="true"></span></button></th>
         </tr></thead>
@@ -677,7 +679,13 @@
   var visitors = { range: "1", seq: 0, data: null, sort: null };
   // The direction a column takes on its first click: names from A, the most
   // recent visit and the most games first.
-  var SORT_DEFAULT = { name: "asc", seen: "desc", games: "desc" };
+  var SORT_DEFAULT = { name: "asc", device: "asc", seen: "desc", games: "desc" };
+  // The device column: the explorer of the visitor's latest visit, by the
+  // names of the Explorers block; unknown (visits before 2026-11-02, or only
+  // games in the range) shows a dash and sorts last.
+  function deviceName(v) {
+    return v.explorer && EXPLORER_NAMES[v.explorer] ? EXPLORER_NAMES[v.explorer].name : (v.explorer || "");
+  }
 
   // When only the day of a visit is known it counts as the start of that day,
   // the earliest moment it could have happened.
@@ -698,6 +706,10 @@
         cmp = a.v.name ? a.v.name.localeCompare(b.v.name, "en", { sensitivity: "base" }) : 0;
       } else if (sort.key === "seen") {
         cmp = seenMs(a.v) - seenMs(b.v);
+      } else if (sort.key === "device") {
+        var da = deviceName(a.v), db = deviceName(b.v);
+        if (!da !== !db) return da ? -1 : 1;
+        cmp = da.localeCompare(db, "en", { sensitivity: "base" });
       } else {
         cmp = (Number(a.v.games) || 0) - (Number(b.v.games) || 0);
       }
@@ -758,6 +770,9 @@
       var name = html("td", { "class": "name" + (v.name ? "" : " muted") }, tr, v.name || "No name");
       if (v.name) name.title = v.name;
       html("td", { "class": "wallet" }, tr, v.wallet);
+      var device = deviceName(v);
+      var deviceCell = html("td", { "class": "device" + (device ? "" : " muted") }, tr, device || "–");
+      deviceCell.title = v.explorerAgent || (device ? "" : "Not reported by this visit");
       var seen = html("td", { "class": "seen" }, tr, v.dayOnly
         ? formatDay(v.lastSeen.slice(0, 10), { month: "short", day: "numeric" })
         : relativeTime(Date.parse(v.lastSeen)));

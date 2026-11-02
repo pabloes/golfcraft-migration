@@ -205,17 +205,21 @@ async function computeVisitors(prisma: PrismaClient, from: Date, to: Date){
     //every range that touches that day, and is shown as the date
     const [rows, guests]: any[] = await Promise.all([
         //grouped as bytes (collations differ), returned as text: Prisma 3 sends BINARY as base64
+        //the device is the explorer of the latest visit in the range that
+        //reported one (GROUP_CONCAT skips NULLs: games and old rows have none)
         prisma.$queryRaw`SELECT CONVERT(v.address USING utf8mb4) AS address,
                 DATE_FORMAT(MAX(CASE WHEN v.exact = 1 THEN v.seen END), '%Y-%m-%dT%H:%i:%sZ') AS lastExact,
                 DATE_FORMAT(MAX(CASE WHEN v.exact = 0 THEN v.seen END), '%Y-%m-%dT00:00:00Z') AS lastDay,
-                SUM(v.game) AS games FROM (
-                SELECT CAST(address AS BINARY) AS address, lastSeen AS seen, 1 AS exact, 0 AS game FROM daily_visit
+                SUM(v.game) AS games,
+                SUBSTRING_INDEX(GROUP_CONCAT(v.explorer ORDER BY v.seen DESC SEPARATOR '|'), '|', 1) AS explorer,
+                SUBSTRING_INDEX(GROUP_CONCAT(v.explorerAgent ORDER BY v.seen DESC SEPARATOR '|'), '|', 1) AS explorerAgent FROM (
+                SELECT CAST(address AS BINARY) AS address, lastSeen AS seen, 1 AS exact, 0 AS game, explorer, explorerAgent FROM daily_visit
                     WHERE lastSeen >= ${from} AND lastSeen <= ${to}
                 UNION ALL
-                SELECT CAST(address AS BINARY), TIMESTAMP(day), 0, 0 FROM daily_visit
+                SELECT CAST(address AS BINARY), TIMESTAMP(day), 0, 0, explorer, explorerAgent FROM daily_visit
                     WHERE lastSeen IS NULL AND day >= DATE(${from}) AND day <= DATE(${to})
                 UNION ALL
-                SELECT CAST(LOWER(address) AS BINARY), startTime, 1, 1 FROM player_game
+                SELECT CAST(LOWER(address) AS BINARY), startTime, 1, 1, NULL, NULL FROM player_game
                     WHERE startTime >= ${from} AND startTime <= ${to} AND address IS NOT NULL
             ) v GROUP BY v.address
             ORDER BY GREATEST(COALESCE(lastExact, ''), COALESCE(lastDay, '')) DESC
@@ -231,7 +235,9 @@ async function computeVisitors(prisma: PrismaClient, from: Date, to: Date){
         const day = row.lastDay ? new Date(String(row.lastDay)) : null;
         //a day-level row only wins over an exact time of an earlier day
         const dayOnly = !!day && (!exact || day.getTime() > exact.getTime());
-        return {address, lastSeen: (dayOnly ? day : exact).toISOString(), dayOnly, games: Number(row.games || 0)};
+        const explorer = row.explorer ? String(row.explorer) : null;
+        return {address, lastSeen: (dayOnly ? day : exact).toISOString(), dayOnly, games: Number(row.games || 0),
+            explorer, explorerAgent: explorer && row.explorerAgent ? String(row.explorerAgent) : null};
     });
     const names = await lookupNames(list.map(v => v.address));
     return {
