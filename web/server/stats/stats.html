@@ -84,7 +84,10 @@
   .explorers { margin-top: 16px; }
   .explorers[hidden] { display: none; }
   .explorers .chart-head { margin-bottom: 4px; }
-  .explorer-row { display: grid; grid-template-columns: minmax(120px, 200px) minmax(0, 1fr) 72px; align-items: center; gap: 14px; padding: 9px 0; }
+  .explorer-row { display: grid; grid-template-columns: minmax(120px, 200px) minmax(0, 1fr) 100px 72px; align-items: center; gap: 14px; padding: 9px 0; }
+  /* games completed (holes started) by that explorer's players */
+  .explorer-play { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .explorer-play small { display: block; color: var(--text-3); font-size: 12px; font-weight: 400; }
   .explorer-row + .explorer-row { border-top: 1px solid var(--card-edge); }
   .explorer-name { font-weight: 500; }
   .explorer-name small { display: block; color: var(--text-3); font-size: 12px; font-weight: 400; }
@@ -94,7 +97,7 @@
   .explorer-count small { display: block; color: var(--text-3); font-size: 12px; font-weight: 400; }
   .explorers .note { margin-top: 10px; }
   @media (max-width: 420px) {
-    .explorer-row { grid-template-columns: minmax(0, 1fr) 72px; }
+    .explorer-row { grid-template-columns: minmax(0, 1fr) auto 72px; }
     .explorer-bar { grid-column: 1 / -1; }
   }
 
@@ -582,11 +585,14 @@
     list.forEach(function (e) {
       var info = EXPLORER_NAMES[e.bucket] || { name: e.bucket, detail: "" };
       var row = html("div", { "class": "explorer-row" }, rows);
-      row.title = fullCount(e.wallets) + " with wallet · " + fullCount(e.guests) + (e.guests === 1 ? " guest" : " guests");
+      row.title = fullCount(e.wallets) + " with wallet · " + fullCount(e.guests) + (e.guests === 1 ? " guest" : " guests") +
+        " · " + fullCount(e.games) + " games completed · " + fullCount(e.holes) + " holes started";
       var name = html("div", { "class": "explorer-name" }, row, info.name);
       if (info.detail) html("small", {}, name, info.detail);
       var bar = html("div", { "class": "explorer-bar", role: "img", "aria-label": info.name + ": " + fullCount(e.total) }, row);
       html("i", { style: "width:" + (max ? (e.total / max) * 100 : 0).toFixed(1) + "%" }, bar);
+      var play = html("div", { "class": "explorer-play" }, row, fullCount(e.games) + " (" + fullCount(e.holes) + ")");
+      html("small", {}, play, "games (holes)");
       var count = html("div", { "class": "explorer-count" }, row, fullCount(e.total));
       html("small", {}, count, sum ? Math.round((e.total / sum) * 100) + "%" : "");
     });
@@ -594,8 +600,14 @@
     var windowStart = utcDay(Date.now() - 30 * DAY_MS);
     var partial = since && since > windowStart;
     $("explorers-sub").textContent = partial ? "Since " + formatDay(since) : "Unique visitors";
+    var unmatched = d.explorersUnmatched || { games: 0, holes: 0 };
     $("explorers-note").textContent = "Unique visitors by the explorer they used, wallets and guests together" +
-      (since ? ", counted since " + formatDay(since) + ", when the scene started reporting it" : "") + ".";
+      (since ? ", counted since " + formatDay(since) + ", when the scene started reporting it" : "") + "." +
+      " Games (holes) are the games completed and holes started in the last 30 days by the players who logged in with that explorer that day" +
+      (unmatched.games || unmatched.holes
+        ? "; " + fullCount(unmatched.games) + (unmatched.games === 1 ? " game" : " games") + " and " +
+          fullCount(unmatched.holes) + (unmatched.holes === 1 ? " hole" : " holes") + " belong to players whose explorer is not known."
+        : ".");
   }
 
   function render() {

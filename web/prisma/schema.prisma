@@ -269,14 +269,16 @@ model daily_guest_visit {
   @@id([day, address])
 }
 
-//holes begun per UTC day and game mode, bumped by the game server through
-///api/hole-start; the stats page shows the sum after Games completed
+//holes begun per UTC day, game mode and explorer bucket ('' when the player's
+//explorer is not known), bumped by the game server through /api/hole-start;
+//the stats page shows the sum after Games completed and one per explorer
 model daily_hole_start {
   day      DateTime @db.Date
   gameMode String   @db.VarChar(16)
+  explorer String   @default("") @db.VarChar(16)
   n        Int      @default(0) @db.UnsignedInt
 
-  @@id([day, gameMode])
+  @@id([day, gameMode, explorer])
 }
 
 model recorded_game {

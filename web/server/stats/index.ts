@@ -26,9 +26,11 @@ import {redactedMessage} from "../../../common/redact";
 // Unique visitors = every PlayFab account (one per wallet or guest that ever
 // logged in, since 2021), counted from a daily "All Players" segment export.
 // Holes started (the bracket after Games completed) = daily_hole_start, one
-// counter per UTC day and game mode, bumped by the game server's
+// counter per UTC day, game mode and explorer, bumped by the game server's
 // /api/hole-start when a hole begins (server/hole-start.ts); the page sums a
 // few hundred rows, never counts holes. Nothing before its first deploy.
+// The explorer of a hole or a finished game is the one its player logged in
+// with that UTC day (the visit tables), '' / unmatched when none is known.
 const DAY = 1000 * 60 * 60 * 24;
 const DAYS = 365;
 const CACHE_MS = 60 * 1000;
@@ -78,9 +80,11 @@ export function statsApi(router, prisma: PrismaClient){
     prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS daily_hole_start (
         day DATE NOT NULL,
         gameMode VARCHAR(${HOLE_MODE_MAX}) NOT NULL,
+        explorer VARCHAR(16) NOT NULL DEFAULT '',
         n INT UNSIGNED NOT NULL DEFAULT 0,
-        PRIMARY KEY (day, gameMode)
-    )`).catch(error => console.log("daily_hole_start table error", error?.message));
+        PRIMARY KEY (day, gameMode, explorer)
+    )`).then(() => addHoleExplorerColumn(prisma))
+        .catch(error => console.log("daily_hole_start table error", error?.message));
 
     loadPlayFabAccounts(prisma).then(() => refreshPlayFabAccounts(prisma));
     setInterval(() => refreshPlayFabAccounts(prisma), 60 * 60 * 1000);
@@ -122,17 +126,30 @@ export function statsApi(router, prisma: PrismaClient){
         }
     });
 
-    //the game server reports a hole that just began: {apiKey, gameMode, count}
-    //(count = the members of a party, 1 otherwise), like /api/player-game
+    //the game server reports a hole that just began: {apiKey, gameMode,
+    //addresses} (one hole per player it starts for; the explorer is the one
+    //each logged in with today) or, from an older server, {count}; the key is
+    //the one /api/player-game takes
     router.post("/api/hole-start", async (req, res) => {
         try{
-            const {apiKey, gameMode, count} = req.body || {};
+            const {apiKey, gameMode, count, addresses} = req.body || {};
             if(apiKey !== process.env.GOLF_API_KEY) return res.status(400).send({error: "NON AUTH"});
             const mode = String(gameMode || "").trim().toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, HOLE_MODE_MAX);
-            const n = Math.min(HOLE_COUNT_MAX, Math.max(1, Math.floor(Number(count) || 1)));
             if(!mode) return res.status(400).send({error: "invalid gameMode"});
-            await prisma.$executeRaw`INSERT INTO daily_hole_start (day, gameMode, n) VALUES (UTC_DATE(), ${mode}, ${n})
-                    ON DUPLICATE KEY UPDATE n = n + ${n}`;
+            const players = (Array.isArray(addresses) ? addresses : [])
+                .map(a => String(a || "").trim().toLowerCase().slice(0, 45)).filter(Boolean).slice(0, HOLE_COUNT_MAX);
+            const byExplorer: {[explorer: string]: number} = {};
+            if(players.length){
+                const known = await explorersToday(prisma, players);
+                players.forEach(a => byExplorer[known[a] || ""] = (byExplorer[known[a] || ""] || 0) + 1);
+            }else{
+                byExplorer[""] = Math.min(HOLE_COUNT_MAX, Math.max(1, Math.floor(Number(count) || 1)));
+            }
+            for(const explorer of Object.keys(byExplorer)){
+                const n = byExplorer[explorer];
+                await prisma.$executeRaw`INSERT INTO daily_hole_start (day, gameMode, explorer, n) VALUES (UTC_DATE(), ${mode}, ${explorer}, ${n})
+                        ON DUPLICATE KEY UPDATE n = n + ${n}`;
+            }
             return res.send({ok: true});
         }catch(error){
             console.log("/api/hole-start error", error?.message);
@@ -200,6 +217,34 @@ export function parseExplorer(value: unknown): {bucket: ExplorerBucket, raw: str
     else if(/bevy/.test(agent) && (/web|wasm/.test(agent) || platform === "web")) bucket = "web";
     else if((EXPLORER_BUCKETS as string[]).includes(platform) && platform !== "other") bucket = platform as ExplorerBucket;
     return {bucket, raw};
+}
+
+//the explorer each address logged in with today (lowercase address -> bucket),
+//from both visit tables; addresses without a visit today are left out
+async function explorersToday(prisma: PrismaClient, addresses: string[]): Promise<{[address: string]: string}> {
+    const known: {[address: string]: string} = {};
+    if(!addresses.length) return known;
+    try{
+        const rows: any[] = await prisma.$queryRaw`SELECT address, explorer FROM daily_visit
+                    WHERE day = UTC_DATE() AND explorer IS NOT NULL AND LOWER(address) IN (${Prisma.join(addresses)})
+                UNION ALL SELECT address, explorer FROM daily_guest_visit
+                    WHERE day = UTC_DATE() AND explorer IS NOT NULL AND LOWER(address) IN (${Prisma.join(addresses)})`;
+        rows.forEach(({address, explorer}) => known[String(address).toLowerCase()] = String(explorer));
+    }catch(error){
+        console.log("explorersToday error", error?.message);
+    }
+    return known;
+}
+
+//daily_hole_start was first created without the explorer (2026-11-02, hours
+//before this): add it to the key, its rows become "explorer unknown"
+async function addHoleExplorerColumn(prisma: PrismaClient){
+    const found: any[] = await prisma.$queryRaw`SELECT COUNT(*) AS n FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'daily_hole_start' AND COLUMN_NAME = 'explorer'`;
+    if(Number(found[0]?.n)) return;
+    await prisma.$executeRawUnsafe(`ALTER TABLE daily_hole_start ADD COLUMN explorer VARCHAR(16) NOT NULL DEFAULT '',
+            DROP PRIMARY KEY, ADD PRIMARY KEY (day, gameMode, explorer)`);
+    console.log("daily_hole_start: explorer column added");
 }
 
 //tables created before a column existed; MySQL 8 has no ADD COLUMN IF NOT EXISTS
@@ -369,20 +414,30 @@ async function computeStats(prisma: PrismaClient){
         mapsCreated,
         seasonMaps,
         visitorsTrackedSince: {wallets: tracking[0]?.wallets || null, guests: tracking[0]?.guests || null},
-        //unique visitors per explorer in the last 30 days, biggest first, and
-        //the first day with an explorer: the scene only reports it since the
-        //2026-11-02 deploy, so there is no history before that
+        //unique visitors per explorer in the last 30 days, biggest first, with
+        //the games completed and holes started by its players, and the first
+        //day with an explorer: the scene only reports it since the 2026-11-02
+        //deploy, so there is no history before that
         explorers: explorers.buckets,
         explorersSince: explorers.since,
+        //games and holes of the last 30 days whose player's explorer is not known
+        explorersUnmatched: {
+            games: Math.max(0, Number(games[0]?.last30 || 0) - explorers.buckets.reduce((sum, b) => sum + b.games, 0)),
+            holes: explorers.holesUnknown
+        },
         daily: Object.values(days).sort((a, b) => (a.day < b.day ? -1 : 1))
     };
 }
 
-//{buckets: [{bucket, wallets, guests, total}] (only buckets with visitors),
+//{buckets: [{bucket, wallets, guests, total, games, holes}] (only buckets with
+//visitors; games = finished games of the last 30 days whose player logged in
+//with that explorer that day, holes = holes started, same rule),
+//holesUnknown: holes of the window with no explorer known,
 //since: "YYYY-MM-DD" | null}; empty while the explorer columns are missing
-async function computeExplorers(prisma: PrismaClient, since30: Date): Promise<{buckets: any[], since: string}> {
+type ExplorerRow = {bucket: string, wallets: number, guests: number, total: number, games: number, holes: number};
+async function computeExplorers(prisma: PrismaClient, since30: Date): Promise<{buckets: ExplorerRow[], holesUnknown: number, since: string}> {
     try{
-        const [wallets, guests, first]: any[] = await Promise.all([
+        const [wallets, guests, first, games, holes]: any[] = await Promise.all([
             prisma.$queryRaw`SELECT explorer, COUNT(DISTINCT address) AS n FROM daily_visit
                     WHERE day >= ${since30} AND explorer IS NOT NULL GROUP BY explorer`,
             prisma.$queryRaw`SELECT explorer, COUNT(DISTINCT address) AS n FROM daily_guest_visit
@@ -391,20 +446,35 @@ async function computeExplorers(prisma: PrismaClient, since30: Date): Promise<{b
                     SELECT MIN(day) AS day FROM daily_visit WHERE explorer IS NOT NULL
                     UNION ALL
                     SELECT MIN(day) FROM daily_guest_visit WHERE explorer IS NOT NULL
-                ) d`
+                ) d`,
+            //a game joins the visit of its player on its day (the visits of the
+            //window are a few hundred rows; player_game is scanned once, as the
+            //other run queries do); the collations differ, so compare as bytes
+            prisma.$queryRaw`SELECT v.explorer, COUNT(*) AS n FROM player_game g JOIN (
+                        SELECT day, address, explorer FROM daily_visit WHERE day >= ${since30} AND explorer IS NOT NULL
+                        UNION ALL
+                        SELECT day, address, explorer FROM daily_guest_visit WHERE day >= ${since30} AND explorer IS NOT NULL
+                    ) v ON v.day = DATE(g.startTime) AND CAST(LOWER(v.address) AS BINARY) = CAST(LOWER(g.address) AS BINARY)
+                    WHERE g.startTime >= ${since30} AND g.address IS NOT NULL GROUP BY v.explorer`
+                .catch(error => (console.log("/api/stats explorer games error", error?.message), [])),
+            prisma.$queryRaw`SELECT explorer, SUM(n) AS n FROM daily_hole_start WHERE day >= ${since30} GROUP BY explorer`
+                .catch(error => (console.log("/api/stats explorer holes error", error?.message), []))
         ]);
-        const counts: {[bucket: string]: {bucket: string, wallets: number, guests: number, total: number}} = {};
-        const at = (bucket: string) => counts[bucket] = counts[bucket] || {bucket, wallets: 0, guests: 0, total: 0};
+        const counts: {[bucket: string]: ExplorerRow} = {};
+        const at = (bucket: string) => counts[bucket] = counts[bucket] || {bucket, wallets: 0, guests: 0, total: 0, games: 0, holes: 0};
         wallets.forEach(({explorer, n}) => at(String(explorer)).wallets = Number(n));
         guests.forEach(({explorer, n}) => at(String(explorer)).guests = Number(n));
+        games.forEach(({explorer, n}) => at(String(explorer)).games = Number(n));
+        let holesUnknown = 0;
+        holes.forEach(({explorer, n}) => explorer ? (at(String(explorer)).holes = Number(n)) : (holesUnknown = Number(n)));
         const buckets = Object.values(counts)
             .map(c => ({...c, total: c.wallets + c.guests}))
             .filter(c => c.total > 0)
             .sort((a, b) => b.total - a.total || EXPLORER_BUCKETS.indexOf(a.bucket as ExplorerBucket) - EXPLORER_BUCKETS.indexOf(b.bucket as ExplorerBucket));
-        return {buckets, since: first[0]?.since || null};
+        return {buckets, holesUnknown, since: first[0]?.since || null};
     }catch(error){
         console.log("/api/stats explorers error", error?.message);
-        return {buckets: [], since: null};
+        return {buckets: [], holesUnknown: 0, since: null};
     }
 }
 
