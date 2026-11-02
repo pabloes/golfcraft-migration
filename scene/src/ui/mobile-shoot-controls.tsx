@@ -49,10 +49,14 @@ export const MobileShootControls = () => {
   const L = fullLayout()
   const { px, fs } = scaler(L.scale)
 
+  // A press also records itself for the orbit camera's tap step and hold ramp;
+  // a repeated down while the same arrow is already held is not a new press.
   const aim = (dir: -1 | 0 | 1) => () => {
+    if (dir && st.aimHold !== dir) st.aimPress = { at: Date.now(), dir }
     st.aimHold = dir
   }
   const pitch = (dir: -1 | 0 | 1) => () => {
+    if (dir && st.pitchHold !== dir) st.pitchPress = { at: Date.now(), dir }
     st.pitchHold = dir
   }
   const zoom = (dir: -1 | 0 | 1) => () => {

@@ -125,6 +125,7 @@ const createShootControl = (
     mobileShootState.power = s.power
     if (!s.visible) {
       mobileShootState.aimHold = 0
+      mobileShootState.pitchHold = 0
       mobileShootState.powerHold = 0
     }
     control.setAngle(s.modifiedRotation)
