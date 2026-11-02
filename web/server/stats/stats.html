@@ -136,6 +136,20 @@
   .visitors .table-wrap { max-height: 440px; margin-top: 0; }
   .visitors table { max-width: none; }
   .visitors thead th { position: sticky; top: 0; background: var(--card); }
+  /* Sortable headers: the button inherits the header's look; the arrow says
+     which column orders the list and which way. */
+  .visitors th .sort {
+    font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 5px; border-radius: 4px;
+  }
+  .visitors th .sort:hover { color: var(--text-1); }
+  .visitors th .sort:focus-visible { outline: 2px solid var(--text-2); outline-offset: 2px; }
+  .visitors th[aria-sort] .sort { color: var(--text-1); font-weight: 600; }
+  .visitors th .arrow { font-size: 9px; line-height: 1; opacity: 0.45; }
+  .visitors th .arrow::before { content: "▲▼"; letter-spacing: -1px; }
+  .visitors th[aria-sort] .arrow { opacity: 1; }
+  .visitors th[aria-sort="ascending"] .arrow::before { content: "▲"; }
+  .visitors th[aria-sort="descending"] .arrow::before { content: "▼"; }
   .visitors td.name { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .visitors td.wallet { font: 400 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--text-2); white-space: nowrap; }
   .visitors td.seen { color: var(--text-2); white-space: nowrap; }
@@ -253,7 +267,12 @@
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Name</th><th>Wallet</th><th>Last seen</th><th class="num">Games</th></tr></thead>
+        <thead><tr>
+          <th><button type="button" class="sort" data-sort="name" title="Sort by name">Name<span class="arrow" aria-hidden="true"></span></button></th>
+          <th>Wallet</th>
+          <th><button type="button" class="sort" data-sort="seen" title="Sort by last seen">Last seen<span class="arrow" aria-hidden="true"></span></button></th>
+          <th class="num"><button type="button" class="sort" data-sort="games" title="Sort by games played">Games<span class="arrow" aria-hidden="true"></span></button></th>
+        </tr></thead>
         <tbody id="visitors-body"></tbody>
       </table>
       <div class="empty" id="visitors-empty" hidden></div>
@@ -588,7 +607,58 @@
 
   // "Who visited": the API already shortens the wallets; names are untrusted
   // text, so everything goes in through textContent.
-  var visitors = { range: "1", seq: 0 };
+  // sort is null until a header is clicked: the list stays in the API's order
+  // (latest visit first). data is the last payload, re-sorted on each click.
+  var visitors = { range: "1", seq: 0, data: null, sort: null };
+  // The direction a column takes on its first click: names from A, the most
+  // recent visit and the most games first.
+  var SORT_DEFAULT = { name: "asc", seen: "desc", games: "desc" };
+
+  // When only the day of a visit is known it counts as the start of that day,
+  // the earliest moment it could have happened.
+  function seenMs(v) {
+    return v.dayOnly ? Date.parse(v.lastSeen.slice(0, 10) + "T00:00:00Z") : Date.parse(v.lastSeen);
+  }
+  // A copy of list in the chosen order. Ties keep the API's order, and rows
+  // without a name go last whichever way names are sorted.
+  function sortedVisitors(list) {
+    var sort = visitors.sort;
+    if (!sort) return list;
+    var sign = sort.dir === "asc" ? 1 : -1;
+    var indexed = list.map(function (v, i) { return { v: v, i: i }; });
+    indexed.sort(function (a, b) {
+      var cmp = 0;
+      if (sort.key === "name") {
+        if (!a.v.name !== !b.v.name) return a.v.name ? -1 : 1;
+        cmp = a.v.name ? a.v.name.localeCompare(b.v.name, "en", { sensitivity: "base" }) : 0;
+      } else if (sort.key === "seen") {
+        cmp = seenMs(a.v) - seenMs(b.v);
+      } else {
+        cmp = (Number(a.v.games) || 0) - (Number(b.v.games) || 0);
+      }
+      return cmp ? cmp * sign : a.i - b.i;
+    });
+    return indexed.map(function (x) { return x.v; });
+  }
+  function updateSortHeaders() {
+    Array.prototype.forEach.call(document.querySelectorAll(".visitors th .sort"), function (button) {
+      var th = button.parentNode;
+      var active = visitors.sort && visitors.sort.key === button.getAttribute("data-sort");
+      if (active) th.setAttribute("aria-sort", visitors.sort.dir === "asc" ? "ascending" : "descending");
+      else th.removeAttribute("aria-sort");
+    });
+  }
+  // A click on the active column flips its direction; on another column it
+  // switches to that column with its default direction.
+  function setSort(key) {
+    if (visitors.sort && visitors.sort.key === key) visitors.sort.dir = visitors.sort.dir === "asc" ? "desc" : "asc";
+    else visitors.sort = { key: key, dir: SORT_DEFAULT[key] };
+    updateSortHeaders();
+    if (visitors.data) renderVisitors(visitors.data);
+  }
+  Array.prototype.forEach.call(document.querySelectorAll(".visitors th .sort"), function (button) {
+    button.addEventListener("click", function () { setSort(button.getAttribute("data-sort")); });
+  });
 
   function relativeTime(ms) {
     var s = Math.max(0, (Date.now() - ms) / 1000);
@@ -614,10 +684,11 @@
     empty.textContent = text || "";
   }
   function renderVisitors(data) {
+    visitors.data = data;
     var body = $("visitors-body");
     clear(body);
     var list = data.visitors || [];
-    list.forEach(function (v) {
+    sortedVisitors(list).forEach(function (v) {
       var tr = html("tr", {}, body);
       var name = html("td", { "class": "name" + (v.name ? "" : " muted") }, tr, v.name || "No name");
       if (v.name) name.title = v.name;
