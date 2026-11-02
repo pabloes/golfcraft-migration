@@ -39,16 +39,23 @@ export const GiveawayCard = () => {
   if (!cardVisible()) return null
   const L = fullLayout()
   const { px } = scaler(L.scale)
+  const c = L.canvas
   const mobile = isMobile()
-  // The strip's width and right margin in canvas px, as lobby-hud.tsx draws it
-  // (full height flush right at 8 px on phones, the HUD scale at the
-  // interactable area's edge on desktop).
-  const stripCanvas = mobile
-    ? STRIP_W * Math.min(1, (L.canvas.height - 16) / HUD_H) + 8
-    : hudScale().s.px(STRIP_W) + L.canvas.area.right
-  const left = L.canvas.width - stripCanvas - px(8) - px(CARD)
-  // phones: the explorer's buttons take the corner below y = 232
-  const top = L.top + px(mobile ? 232 - CARD - 6 : 375 - CARD - 8)
+  const margin = px(8)
+  // Anchored to the canvas, not to the 667x375 panel (which a portrait phone
+  // centres mid-screen). The bottom edge: the interactable area on desktop; on
+  // a phone in landscape above the explorer's E / F / + / jump buttons, which
+  // start at about 64 % of the height; in portrait the canvas bottom.
+  const bottom = mobile ? (c.width > c.height ? c.height * 0.63 : c.height - margin) : c.height - c.area.bottom - margin
+  const top = bottom - px(CARD)
+  // The HUD's sprite strip runs down the right edge (lobby-hud.tsx: full
+  // height flush right at 8 px on phones, the HUD scale at the interactable
+  // area's edge on desktop): the card moves left of it when they would meet.
+  const hudS = mobile ? Math.min(1, (c.height - 16) / HUD_H) : hudScale().scale
+  const stripRight = mobile ? 8 : c.area.right
+  const stripBottom = (mobile ? 8 : c.area.top) + HUD_H * hudS
+  const besideStrip = top < stripBottom
+  const left = c.width - stripRight - (besideStrip ? STRIP_W * hudS + margin : 0) - margin - px(CARD)
   return (
     <UiEntity
       uiTransform={{ positionType: 'absolute', position: { left, top }, width: px(CARD), height: px(CARD), borderRadius: px(12), padding: px(BORDER) }}
