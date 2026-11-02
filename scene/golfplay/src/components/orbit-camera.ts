@@ -36,7 +36,7 @@ import {
   ORBIT_PITCH_MIN,
   ORBIT_ZOOM_SPEED
 } from '../../../src/config/controls'
-import { mobileShootState } from '../../../src/ui/mobile-shoot-state'
+import { mobileShootState, type ArrowPress } from '../../../src/ui/mobile-shoot-state'
 import { isMobile } from '../../../src/services/platform'
 import { createCameraOcclusion } from './camera-occlusion'
 
@@ -57,6 +57,49 @@ const ORBIT_PITCH_KEY_SPEED = 45
 // How fast the camera catches up with a touch drag on mobile (1/s): about
 // 90 % of the way in a quarter of a second.
 const ORBIT_TOUCH_EASE = 9
+// The mobile panel's aim (< >) and pitch (^ v) arrows. A press turns one small
+// step at once; a hold then waits ARROW_HOLD_DELAY_MS and speeds up over
+// ARROW_RAMP_MS to the full speed (ORBIT_KEY_SPEED, ORBIT_PITCH_KEY_SPEED). The
+// scene ticks slower than the screen and the explorer reports touches late, so
+// at full speed from the first tick even a quick tap turned several degrees.
+const ARROW_AIM_STEP = 0.4
+const ARROW_PITCH_STEP = 0.5
+const ARROW_HOLD_DELAY_MS = 250
+const ARROW_RAMP_MS = 1000
+
+// Degrees an arrow has turned `ms` after its press. The speed grows with the
+// square of the time held past the delay, so a tap whose release arrives a
+// little after the delay adds next to nothing (90 deg/s: 0.03° 100 ms later).
+const arrowTravel = (ms: number, step: number, speed: number) => {
+  const held = Math.max(0, ms - ARROW_HOLD_DELAY_MS) / 1000
+  const ramp = ARROW_RAMP_MS / 1000
+  if (held <= ramp) return step + (speed * held * held * held) / (3 * ramp * ramp)
+  return step + (speed * ramp) / 3 + speed * (held - ramp)
+}
+
+// Degrees to turn this tick for an arrow. Measured from the press time, not
+// summed from dt, so the result doesn't depend on how often the scene ticks.
+// Module level, like the zoom and tilt, so a press is never counted twice
+// by the next hole's camera.
+const arrowMotion = (step: number, speed: number) => {
+  let seen: ArrowPress | null = null
+  let travelled = 0
+  return (press: ArrowPress | null, holding: number) => {
+    if (press !== seen) {
+      seen = press
+      travelled = 0
+    }
+    if (!press) return 0
+    // Released: only the step, if it hasn't landed yet.
+    const travel = holding === press.dir ? arrowTravel(Date.now() - press.at, step, speed) : Math.max(travelled, step)
+    const move = travel - travelled
+    travelled = travel
+    return press.dir * move
+  }
+}
+const aimArrow = arrowMotion(ARROW_AIM_STEP, ORBIT_KEY_SPEED)
+const pitchArrow = arrowMotion(ARROW_PITCH_STEP, ORBIT_PITCH_KEY_SPEED)
+const clampPitch = (value: number) => Math.max(ORBIT_PITCH_MIN, Math.min(ORBIT_PITCH_MAX, value))
 
 // Zoom and tilt carry over from one hole to the next; only the heading starts
 // again from each tee.
@@ -192,18 +235,23 @@ export const createBallOrbitCamera = (
 
   function update(dt: number) {
     const mouse = pointerDelta()
-    // The mobile touch panel's aim arrows count as A / D.
-    const turn = pressed(InputAction.IA_RIGHT) - pressed(InputAction.IA_LEFT) + mobileShootState.aimHold
+    const turn = pressed(InputAction.IA_RIGHT) - pressed(InputAction.IA_LEFT)
     // W brings the camera in, S takes it out; so do the mobile zoom buttons.
     const zoom = pressed(InputAction.IA_BACKWARD) - pressed(InputAction.IA_FORWARD) + mobileShootState.zoomHold
+    // Degrees from the mobile panel's < > (aim) and ^ v (raise / lower) arrows.
+    const aimMove = aimArrow(mobileShootState.aimPress, mobileShootState.aimHold)
+    const pitchMove = pitchArrow(mobileShootState.pitchPress, mobileShootState.pitchHold)
 
-    targetYaw += mouse.x * ORBIT_MOUSE_SENSITIVITY + turn * ORBIT_KEY_SPEED * dt
+    targetYaw += mouse.x * ORBIT_MOUSE_SENSITIVITY + turn * ORBIT_KEY_SPEED * dt + aimMove
     // Screen Y grows upwards in the desktop client, so pushing the mouse up
     // raises the camera over the ball.
-    // The mobile panel's ^ / v arrows raise and lower the camera.
-    targetPitch += mouse.y * ORBIT_MOUSE_SENSITIVITY + mobileShootState.pitchHold * ORBIT_PITCH_KEY_SPEED * dt
-    targetPitch = Math.max(ORBIT_PITCH_MIN, Math.min(ORBIT_PITCH_MAX, targetPitch))
+    targetPitch = clampPitch(targetPitch + mouse.y * ORBIT_MOUSE_SENSITIVITY + pitchMove)
     if (isMobile()) {
+      // The arrows move the camera itself, not only its target: the easing
+      // would spread a tap's step over a quarter of a second and keep turning
+      // some 10° after a held arrow was let go.
+      yaw += aimMove
+      pitch = clampPitch(pitch + pitchMove)
       const ease = 1 - Math.exp(-ORBIT_TOUCH_EASE * dt)
       yaw += (targetYaw - yaw) * ease
       pitch += (targetPitch - pitch) * ease
