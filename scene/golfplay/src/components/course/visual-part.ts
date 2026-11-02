@@ -137,11 +137,16 @@ const createVisualPart = (
   } else {
     const shape = getGLTFShape(`${baseUrl}models/${subtype || type}.gltf`)
     GltfContainer.create(entity, { src: shape.src, visibleMeshesCollisionMask: OCCLUSION_LAYER })
-    occludableParts.set(entity, (value) => {
-      if (value === occluded) return
-      occluded = value
-      applyVisibility()
-    })
+    // Floors never block the view of the ball, they hold it: the camera ray
+    // grazed the slab the ball sits on and hid the ground under the ball
+    // (user, 2026-11-02), so they are not candidates for occlusion.
+    if (!/floor/i.test(subtype || type)) {
+      occludableParts.set(entity, (value) => {
+        if (value === occluded) return
+        occluded = value
+        applyVisibility()
+      })
+    }
   }
 
   const listeningVariables: string[] = []

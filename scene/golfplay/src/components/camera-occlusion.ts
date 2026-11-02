@@ -21,7 +21,14 @@ const BALL_MARGIN = 0.1
 // a ray whose result never arrives (an explorer without raycasts) is dropped
 const RESULT_TIMEOUT_MS = 1000
 
-export const createCameraOcclusion = (camera: Entity, ballEntity: Entity, getDistance: () => number) => {
+type Vec3Like = { x: number; y: number; z: number }
+
+// A hit at or below the ball's centre is the ground the ball sits on (or a
+// border level with it), never something in front of it: the ray descends
+// from the camera, so anything that really blocks the view is hit higher.
+const ABOVE_BALL = 0.05
+
+export const createCameraOcclusion = (camera: Entity, ballEntity: Entity, getDistance: () => number, getBallPosition: () => Vec3Like) => {
   // hidden part -> checks in a row that didn't hit it
   const hidden = new Map<Entity, number>()
   let sinceCheck = 0
@@ -34,13 +41,17 @@ export const createCameraOcclusion = (camera: Entity, ballEntity: Entity, getDis
     hidden.clear()
   }
 
-  function onResult(hits: ReadonlyArray<{ readonly entityId?: number }>) {
+  function onResult(hits: ReadonlyArray<{ readonly entityId?: number; readonly position?: Vec3Like }>) {
     sentAt = 0
     if (!mobileShootState.visible) return
+    // the course sits under the scene root at y = 0, so local and global y match
+    const floorLine = getBallPosition().y + ABOVE_BALL
     const blocking = new Set<Entity>()
     for (const hit of hits) {
       const part = hit.entityId as Entity | undefined
-      if (part !== undefined && occludableParts.has(part)) blocking.add(part)
+      if (part === undefined || !occludableParts.has(part)) continue
+      if (hit.position && hit.position.y < floorLine) continue
+      blocking.add(part)
     }
     blocking.forEach((part) => {
       if (!hidden.has(part)) setOccluded(part, true)

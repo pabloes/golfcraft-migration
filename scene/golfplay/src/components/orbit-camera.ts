@@ -127,7 +127,7 @@ export const createBallOrbitCamera = (
     defaultTransition: { transitionMode: { $case: 'time', time: 0.4 } }
   })
   // While aiming, the parts between the camera and the ball step aside.
-  const occlusion = createCameraOcclusion(camera, ballEntity, () => distance)
+  const occlusion = createCameraOcclusion(camera, ballEntity, () => distance, getBallPosition)
 
   function place() {
     const yawRad = (yaw * Math.PI) / 180
