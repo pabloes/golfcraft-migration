@@ -30,6 +30,7 @@ class TrainingRaceState extends Gameplay {
 export class MissionRoom extends Room<TrainingRaceState> {
     private interval:ReturnType<typeof setInterval>;
     private holeStarted = false;//counted once, whatever READY does after a reconnect
+    private address: string;//the wallet, or the PlayFabId without one (session-auth.ts)
     private gameDefinition:GameDefinition;
     private golfPlay;
     private courseDefinition;
@@ -55,6 +56,7 @@ export class MissionRoom extends Room<TrainingRaceState> {
                 console.log("Mission onAuth: PlayFabId does not match the session", PlayFabId, resolved.PlayFabId);
                 return false;
             }
+            this.address = resolved.address;
             //monthly game window: no new mission outside it, unless allow-listed
             const access = await getGameAccessFor(resolved.address);
             if (!access.open) {
@@ -137,7 +139,7 @@ export class MissionRoom extends Room<TrainingRaceState> {
             this.lastShootTime = Date.now();
             if(!this.holeStarted){
                 this.holeStarted = true;
-                recordHoleStart("mission");
+                recordHoleStart("mission", [this.address || PlayFabId]);
             }
             client.send(MESSAGES.START, {
                 startTime: this.state.startTime,

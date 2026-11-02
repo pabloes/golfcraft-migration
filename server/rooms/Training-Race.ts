@@ -97,7 +97,7 @@ export class TrainingRace extends Room<TrainingRaceState> {
         
         this.clock.start();
         this.broadcast(MESSAGE.START, {startTime:this.state.startTime, duration:this.state.duration, serverTime:Date.now()});
-        recordHoleStart("training");
+        recordHoleStart("training", [userId]);
         this.update = this.update.bind(this);
         this.setSimulationInterval((deltaTime) => this.update(deltaTime/1000), 30);
         this.interval = setInterval(() => this.clockCheck({client, userId, PlayFabId}), 100); 

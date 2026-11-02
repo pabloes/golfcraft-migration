@@ -315,7 +315,7 @@ export class TournamentRoom extends Room<CompetitionGroupState> {
             this.state.startTime = Date.now() + 12000;
             if(!this.holeStarted){
                 this.holeStarted = true;
-                recordHoleStart("tournament");
+                recordHoleStart("tournament", [userId]);
             }
             this.clock.start();
             this.update = this.update.bind(this);

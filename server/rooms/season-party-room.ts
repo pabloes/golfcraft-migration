@@ -559,7 +559,7 @@ export class SeasonPartyRoom extends Room<SeasonPartyRoomState> {
             console.log("season-party STARTED = TRUE", this.state.currentGame);
             this.state.started = true;
             //one hole per member still in the party, like their player_game rows
-            recordHoleStart("season", this.state.players.filter(p => this.isActive(p)).length);
+            recordHoleStart("season", this.state.players.filter(p => this.isActive(p)).map(p => p.address));
             this.state.players.forEach(player => {
                 if (!this.isActive(player) || !player.golfPlay) return;
                 player.lastRecordedFrameTime = Date.now();

@@ -429,7 +429,7 @@ export class SeasonRoom extends Room<SeasonRoomState> {
         if (!this.state.started && this.state.startTime && Date.now() > this.state.startTime) {
             console.log("STARTED = TRUE");
             this.state.started = true;
-            recordHoleStart("season");
+            recordHoleStart("season", [this.address]);
 
             this.lastRecordedFrameTime = Date.now();
             const position = this.golfPlay.getPhysicBall().body.position;

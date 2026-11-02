@@ -182,7 +182,7 @@ export class CompetitionGroupRoom extends Room<CompetitionGroupState> {
         this.interval = setInterval(() => this.clockCheck({client, userId, PlayFabId}), 300); 
         this.setSimulationInterval((deltaTime) => this.update(deltaTime/1000), 15);
         this.broadcast(MESSAGES.START, {startTime:this.state.startTime, duration:this.state.duration, serverTime:Date.now()});
-        recordHoleStart("competition");
+        recordHoleStart("competition", [userId]);
 
          this.golfPlay.onUpdate(({ball, movingParts})=>{
             //if(ball) this.state.ball.updateFromCANNON(ball);
