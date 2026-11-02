@@ -1,8 +1,9 @@
 // The giveaway in the lobby HUD (services/giveaway.ts): a small card of the
-// poster in the bottom-left corner of the full-screen grid (on a phone just
-// above the explorer's joystick, which owns that corner, CLAUDE.md §4), and
-// the poster full-screen when the card, the Season card of the lobby dialog
-// or the sign by the Season wall is clicked. E / F or a click close it.
+// poster in the bottom-right corner, left of the HUD's sprite strip (which
+// runs down the right edge) and, on a phone, above the explorer's E / F / +
+// / jump buttons, which own that corner (CLAUDE.md §4). The poster opens
+// full-screen when the card, the Season card of the lobby dialog or the sign
+// by the Season wall is clicked. E / F or a click close it.
 import ReactEcs, { Label, UiEntity } from '@dcl/sdk/react-ecs'
 import { InputAction, PointerEventType, inputSystem } from '@dcl/sdk/ecs'
 import { Color4 } from '@dcl/sdk/math'
@@ -11,8 +12,8 @@ import { GIVEAWAY, isGiveawayActive } from '../services/giveaway'
 import { giveawayUiState } from './giveaway-state'
 import { lobbyHudState } from './lobby-hud-state'
 import { lobbyMenuState } from './lobby-menu-state'
-import { fullLayout, scaler } from './ui-scale'
-import { placeAt } from './ui2'
+import { fullLayout, hudScale, scaler } from './ui-scale'
+import { HUD_H, STRIP_W } from './lobby-hud-layout'
 import { isMobile } from '../services/platform'
 
 const CARD = 104
@@ -38,11 +39,19 @@ export const GiveawayCard = () => {
   if (!cardVisible()) return null
   const L = fullLayout()
   const { px } = scaler(L.scale)
-  // phones: the joystick and the emote button take the corner below y = 252
-  const top = isMobile() ? 252 - CARD - 6 : 375 - CARD - 8
+  const mobile = isMobile()
+  // The strip's width and right margin in canvas px, as lobby-hud.tsx draws it
+  // (full height flush right at 8 px on phones, the HUD scale at the
+  // interactable area's edge on desktop).
+  const stripCanvas = mobile
+    ? STRIP_W * Math.min(1, (L.canvas.height - 16) / HUD_H) + 8
+    : hudScale().s.px(STRIP_W) + L.canvas.area.right
+  const left = L.canvas.width - stripCanvas - px(8) - px(CARD)
+  // phones: the explorer's buttons take the corner below y = 232
+  const top = L.top + px(mobile ? 232 - CARD - 6 : 375 - CARD - 8)
   return (
     <UiEntity
-      uiTransform={{ ...placeAt(L, px, 8, top, CARD, CARD), borderRadius: px(12), padding: px(BORDER) }}
+      uiTransform={{ positionType: 'absolute', position: { left, top }, width: px(CARD), height: px(CARD), borderRadius: px(12), padding: px(BORDER) }}
       uiBackground={{ color: Color4.White() }}
       onMouseDown={() => {
         giveawayUiState.open = true

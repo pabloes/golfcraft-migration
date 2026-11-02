@@ -2,7 +2,7 @@
 // ticket, Nov 1-7", 10 COCOBAY hoodies to win. While it runs the poster takes
 // three places, all back to normal by themselves when it ends: the champion's
 // column of the lobby dialog's Season card (ui/lobby-menu.tsx), a card in the
-// bottom-left corner of the lobby HUD (ui/giveaway.tsx) and the "play Season
+// bottom-right corner of the lobby HUD (ui/giveaway.tsx) and the "play Season
 // to win COCOBAY wearables" sign by the Season wall (components/lobby/
 // building.ts, model event_giveaway_banner.gltf). The dates can be moved
 // without a redeploy from the admin's `config` table, row `giveaway`:
