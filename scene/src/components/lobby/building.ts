@@ -2,6 +2,7 @@ import { engine, Entity, Transform, GltfContainer, AudioSource } from '@dcl/sdk/
 import { Vector3, Quaternion } from '@dcl/sdk/math'
 import { movePlayerTo } from '~system/RestrictedActions'
 import buildingPositions from './building-positions'
+import { isGiveawayActive } from '../../services/giveaway'
 import { createButtonList } from '../button-list'
 
 // SDK6 building.ts had panel/elevator buttons + collectables + analytics.
@@ -91,7 +92,12 @@ export const createBuilding = (parent: Entity) => {
     if (key.indexOf('valencia') !== -1) return
 
     const e = transformFromDict(building_entity!, def)
-    GltfContainer.create(e, { src: `models/building/${def.gltf}` })
+    // The "play Season to win COCOBAY wearables" sign by the Season wall shows
+    // the giveaway poster while the campaign runs (services/giveaway.ts): the
+    // same mesh and placement, with the poster as its texture. The building is
+    // rebuilt after every game, so the sign comes back by itself afterwards.
+    const gltf = def.gltf === 'event_cocobay_banner.gltf' && isGiveawayActive() ? 'event_giveaway_banner.gltf' : def.gltf
+    GltfContainer.create(e, { src: `models/building/${gltf}` })
     childEntities.push(e)
   })
 

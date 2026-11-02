@@ -21,7 +21,6 @@ import { returnToMenuIfRequested } from './ui/lobby-menu-state'
 import { joinGameLobby } from './meta/game-lobby'
 import { createStreamScreens } from './components/lobby/stream-screens/stream-screens'
 import { unlockAvatar } from '../golfplay/src/components/orbit-camera'
-import { createGiveawayBanner } from './components/lobby/giveaway-banner'
 
 // Mission-1 production flow:
 //   1. bootstrap() -> PlayFab LoginWithCustomID, get user, realm, Colyseus client
@@ -147,13 +146,6 @@ export async function main() {
       createStreamScreens(globalStore.userData.getState().TitleData?.streamURL)
     } catch (err) {
       console.log('[main] stream screens failed:', err)
-    }
-    // The week's giveaway poster on the lobby wall (services/giveaway.ts);
-    // it hides itself during games and once the campaign is over.
-    try {
-      createGiveawayBanner(sceneRoot)
-    } catch (err) {
-      console.log('[main] giveaway banner failed:', err)
     }
     console.log('[main] lobby spawned, ready')
   } catch (err: any) {

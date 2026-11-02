@@ -1,7 +1,8 @@
 // The giveaway in the lobby HUD (services/giveaway.ts): a small card of the
-// poster at the bottom centre of the full-screen grid (clear of the explorer's
-// touch controls in the corners, CLAUDE.md §4), and the poster full-screen
-// when the card or the wall banner is clicked. E / F or a click close it.
+// poster in the bottom-left corner of the full-screen grid (on a phone just
+// above the explorer's joystick, which owns that corner, CLAUDE.md §4), and
+// the poster full-screen when the card, the Season card of the lobby dialog
+// or the sign by the Season wall is clicked. E / F or a click close it.
 import ReactEcs, { Label, UiEntity } from '@dcl/sdk/react-ecs'
 import { InputAction, PointerEventType, inputSystem } from '@dcl/sdk/ecs'
 import { Color4 } from '@dcl/sdk/math'
@@ -37,9 +38,11 @@ export const GiveawayCard = () => {
   if (!cardVisible()) return null
   const L = fullLayout()
   const { px } = scaler(L.scale)
+  // phones: the joystick and the emote button take the corner below y = 252
+  const top = isMobile() ? 252 - CARD - 6 : 375 - CARD - 8
   return (
     <UiEntity
-      uiTransform={{ ...placeAt(L, px, (667 - CARD) / 2, 375 - CARD - 8, CARD, CARD), borderRadius: px(12), padding: px(BORDER) }}
+      uiTransform={{ ...placeAt(L, px, 8, top, CARD, CARD), borderRadius: px(12), padding: px(BORDER) }}
       uiBackground={{ color: Color4.White() }}
       onMouseDown={() => {
         giveawayUiState.open = true
@@ -52,6 +55,23 @@ export const GiveawayCard = () => {
     </UiEntity>
   )
 }
+
+// The poster as a box of the lobby dialog (design px), opening it full-screen.
+export const giveawayPosterBox = (px: (n: number) => number, x: number, y: number, size: number) => (
+  <UiEntity
+    key="giveaway-poster-box"
+    uiTransform={{ positionType: 'absolute', position: { left: px(x), top: px(y) }, width: px(size), height: px(size), borderRadius: px(12), padding: px(BORDER) }}
+    uiBackground={{ color: Color4.White() }}
+    onMouseDown={() => {
+      giveawayUiState.open = true
+    }}
+  >
+    <UiEntity
+      uiTransform={{ width: '100%', height: '100%', borderRadius: px(10) }}
+      uiBackground={{ texture: { src: GIVEAWAY.poster }, textureMode: 'stretch' }}
+    />
+  </UiEntity>
+)
 
 export const GiveawayPoster = () => {
   if (!giveawayUiState.open) return null

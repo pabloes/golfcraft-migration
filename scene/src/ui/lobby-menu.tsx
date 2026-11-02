@@ -23,6 +23,8 @@ import { TutorialView, WorkshopView, PrizesView, DailyMissionsView, SeasonView, 
 import { C, hex, fmt, materialIcon } from './ui-theme'
 import { fullLayout, scaler, type Px } from './ui-scale'
 import { P, at, img, imgW, imgBox, text, box, fullFrame, button2, imageButton, squareButton, sideCard, nextPrizeStrip, resIcon, rankBadge, border, energyChip } from './ui2'
+import { isGiveawayActive } from '../services/giveaway'
+import { giveawayPosterBox } from './giveaway'
 import { pingLabel } from './ping-label'
 import { seasonCatalog } from '../components/lobby/seasons/season-catalog'
 // @ts-ignore - common/utils has @ts-nocheck
@@ -178,34 +180,40 @@ export const LobbyMenu = () => {
 
   // ---------------------------------------------------------- season card
   const toNextTier = nextTierName ? `${ptsPerTier - ptsOnTier} pts to ${nextTierName}` : 'Top rank reached'
+  // While a giveaway runs (services/giveaway.ts) its poster takes the champion's
+  // column and the rank box and the next prize narrow to leave it room; the
+  // card goes back to the design by itself when the campaign ends.
+  const promo = isGiveawayActive()
+  const rx = promo ? 290 : 255
+  const rw = promo ? 191 : 226
   const season = [
     imgBox(px, 'season_card_m', 152, 58, 340, 236),
     // The champion stands in the card's left column, behind the PLAY button.
-    img(px, 'champion', 154, 95, 104 / imgW('champion')),
+    promo ? giveawayPosterBox(px, 158, 94, 124) : img(px, 'champion', 154, 95, 104 / imgW('champion')),
     imageButton(px, 'season-ribbon', 'rb_season_lobby', 163, 64, () => showLobbyView('season'), 0.5),
     box(px, 'season-tag', 373, 71, 112, 20, { color: C.yellow, radius: 10, justify: 'center', align: 'center' }, [
       <Label value={`${seasonName} Season`} fontSize={fs(11)} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />
     ]),
 
-    box(px, 'rank', 255, 105, 226, 66, { color: P.rankBox, radius: 12, border: 2, borderColor: P.rankEdge, shadow: 4, shadowColor: P.rankShadow }),
-    rankBadge(px, tier, 44, 263, 116),
-    text(px, fs, tierName, 315, 109, 110, 26, 20),
-    text(px, fs, `${tierSub} pts`, 400, 114, 72, 16, 12, P.white, 'middle-right'),
-    box(px, 'rank-bar', 315, 139, 152, 8, { color: BAR_TRACK, radius: 4 }, [
+    box(px, 'rank', rx, 105, rw, 66, { color: P.rankBox, radius: 12, border: 2, borderColor: P.rankEdge, shadow: 4, shadowColor: P.rankShadow }),
+    rankBadge(px, tier, 44, rx + 8, 116),
+    text(px, fs, tierName, rx + 60, 109, promo ? 92 : 110, 26, promo ? 18 : 20),
+    text(px, fs, `${tierSub} pts`, rx + rw - 81, 114, 72, 16, 12, P.white, 'middle-right'),
+    box(px, 'rank-bar', rx + 60, 139, rw - 74, 8, { color: BAR_TRACK, radius: 4 }, [
       <UiEntity uiTransform={{ width: `${Math.max(0, Math.min(100, Math.round((100 * ptsOnTier) / ptsPerTier)))}%`, height: '100%', borderRadius: px(4) }} uiBackground={{ color: P.green }} />
     ]),
-    text(px, fs, toNextTier, 315, 151, 110, 14, 11, RANK_TEXT),
+    text(px, fs, toNextTier, rx + 60, 151, 110, 14, 11, RANK_TEXT),
     // The next category only when the line on the left leaves room for it.
-    nextCat > cat && toNextTier.length <= 16 ? text(px, fs, `${nextCatName} at ${nextCatAt}`, 390, 151, 82, 14, 11, RANK_TEXT, 'middle-right') : null,
+    nextCat > cat && toNextTier.length <= (promo ? 12 : 16) ? text(px, fs, `${nextCatName} at ${nextCatAt}`, rx + rw - 91, 151, 82, 14, 11, RANK_TEXT, 'middle-right') : null,
 
     ...(gameOpen
       ? [
-          ...nextPrizeStrip(px, fs, 'next-prize', 255, 177, 226, 40, nextPrize, '', toNextPrize, prizesLoaded)
+          ...nextPrizeStrip(px, fs, 'next-prize', rx, 177, rw, 40, nextPrize, '', toNextPrize, prizesLoaded)
         ]
       : [
-          box(px, 'closed', 255, 177, 226, 40, { color: P.navyDeep, radius: 10, border: 2, borderColor: C.yellow }),
-          text(px, fs, 'CLOSED UNTIL THE FIRST WEEK', 263, 181, 212, 14, 10, C.yellow),
-          text(px, fs, opensInText(), 263, 195, 212, 18, 13)
+          box(px, 'closed', rx, 177, rw, 40, { color: P.navyDeep, radius: 10, border: 2, borderColor: C.yellow }),
+          text(px, fs, 'CLOSED UNTIL THE FIRST WEEK', rx + 8, 181, rw - 14, 14, 10, C.yellow),
+          text(px, fs, opensInText(), rx + 8, 195, rw - 14, 18, 13)
         ]),
 
     button2(
