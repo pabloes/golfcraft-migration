@@ -35,9 +35,6 @@ export const mobileShootState: {
   // which ends the hole for this player the same way a server kick does.
   quit: (() => void) | null
   quitConfirm: boolean
-  // Trial readout of the anchor camera (anchor-camera.ts), drawn over the
-  // shoot buttons while it is not empty.
-  debug: string
 } = {
   visible: false,
   power: 0,
@@ -51,6 +48,5 @@ export const mobileShootState: {
   pitchable: false,
   shoot: null,
   quit: null,
-  quitConfirm: false,
-  debug: ''
+  quitConfirm: false
 }

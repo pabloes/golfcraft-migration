@@ -97,18 +97,6 @@ export const MobileShootControls = () => {
           ]
         : null}
 
-      {st.debug ? (
-        <Label
-          key="anchor-debug"
-          value={st.debug}
-          fontSize={fs(10)}
-          color={C.white}
-          textAlign="middle-center"
-          textWrap="nowrap"
-          uiTransform={placeAt(L, px, 166, 284, 316, 14)}
-        />
-      ) : null}
-
       {st.quit ? (
         <UiEntity
           uiTransform={{ ...placeAt(L, px, 617, 6, 44, 44), flexDirection: 'column', justifyContent: 'center', alignItems: 'center', borderRadius: px(12), borderWidth: border(px, 2), borderColor: P.white }}

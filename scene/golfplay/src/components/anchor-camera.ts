@@ -34,9 +34,6 @@ import { ARROW_AIM_STEP, arrowMotion } from './orbit-camera'
 // tilts it afterwards anyway.
 const LOOK_AHEAD = 8
 const LOOK_AHEAD_Y = -2
-// The trial readout on the mobile panel (mobileShootState.debug) is refreshed
-// this often.
-const DEBUG_EVERY_MS = 100
 // After a teleport the explorer takes a few frames (and maybe an easing) to
 // turn its camera towards cameraTarget: the aim holds meanwhile, so the arrow
 // does not swing through the camera's old heading.
@@ -89,7 +86,6 @@ export const createAvatarAnchorCamera = (
   let wasVisible = false
   let anchors = 0
   let cameraSeen = false
-  let debugAt = 0
 
   // The course is local to the scene root; movePlayerTo wants scene coordinates.
   const origin = Transform.getOrNull(parent)?.position || DEFAULT_ORIGIN
@@ -165,19 +161,6 @@ export const createAvatarAnchorCamera = (
 
     offset += aimArrow(mobileShootState.aimPress, mobileShootState.aimHold)
     yaw = base() + offset
-
-    // Trial readout: what the phone sees of the explorer camera, so the test
-    // tells whether the camera transform updates with the drag and whether
-    // cameraTarget was honoured. Remove once the scheme is settled.
-    const now = Date.now()
-    if (now - debugAt >= DEBUG_EVERY_MS) {
-      debugAt = now
-      const camYaw = explorerCameraYaw()
-      mobileShootState.debug =
-        `cam ${camYaw === null ? '-' : camYaw.toFixed(0)}°  aim ${yaw.toFixed(0)}°  off ${offset.toFixed(1)}°  #${anchors}` +
-        (settleUntil ? ' settling' : '') +
-        (cam ? '' : '  NO CAMERA TRANSFORM')
-    }
   }
 
   holdAvatar()
@@ -191,7 +174,6 @@ export const createAvatarAnchorCamera = (
     occlusion.dispose()
     engine.removeEntity(modeArea)
     engine.removeEntity(probe)
-    mobileShootState.debug = ''
     releaseAvatar()
   }
 
