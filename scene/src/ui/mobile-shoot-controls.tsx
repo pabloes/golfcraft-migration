@@ -5,6 +5,9 @@
 //   - bottom centre:  ^ v  < SHOOT >   (camera pitch, aim, shot)
 //   - top right:      QUIT, with a confirm dialog
 //   - right column:   zoom in / out, left of the power column's + (game-hud.tsx)
+// The pitch arrows and the zoom buttons belong to the orbit camera (pitchable /
+// zoomable); with the anchor camera (MOBILE_ANCHOR_CAMERA) the explorer's own
+// camera is dragged and only < SHOOT > show.
 // Power + / - sit with the power column. Hold buttons act like a held key
 // (release on up or when the finger leaves).
 import ReactEcs, { Label, UiEntity } from '@dcl/sdk/react-ecs'
@@ -74,8 +77,12 @@ export const MobileShootControls = () => {
 
       {st.visible
         ? [
-            holdButton(L, px, 'pitch-up', 162, glyph(px, fs, '^'), pitch(1), pitch(0)),
-            holdButton(L, px, 'pitch-down', 210, glyph(px, fs, 'v'), pitch(-1), pitch(0)),
+            ...(st.pitchable
+              ? [
+                  holdButton(L, px, 'pitch-up', 162, glyph(px, fs, '^'), pitch(1), pitch(0)),
+                  holdButton(L, px, 'pitch-down', 210, glyph(px, fs, 'v'), pitch(-1), pitch(0))
+                ]
+              : []),
             holdButton(L, px, 'aim-left', 266, img(px, 'ic_chev_left_w', undefined, undefined, 0.7), aim(-1), aim(0)),
             <UiEntity
               key="shoot"
@@ -89,6 +96,18 @@ export const MobileShootControls = () => {
             holdButton(L, px, 'aim-right', 438, img(px, 'ic_chev_right_w', undefined, undefined, 0.7), aim(1), aim(0))
           ]
         : null}
+
+      {st.debug ? (
+        <Label
+          key="anchor-debug"
+          value={st.debug}
+          fontSize={fs(10)}
+          color={C.white}
+          textAlign="middle-center"
+          textWrap="nowrap"
+          uiTransform={placeAt(L, px, 166, 284, 316, 14)}
+        />
+      ) : null}
 
       {st.quit ? (
         <UiEntity

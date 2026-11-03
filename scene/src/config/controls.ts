@@ -10,6 +10,15 @@
 // InputModifier. Flip it to compare the two schemes.
 export const CAMERA_AIM_MODE = true
 
+// Phones only (platform.ts isMobile). The mobile explorer does not update
+// PrimaryPointerInfo during a touch drag while a VirtualCamera is active, so
+// the orbit camera could only be turned with the panel's < > arrows there.
+// With this on, a phone gets golfplay/src/components/anchor-camera.ts instead:
+// the hidden avatar is teleported onto the ball at every turn, kept still, and
+// the explorer's own third-person camera (turned by the native touch drag) is
+// the aim, plus the arrows' fine offset. Desktop keeps the orbit camera.
+export const MOBILE_ANCHOR_CAMERA = true
+
 // Orbit camera (golfplay/src/components/orbit-camera.ts).
 // Metres from the ball (W/S zoom between MIN and MAX), and degrees above the
 // ground (the mouse tilts between MIN and MAX): where each starts.

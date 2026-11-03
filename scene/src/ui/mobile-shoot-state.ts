@@ -25,12 +25,19 @@ export const mobileShootState: {
   zoomHold: -1 | 0 | 1
   // Set by the orbit camera while it is active, which is when zoom works.
   zoomable: boolean
+  // Set by the orbit camera while it is active: the ^ v arrows tilt it. The
+  // anchor camera (phones, MOBILE_ANCHOR_CAMERA) has no tilt of its own, the
+  // explorer's camera is dragged, so the arrows stay hidden.
+  pitchable: boolean
   // Set by the shoot control while a shot can be taken.
   shoot: (() => void) | null
   // Set by the golfplay clients while the player is in a hole: leaves the room,
   // which ends the hole for this player the same way a server kick does.
   quit: (() => void) | null
   quitConfirm: boolean
+  // Trial readout of the anchor camera (anchor-camera.ts), drawn over the
+  // shoot buttons while it is not empty.
+  debug: string
 } = {
   visible: false,
   power: 0,
@@ -41,7 +48,9 @@ export const mobileShootState: {
   pitchPress: null,
   zoomHold: 0,
   zoomable: false,
+  pitchable: false,
   shoot: null,
   quit: null,
-  quitConfirm: false
+  quitConfirm: false,
+  debug: ''
 }

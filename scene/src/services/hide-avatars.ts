@@ -1,7 +1,9 @@
 // SDK6 services/hide-avatars.ts: while a hole is played, an AvatarModifierArea
 // over the course hides the other players and disables their passports. SDK6
 // kept the player's own avatar visible; with the camera circling the ball
-// (CAMERA_AIM_MODE) it would only be in the way, so it is hidden too.
+// (CAMERA_AIM_MODE) it would only be in the way, so it is hidden too. On
+// phones the anchor camera (anchor-camera.ts) relies on this: the hidden
+// avatar stands on the ball and the explorer's camera orbits it.
 import { AvatarModifierArea, AvatarModifierType, Entity, Transform, engine } from '@dcl/sdk/ecs'
 import { Vector3 } from '@dcl/sdk/math'
 import { getPlayer } from '@dcl/sdk/players'

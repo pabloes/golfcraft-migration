@@ -1,7 +1,9 @@
-// Hides the course parts that stand between the orbit camera and the ball
+// Hides the course parts that stand between the aim camera and the ball
 // while the player is lining up a shot, and shows them again as soon as they
 // no longer block the view or the shot is taken (the shoot control's
-// `visible`, mirrored in mobileShootState on every platform).
+// `visible`, mirrored in mobileShootState on every platform). `camera` is the
+// orbit camera's entity, or on phones a probe that anchor-camera.ts keeps at
+// the explorer camera's position.
 //
 // A ray from the camera to the ball, on the layer the model parts collide on
 // (visual-part.ts OCCLUSION_LAYER), every CHECK_EVERY seconds. The camera never

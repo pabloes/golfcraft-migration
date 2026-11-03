@@ -20,7 +20,7 @@ import { startGameWindow } from './services/game-window'
 import { returnToMenuIfRequested } from './ui/lobby-menu-state'
 import { joinGameLobby } from './meta/game-lobby'
 import { createStreamScreens } from './components/lobby/stream-screens/stream-screens'
-import { unlockAvatar } from '../golfplay/src/components/orbit-camera'
+import { unlockAvatar } from '../golfplay/src/components/avatar-lock'
 
 // Mission-1 production flow:
 //   1. bootstrap() -> PlayFab LoginWithCustomID, get user, realm, Colyseus client

@@ -1,11 +1,12 @@
-// Ball orbit camera for CAMERA_AIM_MODE (Golf With Your Friends style).
+// Ball orbit camera for CAMERA_AIM_MODE (Golf With Your Friends style). The
+// desktop aim camera; phones get anchor-camera.ts (see aim-camera.ts).
 //
 // A VirtualCamera that circles the ball for the whole hole, whether the ball is
 // still or rolling. The player turns it, and its heading IS the aim: the shoot
 // control reads getYaw() instead of having its own rotation step. While it is
-// active InputModifier keeps the avatar still; release() hands back the camera
-// as soon as the hole is over for this player, and the legs too unless a Season
-// run holds them (lockAvatarForRun).
+// active InputModifier keeps the avatar still (avatar-lock.ts); release() hands
+// back the camera as soon as the hole is over for this player, and the legs
+// too unless a Season run holds them (lockAvatarForRun).
 //
 // A VirtualCamera takes no input from the explorer, so the scene reads it:
 //   - the pointer, from PrimaryPointerInfo on the root entity;
@@ -15,7 +16,6 @@
 import {
   Entity,
   InputAction,
-  InputModifier,
   MainCamera,
   PrimaryPointerInfo,
   Transform,
@@ -38,6 +38,7 @@ import {
 } from '../../../src/config/controls'
 import { mobileShootState, type ArrowPress } from '../../../src/ui/mobile-shoot-state'
 import { isMobile } from '../../../src/services/platform'
+import { holdAvatar, releaseAvatar } from './avatar-lock'
 import { createCameraOcclusion } from './camera-occlusion'
 
 type Vec3Like = { x: number; y: number; z: number }
@@ -64,8 +65,9 @@ const ORBIT_TOUCH_EASE = 9
 // than the screen and the explorer reports touches late, so at full speed
 // from the first tick even a quick tap turned several degrees. The pitch
 // arrows (^ v) just move at ORBIT_PITCH_KEY_SPEED while held (user,
-// 2026-11-03): a tilt needs no fine steps.
-const ARROW_AIM_STEP = 0.4
+// 2026-11-03): a tilt needs no fine steps. anchor-camera.ts reuses the step
+// and the ramp for its offset over the explorer camera.
+export const ARROW_AIM_STEP = 0.4
 const ARROW_HOLD_DELAY_MS = 100
 const ARROW_RAMP_MS = 500
 
@@ -84,7 +86,7 @@ const arrowTravel = (ms: number, step: number, speed: number) => {
 // summed from dt, so the result doesn't depend on how often the scene ticks.
 // Module level, like the zoom and tilt, so a press is never counted twice
 // by the next hole's camera.
-const arrowMotion = (step: number, speed: number) => {
+export const arrowMotion = (step: number, speed: number) => {
   let seen: ArrowPress | null = null
   let travelled = 0
   return (press: ArrowPress | null, holding: number) => {
@@ -107,38 +109,6 @@ const clampPitch = (value: number) => Math.max(ORBIT_PITCH_MIN, Math.min(ORBIT_P
 // again from each tee.
 let distance = ORBIT_DISTANCE
 let pitch = ORBIT_PITCH
-
-// A Season run keeps the avatar still from its first tee to the end of the run,
-// not only while a hole's camera is up. With the legs handed back when the ball
-// holed, a player could walk out of the 48 m scene while the others finished,
-// during the hole result or while the next course loaded (W/S and A/D are the
-// aim keys): outside it the explorer draws none of the scene's UI and ignores
-// its movePlayerTo, so the next hole started without them (CLAUDE.md §6 #34).
-// unlockAvatar() ends it; a run that ends without telling us (a lost room the
-// run never closes) is freed by the watchdog once no camera has been up for
-// RUN_LOCK_MAX_MS.
-const RUN_LOCK_MAX_MS = 180000
-let lockedForRun = false
-let activeCameras = 0
-let lastReleaseAt = 0
-let watchdogAdded = false
-
-export const lockAvatarForRun = () => {
-  lockedForRun = true
-  if (watchdogAdded) return
-  watchdogAdded = true
-  engine.addSystem(() => {
-    if (lockedForRun && !activeCameras && Date.now() - lastReleaseAt > RUN_LOCK_MAX_MS) {
-      console.log('[orbit] run lock timed out, freeing the avatar')
-      unlockAvatar()
-    }
-  })
-}
-
-export const unlockAvatar = () => {
-  lockedForRun = false
-  if (!activeCameras) InputModifier.deleteFrom(engine.PlayerEntity)
-}
 
 export const createBallOrbitCamera = (
   parent: Entity,
@@ -272,28 +242,25 @@ export const createBallOrbitCamera = (
 
   place()
   MainCamera.createOrReplace(engine.CameraEntity, { virtualCameraEntity: camera })
-  InputModifier.createOrReplace(engine.PlayerEntity, {
-    mode: InputModifier.Mode.Standard({ disableAll: true })
-  })
+  holdAvatar()
   engine.addSystem(update)
   mobileShootState.zoomable = true
-  activeCameras++
+  mobileShootState.pitchable = true
 
   let released = false
   function release() {
     if (released) return
     released = true
-    activeCameras--
-    lastReleaseAt = Date.now()
     engine.removeSystem(update)
     occlusion.dispose()
     mobileShootState.zoomable = false
+    mobileShootState.pitchable = false
     mobileShootState.zoomHold = 0
     if (MainCamera.getOrNull(engine.CameraEntity)?.virtualCameraEntity === camera) {
       MainCamera.deleteFrom(engine.CameraEntity)
     }
     // Inside a Season run the legs stay locked until unlockAvatar().
-    if (!lockedForRun && !activeCameras) InputModifier.deleteFrom(engine.PlayerEntity)
+    releaseAvatar()
   }
 
   return {
