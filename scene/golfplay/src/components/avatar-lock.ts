@@ -11,13 +11,66 @@
 // without them (CLAUDE.md §6 #34). unlockAvatar() ends it; a run that ends
 // without telling us (a lost room the run never closes) is freed by the
 // watchdog once no camera has been up for RUN_LOCK_MAX_MS.
-import { InputModifier, engine } from '@dcl/sdk/ecs'
+//
+// Between holing out and the end of the hole (the "Ending in..." wait) the
+// player may walk around (user, 2026-11-03): freeAvatarForNow() hands the legs
+// back inside the run and holdAvatarForRun() takes them again at the hole's
+// end. A fence keeps that walk inside the scene's main block, because a player
+// outside it cannot be brought back for the next hole (movePlayerTo is ignored
+// there): a step past it is undone with a teleport to the last place inside.
+import { InputModifier, Transform, engine } from '@dcl/sdk/ecs'
+import { Vector3 } from '@dcl/sdk/math'
+import { movePlayerTo } from '~system/RestrictedActions'
 
 const RUN_LOCK_MAX_MS = 180000
+// Scene-local metres of the 3x3 parcel block the courses and the lobby sit in.
+const FENCE_MIN = 1
+const FENCE_MAX = 47
 let lockedForRun = false
 let activeCameras = 0
 let lastReleaseAt = 0
 let watchdogAdded = false
+let freeForNow = false
+let lastInside: Vector3 | null = null
+let fenceAdded = false
+
+const inside = (p: { x: number; z: number }) => p.x >= FENCE_MIN && p.x <= FENCE_MAX && p.z >= FENCE_MIN && p.z <= FENCE_MAX
+
+const fence = () => {
+  if (!freeForNow) return
+  const t = Transform.getOrNull(engine.PlayerEntity)
+  if (!t) return
+  if (inside(t.position)) {
+    lastInside = Vector3.create(t.position.x, t.position.y, t.position.z)
+    return
+  }
+  const back = lastInside || Vector3.create(24, t.position.y, 24)
+  console.log('[avatar-lock] at the edge of the scene, back to', JSON.stringify(back))
+  movePlayerTo({ newRelativePosition: back }).catch((err) => console.log('[avatar-lock] movePlayerTo failed', err))
+}
+
+// The hole is over for this player but the run goes on: the legs come back
+// until holdAvatarForRun(), within the fence.
+export const freeAvatarForNow = () => {
+  if (!lockedForRun || activeCameras) return
+  freeForNow = true
+  lastInside = null
+  InputModifier.deleteFrom(engine.PlayerEntity)
+  if (!fenceAdded) {
+    fenceAdded = true
+    engine.addSystem(fence)
+  }
+}
+
+// The hole has ended (the fade to the results): still inside the run, so the
+// legs are locked again until the next hole's camera, or unlockAvatar().
+export const holdAvatarForRun = () => {
+  freeForNow = false
+  if (!lockedForRun) return
+  InputModifier.createOrReplace(engine.PlayerEntity, {
+    mode: InputModifier.Mode.Standard({ disableAll: true })
+  })
+}
 
 export const lockAvatarForRun = () => {
   lockedForRun = true
@@ -33,11 +86,13 @@ export const lockAvatarForRun = () => {
 
 export const unlockAvatar = () => {
   lockedForRun = false
+  freeForNow = false
   if (!activeCameras) InputModifier.deleteFrom(engine.PlayerEntity)
 }
 
 // An aim camera is up: the avatar stays where it is until releaseAvatar().
 export const holdAvatar = () => {
+  freeForNow = false
   InputModifier.createOrReplace(engine.PlayerEntity, {
     mode: InputModifier.Mode.Standard({ disableAll: true })
   })

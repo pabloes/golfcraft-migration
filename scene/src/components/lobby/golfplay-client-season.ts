@@ -48,7 +48,7 @@ import { hideWaitPlayers } from './season-game-countdown'
 import { createInGameResultsUi, createInGameTime } from './ingame-ui'
 import { seasonCountdownState, seasonHoleState, hideSeasonHud } from '../../ui/season-hud-state'
 import { createAimCamera } from '../../../golfplay/src/components/aim-camera'
-import { lockAvatarForRun, unlockAvatar } from '../../../golfplay/src/components/avatar-lock'
+import { lockAvatarForRun, unlockAvatar, freeAvatarForNow, holdAvatarForRun } from '../../../golfplay/src/components/avatar-lock'
 import { CAMERA_AIM_MODE } from '../../config/controls'
 import { mobileShootState } from '../../ui/mobile-shoot-state'
 import { reportPing } from '../../ui/ping-state'
@@ -355,11 +355,14 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
     }
 
     // The hole is over for this player (holed, or the round/room ended): give
-    // back the normal camera, the avatar's legs and the avatars until the next
-    // hole's client takes them again. dispose() repeats it harmlessly.
+    // back the normal camera and the avatars until the next hole's client takes
+    // them again, and the legs for the rest of the hole (the "Ending in..."
+    // wait; user, 2026-11-03), inside the scene's fence (avatar-lock.ts). They
+    // are locked again when the hole ends. dispose() repeats it harmlessly.
     function releasePlayer() {
       aimCam?.release()
       showAvatars()
+      freeAvatarForNow()
     }
 
     function onLeave(code: number) {
@@ -543,6 +546,9 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
       console.log('[season] COMPLETED round', currentGame, 'tierSub', tierSub, '->', newTierSub)
       clearGhostTimers()
       releasePlayer()
+      // The hole is over for everyone: no walking off during the results and
+      // the next course's load (CLAUDE.md §6 #34).
+      holdAvatarForRun()
       timeUI && timeUI.hide()
       await sleep(3000)
       callbacks.onComplete &&
@@ -588,6 +594,8 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
 
     async function onMessageHoleEndCountdown() {
       cancelEnding = true
+      // The hole ends: the legs are locked again before the fade to the results.
+      holdAvatarForRun()
       await fadeInOverlay(3)
     }
 
