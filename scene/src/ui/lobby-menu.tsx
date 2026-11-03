@@ -38,6 +38,9 @@ import { opensInText } from '../services/game-window'
 import { avatarFaceUrl } from '../services/avatar-face'
 
 const TUTORIAL_STEPS = 9
+// The step whose dialogue claims the greeting emote NFT (npc-storymode.ts):
+// the card advertises it while current_mission is at or before it.
+const EMOTE_MISSION = 6
 // Workshop: cost of the next upgrade step for the basic club (cloudscript
 // csGolfclub, indexed by the attribute's current value).
 const UPGRADE_COSTS = [10, 20, 30, 60, 120]
@@ -289,7 +292,7 @@ export const LobbyMenu = () => {
   // ---------------------------------------------------------- right cards
   const cards = [
     sideCard(px, 'card-tutorial', 58, P.teal, tutorialDone || currentMission === 9 ? 'art_tutorial_3_sq' : 'art_tutorial_1_sq', 'tt_card_tutorial', () => showLobbyView('tutorial'), [
-      <UiEntity key="tut-line" uiTransform={{ ...at(px, 51, 26, 100, 14), flexDirection: 'row', alignItems: 'center' }}>
+      <UiEntity key="tut-line" uiTransform={{ ...at(px, 51, 23, 100, 14), flexDirection: 'row', alignItems: 'center' }}>
         {tutorialDone ? (
           <Label value="All 9 done" fontSize={fs(11)} color={C.yellow} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(14) }} />
         ) : (
@@ -298,7 +301,14 @@ export const LobbyMenu = () => {
             <Label value={`${currentMission} of ${TUTORIAL_STEPS}`} fontSize={fs(11)} color={C.yellow} textAlign="middle-left" textWrap="nowrap" uiTransform={{ height: px(14), margin: { left: px(3) } }} />
           ]
         )}
-      </UiEntity>
+      </UiEntity>,
+      // The secret greeting emote (an NFT) arrives at step 6, after the 5th
+      // hole: say so until it is claimed (user, 2026-11-03).
+      currentMission <= EMOTE_MISSION
+        ? box(px, 'tut-emote-tag', 51, 37, 70, 12, { color: P.green, radius: 6, justify: 'center', align: 'center' }, [
+            <Label value="FREE EMOTE!" fontSize={fs(9)} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />
+          ])
+        : null
     ]),
     sideCard(px, 'card-workshop', 116, P.purple, 'art_workshop_sq', 'tt_card_workshop', () => showLobbyView('workshop'), [
       text(px, fs, upgradeHint || 'Upgrade your club', 51, 26, 100, 14, 11, upgradeHint ? C.yellow : P.white)
