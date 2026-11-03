@@ -41,8 +41,10 @@ const ui = () => {
       <hud.PowerColumn />
       {mobile ? null : <desktopHud.ControlsHelp />}
       {mobile ? null : <desktopHud.RankPill />}
+      {mobile ? null : <desktopHud.LeaveButton />}
       <MobileShootControls />
       <hud.MapFooter />
+      {mobile ? null : <desktopHud.LeaveConfirm />}
       <LobbyMenu />
       <IntroScreen />
       <BootErrorDialog />

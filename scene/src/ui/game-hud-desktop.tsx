@@ -15,8 +15,9 @@ import { topbarState, formatTopBarTime } from './topbar-state'
 import { powerBarState, controlHintState } from './shoot-hud-state'
 import { seasonClockState, seasonResultsState, seasonCountdownState, seasonHoleState, SeasonResultRow } from './season-hud-state'
 import { C, hex, mmss } from './ui-theme'
-import { P, border, initialAvatar, rankBadge } from './ui2'
+import { P, border, img, initialAvatar, rankBadge } from './ui2'
 import { pingLabel } from './ping-label'
+import { mobileShootState } from './mobile-shoot-state'
 // @ts-ignore - common/utils has @ts-nocheck
 import { getTierFromSub } from '../../../common/utils'
 // @ts-ignore - season-tier-definitions has @ts-nocheck
@@ -58,12 +59,97 @@ const hudLeft = (canvas: Canvas, px: Px) => {
   return left > px(200) ? left - px(90) : left + px(24)
 }
 
+// LEAVE, top left, in every mode (user, 2026-11-03): the same room.leave()
+// the phone's QUIT does (mobileShootState.quit, set by both golfplay clients
+// for the whole hole), behind the same confirm. The stat boxes start after it.
+const LEAVE_W = 96
+const leaveOffset = (px: Px) => (mobileShootState.quit ? px(LEAVE_W + 10) : 0)
+
+export const LeaveButton = () => {
+  const st = mobileShootState
+  if (!st.quit) return null
+  const { canvas, s } = hudScale()
+  const { px, fs } = s
+  return (
+    <UiEntity
+      uiTransform={{
+        positionType: 'absolute',
+        position: { top: canvas.area.top + px(22), left: hudLeft(canvas, px) },
+        width: px(LEAVE_W),
+        height: px(72),
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderRadius: px(18),
+        borderWidth: border(px, 4),
+        borderColor: P.white
+      }}
+      uiBackground={{ color: P.crimson }}
+      onMouseDown={() => {
+        st.quitConfirm = true
+      }}
+    >
+      {img(px, 'ic_close_w', undefined, undefined, 0.7)}
+      <Label value="LEAVE" fontSize={fs(14)} color={C.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(20), margin: { top: px(2) } }} />
+    </UiEntity>
+  )
+}
+
+// The confirm behind LEAVE, mounted after the rest of the HUD so it paints on
+// top of it (same copy and buttons as the phone's).
+const confirmButton = (px: Px, fs: Px, label: string, color: Color4, textColor: Color4, onTap: () => void, left = 0) => (
+  <UiEntity
+    uiTransform={{ width: px(150), height: px(52), margin: { left: px(left) }, borderRadius: px(14), borderWidth: border(px, 3), borderColor: P.white, justifyContent: 'center', alignItems: 'center' }}
+    uiBackground={{ color }}
+    onMouseDown={onTap}
+  >
+    <Label value={label} fontSize={fs(18)} color={textColor} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(30) }} />
+  </UiEntity>
+)
+
+export const LeaveConfirm = () => {
+  const st = mobileShootState
+  if (!st.quit || !st.quitConfirm) return null
+  const { s } = hudScale()
+  const { px, fs } = s
+  return (
+    <UiEntity
+      uiTransform={{ positionType: 'absolute', position: { left: 0, top: 0 }, width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' }}
+      uiBackground={{ color: C.backdrop }}
+    >
+      <UiEntity
+        uiTransform={{ width: px(380), flexDirection: 'column', alignItems: 'center', padding: px(20), borderRadius: px(18), borderWidth: border(px, 4), borderColor: P.white }}
+        uiBackground={{ color: P.navy }}
+      >
+        <Label value="Leave this hole?" fontSize={fs(24)} color={C.yellow} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: px(34) }} />
+        <Label
+          value="You will lose the run and the shots played so far."
+          fontSize={fs(15)}
+          color={C.white}
+          textAlign="middle-center"
+          textWrap="wrap"
+          uiTransform={{ width: '100%', height: px(44), margin: { top: px(6) } }}
+        />
+        <UiEntity uiTransform={{ flexDirection: 'row', margin: { top: px(14) } }}>
+          {confirmButton(px, fs, 'STAY', P.lavender, P.ink, () => {
+            st.quitConfirm = false
+          })}
+          {confirmButton(px, fs, 'LEAVE', P.pink, C.white, () => {
+            st.quitConfirm = false
+            st.quit && st.quit()
+          }, 12)}
+        </UiEntity>
+      </UiEntity>
+    </UiEntity>
+  )
+}
+
 export const MissionTimer = () => {
   if (!topbarState.visible) return null
   const { canvas, s } = hudScale()
   const { px, fs } = s
   return (
-    <UiEntity uiTransform={{ positionType: 'absolute', position: { top: canvas.area.top + px(22), left: hudLeft(canvas, px) }, flexDirection: 'row' }}>
+    <UiEntity uiTransform={{ positionType: 'absolute', position: { top: canvas.area.top + px(22), left: hudLeft(canvas, px) + leaveOffset(px) }, flexDirection: 'row' }}>
       {statBox(px, fs, px(104), 'TIME', formatTopBarTime(topbarState.ms), P.navy)}
     </UiEntity>
   )
@@ -75,7 +161,7 @@ export const HoleStats = () => {
   const { px, fs } = s
   const me = seasonResultsState.rows.find((row) => row.isMe)
   return (
-    <UiEntity uiTransform={{ positionType: 'absolute', position: { top: canvas.area.top + px(22), left: hudLeft(canvas, px) }, flexDirection: 'row' }}>
+    <UiEntity uiTransform={{ positionType: 'absolute', position: { top: canvas.area.top + px(22), left: hudLeft(canvas, px) + leaveOffset(px) }, flexDirection: 'row' }}>
       {statBox(px, fs, px(104), 'HOLE', `${seasonHoleState.current} / ${seasonHoleState.total}`, P.purple)}
       {statBox(px, fs, px(104), 'TIME', mmss(seasonClockState.ms), P.navy)}
       {statBox(px, fs, px(104), 'SHOTS', String(me ? me.shots : 0), P.navy)}
