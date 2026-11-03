@@ -647,7 +647,8 @@ console.log("accumulatedValue", JSON.stringify(sortedAccumulatedResult,null, "  
                 time:Date.now() - this.state.seasonStartTime,
                 gameMode:"season",
                 subType:1,
-                data:null
+                data:null,
+                rankedPoints:accumulatedValue//what this run added to tier-sub, for the stats page
             }
             console.log("playerGameData times",this.state.seasonStartTime, Date.now() )
             await fetch(`${API_URL}/api/player-game`, {

@@ -758,7 +758,8 @@ export class SeasonPartyRoom extends Room<SeasonPartyRoomState> {
                 time: Date.now() - this.state.seasonStartTime,
                 gameMode: "season",
                 subType: 1,
-                data: null
+                data: null,
+                rankedPoints: tierSubDelta//what this run added to tier-sub (0 above the room's level), for the stats page
             })
         });
     }

@@ -52,6 +52,11 @@ type VisitTable = "daily_visit" | "daily_guest_visit";
 //and at most one party's worth of holes per call
 const HOLE_MODE_MAX = 16;
 const HOLE_COUNT_MAX = 16;
+//player_game: the ranked points (tier-sub) a finished Season run added, sent
+//by the Season rooms with the game since 2026-11-03 (/api/player-game)
+const PLAYER_GAME_COLUMNS: [string, string][] = [
+    ["rankedPoints", "INT NULL"]
+];
 //columns added after the tables existed, in order; MySQL 8 has no ADD COLUMN IF NOT EXISTS
 const LATER_COLUMNS: [string, string][] = [
     ["lastSeen", "DATETIME NULL"],
@@ -88,7 +93,9 @@ export function statsApi(router, prisma: PrismaClient){
         INDEX idx_hole_start_address (address, startedAt)
     )`).then(() => migrateDailyHoleStart(prisma))
         .catch(error => console.log("hole_start table error", error?.message));
-    addPlayerGameIndexes(prisma).catch(error => console.log("player_game indexes error", error?.message));
+    addLaterColumns(prisma, "player_game", PLAYER_GAME_COLUMNS)
+        .then(() => addPlayerGameIndexes(prisma))
+        .catch(error => console.log("player_game columns/indexes error", error?.message));
 
     loadPlayFabAccounts(prisma).then(() => refreshPlayFabAccounts(prisma));
     setInterval(() => refreshPlayFabAccounts(prisma), 60 * 60 * 1000);
@@ -278,8 +285,8 @@ async function addPlayerGameIndexes(prisma: PrismaClient){
 }
 
 //tables created before a column existed; MySQL 8 has no ADD COLUMN IF NOT EXISTS
-async function addLaterColumns(prisma: PrismaClient, table: VisitTable){
-    for(const [column, ddl] of LATER_COLUMNS){
+async function addLaterColumns(prisma: PrismaClient, table: string, columns: [string, string][] = LATER_COLUMNS){
+    for(const [column, ddl] of columns){
         const found: any[] = await prisma.$queryRaw`SELECT COUNT(*) AS n FROM information_schema.COLUMNS
                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ${table} AND COLUMN_NAME = ${column}`;
         if(Number(found[0]?.n)) continue;
@@ -318,19 +325,19 @@ async function computeVisitors(prisma: PrismaClient, from: Date, to: Date){
         prisma.$queryRaw`SELECT CONVERT(v.address USING utf8mb4) AS address,
                 DATE_FORMAT(MAX(CASE WHEN v.exact = 1 THEN v.seen END), '%Y-%m-%dT%H:%i:%sZ') AS lastExact,
                 DATE_FORMAT(MAX(CASE WHEN v.exact = 0 THEN v.seen END), '%Y-%m-%dT00:00:00Z') AS lastDay,
-                SUM(v.game) AS games, SUM(v.hole) AS holes,
+                SUM(v.game) AS games, SUM(v.hole) AS holes, SUM(v.rp) AS rankedPoints,
                 SUBSTRING_INDEX(GROUP_CONCAT(v.explorer ORDER BY v.seen DESC SEPARATOR '|'), '|', 1) AS explorer,
                 SUBSTRING_INDEX(GROUP_CONCAT(v.explorerAgent ORDER BY v.seen DESC SEPARATOR '|'), '|', 1) AS explorerAgent FROM (
-                SELECT CAST(address AS BINARY) AS address, lastSeen AS seen, 1 AS exact, 0 AS game, 0 AS hole, explorer, explorerAgent FROM daily_visit
+                SELECT CAST(address AS BINARY) AS address, lastSeen AS seen, 1 AS exact, 0 AS game, 0 AS hole, 0 AS rp, explorer, explorerAgent FROM daily_visit
                     WHERE lastSeen >= ${from} AND lastSeen <= ${to}
                 UNION ALL
-                SELECT CAST(address AS BINARY), TIMESTAMP(day), 0, 0, 0, explorer, explorerAgent FROM daily_visit
+                SELECT CAST(address AS BINARY), TIMESTAMP(day), 0, 0, 0, 0, explorer, explorerAgent FROM daily_visit
                     WHERE lastSeen IS NULL AND day >= DATE(${from}) AND day <= DATE(${to})
                 UNION ALL
-                SELECT CAST(LOWER(address) AS BINARY), startTime, 1, 1, 0, NULL, NULL FROM player_game
+                SELECT CAST(LOWER(address) AS BINARY), startTime, 1, 1, 0, COALESCE(rankedPoints, 0), NULL, NULL FROM player_game
                     WHERE startTime >= ${from} AND startTime <= ${to} AND address IS NOT NULL
                 UNION ALL
-                SELECT CAST(address AS BINARY), startedAt, 1, 0, 1, NULL, NULL FROM hole_start
+                SELECT CAST(address AS BINARY), startedAt, 1, 0, 1, 0, NULL, NULL FROM hole_start
                     WHERE startedAt >= ${from} AND startedAt <= ${to} AND address <> ''
             ) v GROUP BY v.address
             ORDER BY GREATEST(COALESCE(lastExact, ''), COALESCE(lastDay, '')) DESC
@@ -348,7 +355,7 @@ async function computeVisitors(prisma: PrismaClient, from: Date, to: Date){
         const dayOnly = !!day && (!exact || day.getTime() > exact.getTime());
         const explorer = row.explorer ? String(row.explorer) : null;
         return {address, lastSeen: (dayOnly ? day : exact).toISOString(), dayOnly,
-            games: Number(row.games || 0), holes: Number(row.holes || 0),
+            games: Number(row.games || 0), holes: Number(row.holes || 0), rankedPoints: Number(row.rankedPoints || 0),
             explorer, explorerAgent: explorer && row.explorerAgent ? String(row.explorerAgent) : null};
     });
     const names = await lookupNames(list.map(v => v.address));
@@ -412,7 +419,10 @@ async function computeStats(prisma: PrismaClient){
                 UNION
                 SELECT CAST(address AS BINARY) FROM daily_visit
             ) u`,
-        prisma.$queryRaw`SELECT COUNT(*) AS total, SUM(startTime >= ${since30}) AS last30 FROM player_game`,
+        //with the ranked points of the window and the first run that carried them
+        prisma.$queryRaw`SELECT COUNT(*) AS total, SUM(startTime >= ${since30}) AS last30,
+                SUM(IF(startTime >= ${since30}, COALESCE(rankedPoints, 0), 0)) AS rpLast30,
+                DATE_FORMAT(MIN(CASE WHEN rankedPoints IS NOT NULL THEN startTime END), '%Y-%m-%d') AS rpSince FROM player_game`,
         prisma.$queryRaw`SELECT
                 (SELECT DATE_FORMAT(MIN(day), '%Y-%m-%d') FROM daily_visit) AS wallets,
                 (SELECT DATE_FORMAT(MIN(day), '%Y-%m-%d') FROM daily_guest_visit) AS guests`,
@@ -445,6 +455,10 @@ async function computeStats(prisma: PrismaClient){
         holesStarted: Number(holes[0]?.total || 0),
         holesStartedLast30Days: Number(holes[0]?.last30 || 0),
         holesTrackedSince: holes[0]?.since || null,
+        //ranked points (tier-sub) won or lost in the finished Season runs of
+        //the last 30 days, known since rankedPointsTrackedSince
+        rankedPointsLast30Days: Number(games[0]?.rpLast30 || 0),
+        rankedPointsTrackedSince: games[0]?.rpSince || null,
         mapsCreated,
         seasonMaps,
         visitorsTrackedSince: {wallets: tracking[0]?.wallets || null, guests: tracking[0]?.guests || null},
@@ -463,12 +477,13 @@ async function computeStats(prisma: PrismaClient){
     };
 }
 
-//{buckets: [{bucket, wallets, guests, total, games, holes}] (only buckets with
-//visitors; games = finished games of the last 30 days whose player logged in
-//with that explorer that day, holes = holes started, same rule),
+//{buckets: [{bucket, wallets, guests, total, games, holes, rankedPoints}]
+//(only buckets with visitors; games = finished games of the last 30 days
+//whose player logged in with that explorer that day, holes = holes started,
+//rankedPoints = the points those games added, same rule),
 //holesUnknown: holes of the window with no explorer known,
 //since: "YYYY-MM-DD" | null}; empty while the explorer columns are missing
-type ExplorerRow = {bucket: string, wallets: number, guests: number, total: number, games: number, holes: number};
+type ExplorerRow = {bucket: string, wallets: number, guests: number, total: number, games: number, holes: number, rankedPoints: number};
 async function computeExplorers(prisma: PrismaClient, since30: Date): Promise<{buckets: ExplorerRow[], holesUnknown: number, since: string}> {
     try{
         const [wallets, guests, first, games, holes]: any[] = await Promise.all([
@@ -484,7 +499,7 @@ async function computeExplorers(prisma: PrismaClient, since30: Date): Promise<{b
             //a game joins the visit of its player on its day (the visits of the
             //window are a few hundred rows; player_game is scanned once, as the
             //other run queries do); the collations differ, so compare as bytes
-            prisma.$queryRaw`SELECT v.explorer, COUNT(*) AS n FROM player_game g JOIN (
+            prisma.$queryRaw`SELECT v.explorer, COUNT(*) AS n, SUM(COALESCE(g.rankedPoints, 0)) AS rp FROM player_game g JOIN (
                         SELECT day, address, explorer FROM daily_visit WHERE day >= ${since30} AND explorer IS NOT NULL
                         UNION ALL
                         SELECT day, address, explorer FROM daily_guest_visit WHERE day >= ${since30} AND explorer IS NOT NULL
@@ -495,10 +510,10 @@ async function computeExplorers(prisma: PrismaClient, since30: Date): Promise<{b
                 .catch(error => (console.log("/api/stats explorer holes error", error?.message), []))
         ]);
         const counts: {[bucket: string]: ExplorerRow} = {};
-        const at = (bucket: string) => counts[bucket] = counts[bucket] || {bucket, wallets: 0, guests: 0, total: 0, games: 0, holes: 0};
+        const at = (bucket: string) => counts[bucket] = counts[bucket] || {bucket, wallets: 0, guests: 0, total: 0, games: 0, holes: 0, rankedPoints: 0};
         wallets.forEach(({explorer, n}) => at(String(explorer)).wallets = Number(n));
         guests.forEach(({explorer, n}) => at(String(explorer)).guests = Number(n));
-        games.forEach(({explorer, n}) => at(String(explorer)).games = Number(n));
+        games.forEach(({explorer, n, rp}) => Object.assign(at(String(explorer)), {games: Number(n), rankedPoints: Number(rp || 0)}));
         let holesUnknown = 0;
         holes.forEach(({explorer, n}) => explorer ? (at(String(explorer)).holes = Number(n)) : (holesUnknown = Number(n)));
         const buckets = Object.values(counts)

@@ -305,6 +305,7 @@
           <th><button type="button" class="sort" data-sort="device" title="Sort by device">Device<span class="arrow" aria-hidden="true"></span></button></th>
           <th><button type="button" class="sort" data-sort="seen" title="Sort by last seen">Last seen<span class="arrow" aria-hidden="true"></span></button></th>
           <th class="num"><button type="button" class="sort" data-sort="games" title="Sort by games completed, then holes started">Games (holes)<span class="arrow" aria-hidden="true"></span></button></th>
+          <th class="num"><button type="button" class="sort" data-sort="rp" title="Sort by ranked points won or lost in Season runs">RP<span class="arrow" aria-hidden="true"></span></button></th>
         </tr></thead>
         <tbody id="visitors-body"></tbody>
       </table>
@@ -347,6 +348,8 @@
     return new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(n);
   }
   function fullCount(n) { return n == null ? "–" : n.toLocaleString("en-US"); }
+  // Points won or lost: "+3", "−2", "0".
+  function signedCount(n) { return n > 0 ? "+" + fullCount(n) : n < 0 ? "−" + fullCount(-n) : "0"; }
   function dayDate(day) { return new Date(day + "T00:00:00Z"); }
   function formatDay(day, opts) {
     return dayDate(day).toLocaleDateString("en-US", Object.assign({ timeZone: "UTC" }, opts || { month: "short", day: "numeric", year: "numeric" }));
@@ -586,13 +589,14 @@
       var info = EXPLORER_NAMES[e.bucket] || { name: e.bucket, detail: "" };
       var row = html("div", { "class": "explorer-row" }, rows);
       row.title = fullCount(e.wallets) + " with wallet · " + fullCount(e.guests) + (e.guests === 1 ? " guest" : " guests") +
-        " · " + fullCount(e.games) + " games completed · " + fullCount(e.holes) + " holes started";
+        " · " + fullCount(e.games) + " games completed · " + fullCount(e.holes) + " holes started · " +
+        signedCount(e.rankedPoints || 0) + " ranked points";
       var name = html("div", { "class": "explorer-name" }, row, info.name);
       if (info.detail) html("small", {}, name, info.detail);
       var bar = html("div", { "class": "explorer-bar", role: "img", "aria-label": info.name + ": " + fullCount(e.total) }, row);
       html("i", { style: "width:" + (max ? (e.total / max) * 100 : 0).toFixed(1) + "%" }, bar);
       var play = html("div", { "class": "explorer-play" }, row, fullCount(e.games) + " (" + fullCount(e.holes) + ")");
-      html("small", {}, play, "games (holes)");
+      html("small", {}, play, "games (holes) · " + signedCount(e.rankedPoints || 0) + " RP");
       var count = html("div", { "class": "explorer-count" }, row, fullCount(e.total));
       html("small", {}, count, sum ? Math.round((e.total / sum) * 100) + "%" : "");
     });
@@ -634,7 +638,8 @@
       (holes == null ? "" : " · " + fullCount(holes) + " holes started" +
         (d.holesTrackedSince ? " since " + formatDay(d.holesTrackedSince) : ""));
     $("games-sub").textContent = fullCount(d.gamesLast30Days) +
-      (holes == null ? "" : " (" + fullCount(d.holesStartedLast30Days) + ")") + " in the last 30 days";
+      (holes == null ? "" : " (" + fullCount(d.holesStartedLast30Days) + ")") + " in the last 30 days" +
+      (d.rankedPointsLast30Days == null ? "" : " · " + signedCount(d.rankedPointsLast30Days) + " RP");
     $("maps").textContent = formatCount(d.mapsCreated);
     $("maps-sub").textContent = fullCount(d.seasonMaps) + " in the Season pool";
     var tracked = d.visitorsTrackedSince || {};
@@ -646,6 +651,8 @@
       " Unique visitors are every player account since 2021, updated once a day." +
       " Games completed counts finished Season runs, tournaments, competitions and training; the number in brackets is every hole begun in any mode, tutorial included" +
       (d.holesTrackedSince ? ", counted since " + formatDay(d.holesTrackedSince) + "." : " (none counted yet).") +
+      " RP are the ranked points won or lost in finished Season runs" +
+      (d.rankedPointsTrackedSince ? ", known since " + formatDay(d.rankedPointsTrackedSince) + "." : " (none known yet).") +
       " Who visited shows each wallet shortened, with its public Decentraland name and its games completed (holes started) in the range; guests are only counted.";
     $("updated").textContent = "Updated " + new Date(d.updatedAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
     $("status-dot").className = "live-dot";
@@ -699,7 +706,7 @@
   var visitors = { range: "1", seq: 0, data: null, sort: null };
   // The direction a column takes on its first click: names from A, the most
   // recent visit and the most games first.
-  var SORT_DEFAULT = { name: "asc", device: "asc", seen: "desc", games: "desc" };
+  var SORT_DEFAULT = { name: "asc", device: "asc", seen: "desc", games: "desc", rp: "desc" };
   // The device column: the explorer of the visitor's latest visit, by the
   // names of the Explorers block; unknown (visits before 2026-11-02, or only
   // games in the range) shows a dash and sorts last.
@@ -730,6 +737,8 @@
         var da = deviceName(a.v), db = deviceName(b.v);
         if (!da !== !db) return da ? -1 : 1;
         cmp = da.localeCompare(db, "en", { sensitivity: "base" });
+      } else if (sort.key === "rp") {
+        cmp = (Number(a.v.rankedPoints) || 0) - (Number(b.v.rankedPoints) || 0);
       } else {
         cmp = (Number(a.v.games) || 0) - (Number(b.v.games) || 0) ||
           (Number(a.v.holes) || 0) - (Number(b.v.holes) || 0);
@@ -800,6 +809,8 @@
       seen.title = v.dayOnly ? "Only the day is known for this visit" : utcTime(v.lastSeen);
       var play = html("td", { "class": "num" }, tr, fullCount(v.games) + " (" + fullCount(v.holes || 0) + ")");
       play.title = fullCount(v.games) + " games completed · " + fullCount(v.holes || 0) + " holes started in this range";
+      var rp = html("td", { "class": "num" + (v.rankedPoints ? "" : " muted") }, tr, signedCount(v.rankedPoints || 0));
+      rp.title = "Ranked points won or lost in the Season runs finished in this range";
     });
     showVisitorsMessage(list.length ? "" : "Nobody with a wallet visited in this range.");
     var wallets = list.length === 1 ? "1 wallet" : fullCount(list.length) + " wallets";

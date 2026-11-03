@@ -415,7 +415,7 @@ export const coursesApi = (router, app, prisma)=>{
 
     router.post(`/api/player-game`, async (req,res)=>{
         try{
-            const {apiKey, address, PlayFabId, course_alias, startTime, endTime, gameMode, data, course_ID, subType, time} = req.body;
+            const {apiKey, address, PlayFabId, course_alias, startTime, endTime, gameMode, data, course_ID, subType, time, rankedPoints} = req.body;
             console.log("player-game received", {address, PlayFabId, course_alias, startTime, endTime, gameMode, data, course_ID, subType, time});
             if(apiKey !== process.env.GOLF_API_KEY){
                 console.log("Wrong auth");
@@ -426,9 +426,17 @@ export const coursesApi = (router, app, prisma)=>{
                 headers:{"Content-Type":"application/json"},
                 body:JSON.stringify(getEventDefinition({PlayFabId,subType,gameMode}))
             }).then(r=>r.json());
-            await prisma.player_game.create({
+            const created = await prisma.player_game.create({
                 data:{address, PlayFabId, course_alias, startTime:new Date(startTime), endTime:new Date(endTime), gameMode, data, course_ID, subType, time}
             });
+            //the ranked points this run added to tier-sub (the Season rooms send
+            //them since 2026-11-03, for the stats page): written apart, so a
+            //table without the column never loses the game
+            const rp = Number(rankedPoints);
+            if(rankedPoints !== undefined && rankedPoints !== null && Number.isFinite(rp)){
+                await prisma.$executeRaw`UPDATE player_game SET rankedPoints = ${Math.max(-1000, Math.min(1000, Math.round(rp)))} WHERE ID = ${created.ID}`
+                    .catch(error => console.log("player-game rankedPoints error", error?.message));
+            }
 
             return res.send({result:true});
 

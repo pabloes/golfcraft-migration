@@ -194,6 +194,10 @@ model player_game {
   evaluated    Int?      @db.UnsignedTinyInt
   subType      Int?      @default(1) @db.UnsignedTinyInt
   time         Int?      @db.MediumInt
+  //what a finished Season run added to the player's tier-sub (the ranked
+  //points, negative when it lost to the recorded players); NULL for other
+  //modes and for runs before 2026-11-03 (added at web startup)
+  rankedPoints Int?
 
   //the stats page reads this table by time range and by wallet (added at
   //web startup, 2026-11-02)
