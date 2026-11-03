@@ -46,3 +46,9 @@ design/implementation-notes.md
 design/hypothesis-log.md
 design/0[0-9]-*/
 design/gdd.html
+
+# The SDK6 build of the expression storage (jsep inlined): the game server
+# resolves it before the .ts stub (ts-node, preferTsExts off). It is not
+# generated here, so it must travel with the repo, or a clean worktree deploys
+# a server whose switches and trigger areas never change anything.
+!lib/expression-storage/_expression-storage.js
