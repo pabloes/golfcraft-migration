@@ -161,7 +161,14 @@ bash scripts/build-scene-prod.sh   # flips USE_REMOTE_SERVER, builds, flips back
   Test ranked, parties and rewards there against the production backend.
 - **Parcels after that**: remove `worldConfiguration` and deploy to the catalyst
   with the LAND owner/operator wallet. This replaces the SDK6 scene players see
-  today, so only do it once the World run is clean.
+  today, so only do it once the World run is clean. From a clean worktree:
+  `cd scene && yes | npx sdk-commands deploy --skip-build --port 8006`, sign at
+  `http://localhost:8006/`. After `Content uploaded successfully` the CLI keeps
+  printing `Error fetching catalyst pointers ... ENOTFOUND peer.dclnodes.io` (a
+  retired catalyst in its list) and never exits: harmless, Ctrl-C it. Check with
+  `POST https://peer.decentraland.org/content/entities/active {"pointers":["47,-45"]}`
+  (entity timestamp + `bin/index.js` hash; the file at `/content/contents/<hash>`
+  must be byte-identical to `scene/bin/index.js`).
 
 A production scene build claims **real** season rewards: `season-rewards-bridge`
 enables the claim whenever `USE_REMOTE_SERVER` is true. That is the point of the
