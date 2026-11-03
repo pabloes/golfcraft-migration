@@ -5,9 +5,9 @@
 //   - bottom centre:  ^ v  < SHOOT >   (camera pitch, aim, shot)
 //   - top right:      QUIT, with a confirm dialog
 //   - right column:   zoom in / out, left of the power column's + (game-hud.tsx)
-// The pitch arrows and the zoom buttons belong to the orbit camera (pitchable /
-// zoomable); with the anchor camera (MOBILE_ANCHOR_CAMERA) the explorer's own
-// camera is dragged and only < SHOOT > show.
+// The arrows and the zoom buttons belong to the orbit camera (pitchable /
+// aimArrows / zoomable); with the anchor camera (MOBILE_ANCHOR_CAMERA) the
+// explorer's own camera is dragged and only SHOOT shows.
 // Power + / - sit with the power column. Hold buttons act like a held key
 // (release on up or when the finger leaves).
 import ReactEcs, { Label, UiEntity } from '@dcl/sdk/react-ecs'
@@ -83,7 +83,7 @@ export const MobileShootControls = () => {
                   holdButton(L, px, 'pitch-down', 210, glyph(px, fs, 'v'), pitch(-1), pitch(0))
                 ]
               : []),
-            holdButton(L, px, 'aim-left', 266, img(px, 'ic_chev_left_w', undefined, undefined, 0.7), aim(-1), aim(0)),
+            ...(st.aimArrows ? [holdButton(L, px, 'aim-left', 266, img(px, 'ic_chev_left_w', undefined, undefined, 0.7), aim(-1), aim(0))] : []),
             <UiEntity
               key="shoot"
               uiTransform={{ ...placeAt(L, px, 316, 302, 116, 52), flexDirection: 'column', justifyContent: 'center', alignItems: 'center', borderRadius: px(15) }}
@@ -93,7 +93,7 @@ export const MobileShootControls = () => {
               <Label value="SHOOT" fontSize={fs(20)} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: px(24) }} />
               <Label value={`${Math.round(st.power)}%`} fontSize={fs(11)} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: px(14) }} />
             </UiEntity>,
-            holdButton(L, px, 'aim-right', 438, img(px, 'ic_chev_right_w', undefined, undefined, 0.7), aim(1), aim(0))
+            ...(st.aimArrows ? [holdButton(L, px, 'aim-right', 438, img(px, 'ic_chev_right_w', undefined, undefined, 0.7), aim(1), aim(0))] : [])
           ]
         : null}
 

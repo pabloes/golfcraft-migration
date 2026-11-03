@@ -29,6 +29,10 @@ export const mobileShootState: {
   // anchor camera (phones, MOBILE_ANCHOR_CAMERA) has no tilt of its own, the
   // explorer's camera is dragged, so the arrows stay hidden.
   pitchable: boolean
+  // Set by the orbit camera while it is active: the < > arrows turn it. The
+  // anchor camera (phones, MOBILE_ANCHOR_CAMERA) is turned by the touch drag
+  // alone, so the arrows stay hidden (user, 2026-11-03).
+  aimArrows: boolean
   // Set by the shoot control while a shot can be taken.
   shoot: (() => void) | null
   // Set by the golfplay clients while the player is in a hole: leaves the room,
@@ -46,6 +50,7 @@ export const mobileShootState: {
   zoomHold: 0,
   zoomable: false,
   pitchable: false,
+  aimArrows: false,
   shoot: null,
   quit: null,
   quitConfirm: false

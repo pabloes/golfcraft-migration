@@ -246,6 +246,7 @@ export const createBallOrbitCamera = (
   engine.addSystem(update)
   mobileShootState.zoomable = true
   mobileShootState.pitchable = true
+  mobileShootState.aimArrows = true
 
   let released = false
   function release() {
@@ -255,6 +256,7 @@ export const createBallOrbitCamera = (
     occlusion.dispose()
     mobileShootState.zoomable = false
     mobileShootState.pitchable = false
+    mobileShootState.aimArrows = false
     mobileShootState.zoomHold = 0
     if (MainCamera.getOrNull(engine.CameraEntity)?.virtualCameraEntity === camera) {
       MainCamera.deleteFrom(engine.CameraEntity)
