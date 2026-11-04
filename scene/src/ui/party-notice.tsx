@@ -42,6 +42,8 @@ const inLobby = () => {
     !seasonWaitState.visible &&
     !game.playing &&
     !game.starting &&
+    //not while watching somebody else's game either
+    !(game as any).spectating &&
     !game.introScreen &&
     !game.bootError
   )

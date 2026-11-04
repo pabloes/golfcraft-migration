@@ -39,6 +39,10 @@ import {
 } from "./Season-Room";
 import {PartyMember, takeParty} from "./season-party-registry";
 import {isEnergyFree} from "../energy";
+import {isSpectator, LiveGameMetadata, spectatorAuth, wantsToSpectate} from "./spectator";
+
+//Slots kept in the room for people watching, on top of the party's own size.
+const MAX_SPECTATORS = 20;
 
 // "Play ranked with friends": a Season run (4 rounds against recorded ghosts)
 // for 2-4 players at once. Season-Room is single player by design (one ball,
@@ -162,7 +166,9 @@ export class SeasonPartyRoom extends Room<SeasonPartyRoomState> {
     onCreate({partyId}) {
         const members = takeParty(partyId);
         if (!members?.length) throw new Error("season-party-room: unknown party " + partyId);
-        this.maxClients = members.length;
+        //room for the members plus whoever is watching: only a listed token
+        //gets a seat, so the extra slots can never be taken by a player
+        this.maxClients = members.length + MAX_SPECTATORS;
 
         this.setState(new SeasonPartyRoomState());
         members.forEach((member, index) => {
@@ -200,15 +206,31 @@ export class SeasonPartyRoom extends Room<SeasonPartyRoomState> {
         });
     }
 
-    onAuth(client: Client, {token}: any = {}) {
-        const player = this.state.players.find(p => p.token === token);
+    onAuth(client: Client, options: any = {}) {
+        //A spectator needs no token and takes no seat (rooms/spectator.ts).
+        if (wantsToSpectate(options)) return spectatorAuth();
+        const player = this.state.players.find(p => p.token === options?.token);
         if (!player || player.left || player.client) return false;
         return true;
     }
 
     async onJoin(client: Client, {token}: any = {}) {
+        if (isSpectator(client)) {
+            //the courses, so it can draw them; no player index, no ghosts data
+            await this.preparing;
+            client.send(MESSAGE.GAME_DEFINITIONS, {
+                gameDefinitions: this.selectedCourses.map(c => ({courseId: c.alias, type: "season", subType: "1"})),
+                ghostsData: [],
+                playerIndex: -1
+            });
+            this.publishLiveMetadata();
+            return;
+        }
         const player = this.state.players.find(p => p.token === token);
         player.client = client;
+        //listed in */live-games as soon as somebody is in, not only once the
+        //first hole starts: otherwise nobody can find it to watch
+        this.publishLiveMetadata();
         await this.preparing;
         if (player.left) return;
         client.send(MESSAGE.GAME_DEFINITIONS, {
@@ -227,6 +249,23 @@ export class SeasonPartyRoom extends Room<SeasonPartyRoomState> {
             player.client = await this.allowReconnection(client, 20);
         } catch (error) {
             await this.markLeft(player);
+        }
+    }
+
+    //What */live-games shows about this room. Names only, never a wallet.
+    publishLiveMetadata() {
+        try {
+            this.setMetadata({
+                mode: "party",
+                courseId: this.selectedCourses?.[this.state.currentGame]?.alias || "",
+                players: this.state.players.filter(p => !p.left).map(p => p.displayName).filter(Boolean),
+                startedAt: Number(this.state.startTime) || Date.now(),
+                hole: Number(this.state.currentGame) + 1,
+                holes: this.selectedCourses?.length || 4,
+                spectators: this.clients.filter(c => isSpectator(c)).length
+            } as LiveGameMetadata);
+        } catch (error) {
+            console.log("season-party setMetadata error", (error as any)?.message);
         }
     }
 
@@ -561,6 +600,7 @@ export class SeasonPartyRoom extends Room<SeasonPartyRoomState> {
             this.state.started = true;
             //one hole per member still in the party, like their player_game rows
             recordHoleStart("season", this.state.players.filter(p => this.isActive(p)).map(p => p.address));
+            this.publishLiveMetadata();
             this.state.players.forEach(player => {
                 if (!this.isActive(player) || !player.golfPlay) return;
                 player.lastRecordedFrameTime = Date.now();

@@ -19,7 +19,7 @@ import { getPlayer } from '@dcl/sdk/players'
 import { globalStore } from '../services/globalStore/globalStore'
 import { lobbyHudState } from './lobby-hud-state'
 import { lobbyMenuState, closeOrBack, showLobbyView, nextSeasonPrize, seasonPlayState } from './lobby-menu-state'
-import { TutorialView, WorkshopView, PrizesView, DailyMissionsView, SeasonView, MoreGamesView, OptionsView } from './lobby-views'
+import { TutorialView, WorkshopView, PrizesView, DailyMissionsView, SeasonView, MoreGamesView, OptionsView, WatchView } from './lobby-views'
 import { C, hex, fmt, materialIcon } from './ui-theme'
 import { fullLayout, scaler, type Px } from './ui-scale'
 import { P, at, img, imgW, imgBox, text, box, fullFrame, button2, imageButton, squareButton, sideCard, nextPrizeStrip, resIcon, rankBadge, border, energyChip } from './ui2'
@@ -54,11 +54,15 @@ const SOON_TEXT = Color4.create(201 / 255, 207 / 255, 1, 0.8)
 
 // Features of the SDK6 game that this scene does not have yet; the design
 // keeps their buttons, so they show as "soon".
+// WATCH took the first of these slots on 2026-11-04: it is a real feature and
+// the row's leftmost tile is the only one comfortably clear of the explorer's
+// own buttons in the bottom-right corner.
 const SOON = [
-  { icon: 'ic_flag_w', title: 'CUSTOM' },
   { icon: 'ic_map_w', title: 'MY MAPS' },
   { icon: 'ic_cart_w', title: 'SHOP' }
 ]
+const WATCH = hex('#2BD9C6')
+const WATCH_SHADOW = hex('#13796E')
 // MORE GAMES, the last slot of that row (canvas page "Más juegos", OGMainA).
 const MORE_GAMES = hex('#FF8A1F')
 const MORE_GAMES_SHADOW = hex('#A9480A')
@@ -83,6 +87,7 @@ export const LobbyMenu = () => {
   if (lobbyMenuState.view === 'daily') return <DailyMissionsView />
   if (lobbyMenuState.view === 'games') return <MoreGamesView />
   if (lobbyMenuState.view === 'options') return <OptionsView />
+  if (lobbyMenuState.view === 'watch') return <WatchView />
 
   const L = fullLayout()
   const { px, fs } = scaler(L.scale)
@@ -275,8 +280,18 @@ export const LobbyMenu = () => {
   ]
 
   // ---------------------------------------------------------- coming soon
+  const watching = [
+    button2(
+      px,
+      { id: 'watch-games', x: 152, y: 300, w: 80.5, h: 50, color: WATCH, radius: 12, border: 2, borderColor: P.white, shadow: 4, shadowColor: WATCH_SHADOW, row: false, onClick: () => showLobbyView('watch') },
+      [
+        img(px, 'ic_people_w', undefined, undefined, 20 / imgW('ic_people_w')),
+        <Label value="WATCH" fontSize={fs(11)} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(16), margin: { top: px(3) } }} />
+      ]
+    )
+  ]
   const soon = SOON.map((s, i) => {
-    const x = 152 + i * 86.5
+    const x = 152 + (i + 1) * 86.5
     const scale = 18 / Math.max(imgW(s.icon), 1)
     return [
       box(px, `soon-${i}`, x, 300, 80.5, 54, { color: P.navy, radius: 12, border: 2, borderColor: P.navyEdge }),
@@ -287,7 +302,7 @@ export const LobbyMenu = () => {
       ])
     ]
   })
-  const moreX = 152 + SOON.length * 86.5
+  const moreX = 152 + (SOON.length + 1) * 86.5
   const moreGames = [
     button2(
       px,
@@ -338,7 +353,7 @@ export const LobbyMenu = () => {
   // Bottom centre, under the bottom row: clear of the explorer's corners.
   const ping = pingLabel(px, fs, 10, { ...at(px, 152, 355, 120, 16) })
 
-  return fullFrame(L, [...top, ...left, ...season, ...soon, ...moreGames, ...cards, hint, ping])
+  return fullFrame(L, [...top, ...left, ...season, ...watching, ...soon, ...moreGames, ...cards, hint, ping])
 }
 
 // Resource chip of the top bar: the game's icon and the amount.

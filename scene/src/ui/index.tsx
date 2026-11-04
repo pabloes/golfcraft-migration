@@ -18,6 +18,7 @@ import { containLayout, fullLayout, scaler, isSmallCanvas } from './ui-scale'
 import { serverNotificationState } from '../components/lobby/server-notification'
 import { GiveawayCard, GiveawayPoster, giveawayInputSystem } from './giveaway'
 import { PartyNotice } from './party-notice'
+import { SpectateHud } from './spectate-hud'
 import { MobileShootControls } from './mobile-shoot-controls'
 import { isMobile } from '../services/platform'
 import { dismissGameClosedNotice, formatOpeningDay, gameWindowState, showClosedNoticeOnce } from '../services/game-window'
@@ -67,6 +68,7 @@ const ui = () => {
       <RunCompleteScreen />
       <CenterPopup />
       <hud.EndingBanner />
+      <SpectateHud />
       <ServerNotification />
     </UiEntity>
   )

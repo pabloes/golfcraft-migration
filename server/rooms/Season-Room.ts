@@ -12,6 +12,7 @@ import {createFrameReproduction} from "../../common/frame-reproductor";
 import {createEventManager} from "../../scene/golfplay/src/services/EventManagerFactory";
 import {EVENT} from "../../scene/golfplay/src/gameplay-handlers/handler-def";
 import {isEnergyFree} from "../energy";
+import {isSpectator, LiveGameMetadata, spectatorAuth, wantsToSpectate} from "./spectator";
 import MESSAGE from "./mesages";
 import {
     cloneJSON, defaultChestRewardChances, deserializeRecipe,
@@ -186,7 +187,16 @@ export class SeasonRoom extends Room<SeasonRoomState> {
     address: string;
     playerTierSub = 0;
     private selectedCourses: any[];
-    async onAuth(client, {clientInfo, user}, request) {
+    async onAuth(client, options, request) {
+        const {clientInfo, user} = options || {};
+        //A spectator is admitted without resolving anybody and WITHOUT touching
+        //this.PlayFabId / this.address, which identify the room's own player
+        //(rooms/spectator.ts). It is also not subject to the game window: it
+        //is not starting a game.
+        if (wantsToSpectate(options)) {
+            console.log("Season onAuth: spectator");
+            return spectatorAuth();
+        }
         //TODO should check if the user has enough "daily energy"
         console.log("onAuth")
         try{
@@ -403,8 +413,23 @@ export class SeasonRoom extends Room<SeasonRoomState> {
         });
     }
 
-    async onJoin(client, {realm, user}) {
+    async onJoin(client, {realm, user}: any = {}) {
+        //A spectator gets the course list so it can draw them, and nothing else:
+        //no prepareGame, no physics, no seat in the results.
+        if (isSpectator(client)) {
+            client.send(MESSAGE.GAME_DEFINITIONS, {gameDefinitions:this.selectedCourses.map(c=>({
+                    courseId: c.alias,
+                    type: "season",
+                    subType: "1"
+                })), ghostsData:[]});
+            this.publishLiveMetadata();
+            return;
+        }
         console.log("join", this.PlayFabId, JSON.stringify(user));
+        //listed in */live-games from the moment the player is in, not only
+        //once the first hole starts: otherwise nobody can find it to watch
+        this.user = this.user || user;
+        this.publishLiveMetadata();
         client.send(MESSAGE.GAME_DEFINITIONS, {gameDefinitions:this.selectedCourses.map(c=>({
                 courseId: c.alias,
                 type: "season",
@@ -432,6 +457,7 @@ export class SeasonRoom extends Room<SeasonRoomState> {
             console.log("STARTED = TRUE");
             this.state.started = true;
             recordHoleStart("season", [this.address]);
+            this.publishLiveMetadata();
 
             this.lastRecordedFrameTime = Date.now();
             const position = this.golfPlay.getPhysicBall().body.position;
@@ -861,6 +887,13 @@ console.log("accumulatedValue", JSON.stringify(sortedAccumulatedResult,null, "  
     }
 
     async onLeave(client, consented) {
+        //A spectator leaving is not the player leaving: no reconnection wait,
+        //no abandon penalty, no disposing the game somebody else is playing.
+        if (isSpectator(client)) {
+            console.log("Season: spectator left");
+            this.publishLiveMetadata();
+            return;
+        }
         console.log("leave", this.user?.displayName);
         try {
             if (consented) {
@@ -886,6 +919,24 @@ console.log("accumulatedValue", JSON.stringify(sortedAccumulatedResult,null, "  
 
             console.log("disposing golfplay", this.user?.displayName)
             this.golfPlay?.dispose();
+        }
+    }
+
+    //What */live-games shows about this room without opening it. Names only:
+    //a wallet is never published here.
+    publishLiveMetadata() {
+        try {
+            this.setMetadata({
+                mode: "season",
+                courseId: this.selectedCourses?.[this.state.currentGame]?.alias || this.gameDefinition?.courseId || "",
+                players: [this.user?.displayName || ""].filter(Boolean),
+                startedAt: Number(this.state.startTime) || Date.now(),
+                hole: Number(this.state.currentGame) + 1,
+                holes: this.selectedCourses?.length || 4,
+                spectators: this.clients.filter(c => isSpectator(c)).length
+            } as LiveGameMetadata);
+        } catch (error) {
+            console.log("season setMetadata error", (error as any)?.message);
         }
     }
 

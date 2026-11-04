@@ -17,6 +17,8 @@ import { setupUI } from './ui'
 import { startGameWindow } from './services/game-window'
 import { startSceneBounds } from './components/scene-bounds'
 import { teleportVerified } from './services/safe-teleport'
+import { lobbyMenuState } from './ui/lobby-menu-state'
+import { setSpectatorLobbyHooks, startSpectating } from './components/lobby/spectator-client'
 import { GAME_SPAWN } from './components/spawns'
 
 // A breath between the last hole and being put back in the lobby, so the run
@@ -56,9 +58,20 @@ export async function main() {
     console.log('[main] bootstrap done')
     // Monthly game window (services/game-window.ts) for this wallet.
     startGameWindow(user.publicKey || user.userId)
+    // Watching somebody else's game: the lobby dialog's WATCH view calls this,
+    // and only main() holds the colyseus client.
+    lobbyMenuState.actions.spectate = (roomId: string, label: string) => {
+      void startSpectating(colyseus, roomId, label)
+    }
     // SDK6 joined the shared lobby room at login: attached NFT golf clubs,
     // connected days, passive income (meta/game-lobby.ts). Not awaited.
     joinGameLobby({ colyseus, user, PlayFabId, realm }).catch((err) => console.log('[main] game lobby failed', err))
+
+    // The watched course is drawn where the lobby stands, so the building goes
+    // while watching, the same way it does while playing. Wired after
+    // spawnLobby exists: a closure over a const declared later is a trap the
+    // SDK7 sandbox does not forgive (CLAUDE.md section 3, TDZ).
+    const wireSpectatorLobby = () => setSpectatorLobbyHooks(() => destroyBuilding(), () => spawnLobby())
 
     const spawnLobby = () => {
       console.log('[main] spawnLobby (building + golfclub board + NPC)')
@@ -161,6 +174,7 @@ export async function main() {
       createNpcTest(sceneRoot, npcOpts)
     }
 
+    wireSpectatorLobby()
     spawnLobby()
     // SDK6 lobby.ts created them once with the lobby; they hide and show
     // themselves around games, so a respawned lobby doesn't recreate them.

@@ -192,6 +192,40 @@ app.use('*/ping', (req, res)=>{
 //public counters for golfcraftgame.com/stats: everyone in the scene is in
 //gameLobbyRoom, and a player in a match also sits in one of the game rooms
 const NON_GAME_ROOMS = ["gameLobbyRoom", "season-party-lobby", "LiveTournamentLobbyRoom", "ping"];
+//The games being played right now, for the scene's spectator view
+//(rooms/spectator.ts). Only rooms that published metadata are listed, which
+//today means a Ranked run and a Ranked party; a room has to opt in by calling
+//publishLiveMetadata, so nothing is exposed by accident. Names only: no wallet
+//and no PlayFabId ever leaves this endpoint.
+app.get('*/live-games', async (req, res)=>{
+  try{
+    const rooms = await matchMaker.query({});
+    const games = rooms
+        .filter(room => (room.metadata as any)?.mode)
+        .map(room => {
+          const meta = room.metadata as any;
+          return {
+            roomId: room.roomId,
+            name: room.name,
+            mode: meta.mode,
+            courseId: meta.courseId || "",
+            players: Array.isArray(meta.players) ? meta.players.slice(0, 32) : [],
+            startedAt: Number(meta.startedAt) || 0,
+            hole: Number(meta.hole) || 1,
+            holes: Number(meta.holes) || 4,
+            spectators: Number(meta.spectators) || 0
+          };
+        })
+        //the one that started most recently first: it has the longest left to watch
+        .sort((a, b) => b.startedAt - a.startedAt);
+    res.set("Cache-Control", "no-store");
+    res.send({games});
+  }catch(error){
+    console.log("/live-games error", error);
+    res.status(500).send({error: "unavailable"});
+  }
+});
+
 app.get('*/online', async (req, res)=>{
   try{
     const rooms = await matchMaker.query({});

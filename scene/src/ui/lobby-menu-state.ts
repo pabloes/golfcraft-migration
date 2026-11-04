@@ -37,7 +37,7 @@ export type LeaderboardEntry = {
   points: number
 }
 
-export type LobbyMenuView = 'lobby' | 'season' | 'tutorial' | 'workshop' | 'prizes' | 'daily' | 'games' | 'options'
+export type LobbyMenuView = 'lobby' | 'season' | 'tutorial' | 'workshop' | 'prizes' | 'daily' | 'games' | 'options' | 'watch'
 
 export const lobbyMenuState: {
   visible: boolean
@@ -59,6 +59,8 @@ export const lobbyMenuState: {
   // PRIZES and SEASON: the Season's current top 10 (empty until fetched or on failure).
   leaderboard: LeaderboardEntry[]
   leaderboardFetchedAt: number
+  //which page of the WATCH list is shown
+  watchPage: number
   actions: {
     playSeason: (() => void) | null
     playWithFriends: (() => void) | null
@@ -68,6 +70,9 @@ export const lobbyMenuState: {
     friendsAction: (() => string) | null
     // The waiting party's rank (it plays at the host's level), -1 when none.
     friendsRoomTier: (() => number) | null
+    //Watch a game somebody else is playing (components/lobby/spectator-client.ts).
+    //index.ts sets it, because only it holds the colyseus client.
+    spectate: ((roomId: string, label: string) => void) | null
   }
 } = {
   visible: false,
@@ -81,7 +86,8 @@ export const lobbyMenuState: {
   prizesTab: null,
   leaderboard: [],
   leaderboardFetchedAt: 0,
-  actions: { playSeason: null, playWithFriends: null, friendsLabel: null, friendsAction: null, friendsRoomTier: null }
+  watchPage: 0,
+  actions: { playSeason: null, playWithFriends: null, friendsLabel: null, friendsAction: null, friendsRoomTier: null, spectate: null }
 }
 
 const PRIZES_TTL_MS = 60 * 1000

@@ -35,6 +35,8 @@ import { getCatFromTier, getLevelInfo, getPointsOnCurrentTier, getPointsToTier, 
 import { TIER_CATEGORIES, TIER_COLORS } from '../../../common/constants'
 // @ts-ignore - season-tier-definitions has @ts-nocheck
 import { seasonTierDefinitions } from '../../../common/season-tier-definitions'
+// WATCH: the games being played right now (2026-11-04).
+import { liveGamesAreStale, liveGamesState, refreshLiveGames, type LiveGame } from '../services/live-games'
 
 const back = () => showLobbyView('lobby')
 const tierOf = (tierSub: number) => Number(getTierFromSub(tierSub) || 0)
@@ -965,5 +967,98 @@ export const OptionsView = () => {
     text(px, fs, 'CONTROLS', 15, 66, 120, 16, 12, P.pale),
     text(px, fs, 'Pick how you aim and shoot on a computer. Phones always use the touch controls. Saved to your account, applies from your next hole.', 15, 86, 122, 130, 11, P.white, 'middle-left', true),
     ...cards.flat()
+  ])
+}
+
+// ---------------------------------------------------------------------------
+// WATCH: the games being played right now (user request, 2026-11-04).
+//
+// The list comes from the game server itself (services/live-games.ts), which
+// is the only thing that knows what rooms exist. Rows, not cards, because the
+// number of games is not bounded by anything.
+const WATCH_ROW_H = 40
+const WATCH_GAP = 4
+const WATCH_ROWS = 5
+
+const modeName = (mode: string) => (mode === 'party' ? 'Ranked with friends' : 'Ranked')
+
+export const WatchView = () => {
+  const L = fullLayout()
+  const { px, fs } = scaler(L.scale)
+  // Asked when the view opens and refreshed while it is open: nobody needs
+  // this list unless they are looking at it.
+  if (liveGamesAreStale()) void refreshLiveGames()
+  const games = liveGamesState.games
+  const page = Math.max(0, lobbyMenuState.watchPage || 0)
+  const pages = Math.max(1, Math.ceil(games.length / WATCH_ROWS))
+  const shown = games.slice(page * WATCH_ROWS, (page + 1) * WATCH_ROWS)
+
+  const row = (game: LiveGame, i: number) => {
+    const y = 64 + i * (WATCH_ROW_H + WATCH_GAP)
+    const who = game.players.length ? game.players.join(', ') : 'somebody'
+    return [
+      box(px, `watch-${i}`, 152, y, 400, WATCH_ROW_H, { color: P.navy, radius: 10, border: 2, borderColor: P.navyEdge }),
+      text(px, fs, who.length > 38 ? `${who.slice(0, 37)}…` : who, 162, y + 4, 250, 16, 13),
+      text(px, fs, `${modeName(game.mode)} · hole ${game.hole}/${game.holes}${game.spectators ? ` · ${game.spectators} watching` : ''}`, 162, y + 21, 250, 14, 10, P.pale),
+      button2(
+        px,
+        {
+          id: `watch-go-${i}`,
+          x: 460,
+          y: y + 6,
+          w: 82,
+          h: 28,
+          color: C.yellow,
+          radius: 8,
+          onClick: () => {
+            const spectate = lobbyMenuState.actions.spectate
+            if (!spectate) return
+            closeLobbyMenu()
+            spectate(game.roomId, who)
+          }
+        },
+        [<Label value="WATCH" fontSize={fs(12)} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />]
+      )
+    ]
+  }
+
+  const empty = !games.length
+  return fullFrame(L, [
+    squareButton(px, 'view-back', 140, 6, 'ic_chev_left_w', 0.8, back),
+    box(px, 'watch-title', 194, 9, 240, 38, { color: P.navyDeep, radius: 12, border: 2, borderColor: P.navyEdge, justify: 'center', align: 'center' }, [
+      <Label value="GAMES BEING PLAYED" fontSize={fs(15)} color={C.yellow} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />
+    ]),
+    squareButton(px, 'view-close', 617, 6, 'ic_close_w', 0.67, closeLobbyMenu),
+
+    box(px, 'watch-info', 6, 58, 140, 172, { color: P.navyDeep, radius: 14, border: 2, borderColor: P.navyEdge }),
+    text(px, fs, 'WATCH', 15, 66, 120, 16, 12, P.pale),
+    text(px, fs, 'Drop into a game somebody is playing and follow the ball. You can leave whenever you like; the player is not disturbed.', 15, 86, 122, 130, 11, P.white, 'middle-left', true),
+
+    empty
+      ? text(
+          px,
+          fs,
+          liveGamesState.error || (liveGamesState.loading ? 'Looking for games…' : 'Nobody is playing right now'),
+          152,
+          120,
+          400,
+          20,
+          13,
+          P.pale,
+          'middle-center'
+        )
+      : null,
+    ...shown.map((game, i) => row(game, i)).flat(),
+    pages > 1
+      ? button2(px, { id: 'watch-prev', x: 152, y: 290, w: 44, h: 32, color: P.navy, radius: 8, border: 2, borderColor: P.navyEdge, disabled: page === 0, onClick: () => (lobbyMenuState.watchPage = page - 1) }, [
+          img(px, 'ic_chev_left_w', undefined, undefined, 0.7)
+        ])
+      : null,
+    pages > 1 ? text(px, fs, `${page + 1} / ${pages}`, 200, 296, 60, 16, 12, P.white, 'middle-center') : null,
+    pages > 1
+      ? button2(px, { id: 'watch-next', x: 264, y: 290, w: 44, h: 32, color: P.navy, radius: 8, border: 2, borderColor: P.navyEdge, disabled: page >= pages - 1, onClick: () => (lobbyMenuState.watchPage = page + 1) }, [
+          img(px, 'ic_chev_right_w', undefined, undefined, 0.7)
+        ])
+      : null
   ])
 }
