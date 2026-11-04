@@ -329,6 +329,7 @@ export const createSeasonParty = async (
     seasonWaitState.visible = true
     seasonWaitState.mode = 'party'
     seasonWaitState.title = `Ranked with friends (${members.length}/${maxPlayers()})`
+    seasonWaitState.maxPlayers = maxPlayers()
     seasonWaitState.secondsLeft = secondsLeft
     seasonWaitState.roomTierName = tierName
     seasonWaitState.info =

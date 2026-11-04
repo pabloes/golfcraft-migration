@@ -25,6 +25,8 @@ import { P, at, img, imgW, text, box, fullFrame, button2, yellowTag, resIcon, ra
 import { getCatFromTier, getPointsOnCurrentTier, getTierFromSub, seasonPointsPerCategory } from '../../../common/utils'
 // @ts-ignore - season-tier-definitions has @ts-nocheck
 import { seasonTierDefinitions } from '../../../common/season-tier-definitions'
+// A party is no longer four, so its members are a list, not four cards.
+import { partyMemberList } from './party-list'
 
 const SLOTS = 4
 const SALMON = hex('#FFB4A6')
@@ -182,29 +184,12 @@ export const PartyScreen = () => {
   const { px, fs } = scaler(L.scale)
   const alone = w.players.length < 2
   const roomTier = tierIndexByName(w.roomTierName)
+  // The cap the lobby room published; 0 until its first state patch.
+  const cap = w.maxPlayers || w.players.length
 
-  const seats: any[] = []
-  for (let i = 0; i < SLOTS; i++) {
-    const p = w.players[i]
-    if (!p) {
-      seats.push(emptySeat(px, fs, `party-seat-${i}`, i, 'Waiting for a friend', true))
-      continue
-    }
-    const x = SEAT_X(i)
-    seats.push(
-      playerSeat(px, fs, `party-seat-${i}`, i, !!p.isHost, p, [
-        p.isHost
-          ? box(px, `party-host-${i}`, x + SEAT_W - 40, 62, 36, 14, { color: C.yellow, radius: 6, justify: 'center', align: 'center' }, [
-              <Label value="HOST" fontSize={fs(9)} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />
-            ])
-          : null,
-        p.tierName ? seatRank(px, fs, `party-rank-${i}`, i, 146, tierIndexByName(p.tierName), p.tierName) : null,
-        p.eligible === false
-          ? text(px, fs, 'Above room level: plays free, no season points', x + 6, 166, SEAT_W - 12, 40, 10, C.yellow, 'middle-center', true)
-          : text(px, fs, 'Scores season points', x + 6, 170, SEAT_W - 12, 16, 10, P.green, 'middle-center')
-      ])
-    )
-  }
+  // One row per member instead of four cards: a party can hold a lot more
+  // than four now, and four cards is all the width there was.
+  const seats = partyMemberList(px, fs, w.players, cap, 152, 58, 340, 156, seasonTierDefinitions)
 
   const note = (key: string, icon: string, y: number, value: string) => [
     img(px, icon, 14, y + 2, 14 / Math.max(1, imgW(icon))),
@@ -213,11 +198,11 @@ export const PartyScreen = () => {
 
   return fullFrame(L, [
     img(px, 'rb_friends', 140, 9, 0.55),
-    topPill(px, fs, 'party-count', 412, 100, `${w.players.length} / ${SLOTS}`, 'players'),
+    topPill(px, fs, 'party-count', 412, 100, `${w.players.length} / ${cap}`, 'players'),
     countdown(px, fs, 'party-timer', 518, 143, alone ? 'Cancels in' : 'Starts in', `${w.secondsLeft}s`),
 
     box(px, 'party-rules', 6, 58, 140, 188, { color: P.navy, radius: 14, border: 2, borderColor: P.navyEdge }),
-    ...note('party-rule-1', 'ic_people_w', 64, `Friends see JOIN PARTY (${w.players.length}/${SLOTS}) on their Season screen`),
+    ...note('party-rule-1', 'ic_people_w', 64, `Friends see JOIN PARTY (${w.players.length}/${cap}) on their Season screen`),
     ...note('party-rule-2', 'ic_flag_w', 122, 'Same 4 holes for everyone, each player races 3 rivals'),
     ...note('party-rule-3', 'ic_timer_w', 180, 'Starts on its own after 60 s with no one joining or leaving'),
 

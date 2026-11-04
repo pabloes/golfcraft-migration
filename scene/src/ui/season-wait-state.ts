@@ -30,6 +30,9 @@ export type SeasonWaitState = {
   // Party: the caption under the title and the host's START button.
   info: string
   onStart: (() => void) | null
+  // Party: how many fit, as the lobby room publishes it (the admin can change
+  // it without a deploy, so nothing here may hardcode a number).
+  maxPlayers: number
 }
 
 export const seasonWaitState: SeasonWaitState = {
@@ -42,5 +45,6 @@ export const seasonWaitState: SeasonWaitState = {
   sub: '',
   onCancel: null,
   info: '',
-  onStart: null
+  onStart: null,
+  maxPlayers: 0
 }
