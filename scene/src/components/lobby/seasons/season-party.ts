@@ -27,7 +27,7 @@ import { returnToMenuIfRequested } from '../../../ui/lobby-menu-state'
 // `partyMaxPlayers`) and publishes it in the lobby state, so the captions and
 // the full-party check here can never disagree with what the server enforces.
 // The fallback only matters before the first state patch arrives.
-const MAX_PARTY_FALLBACK = 16
+const MAX_PARTY_FALLBACK = 32
 // A CREATE / JOIN the lobby never answers (no state with me in it, no
 // PARTY_ERROR) means the socket died without closing: rejoin.
 const ANSWER_TIMEOUT_MS = 10000

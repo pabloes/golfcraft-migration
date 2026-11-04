@@ -16,6 +16,12 @@ import { bootstrap } from './meta/bootstrap'
 import { setupUI } from './ui'
 import { startGameWindow } from './services/game-window'
 import { startSceneBounds } from './components/scene-bounds'
+import { teleportVerified } from './services/safe-teleport'
+import { GAME_SPAWN } from './components/spawns'
+
+// A breath between the last hole and being put back in the lobby, so the run
+// does not end with a jump cut (user, 2026-11-04). It happens behind the fade.
+const RUN_END_TELEPORT_DELAY_MS = 1500
 import { returnToMenuIfRequested } from './ui/lobby-menu-state'
 import { joinGameLobby } from './meta/game-lobby'
 import { createStreamScreens } from './components/lobby/stream-screens/stream-screens'
@@ -95,15 +101,20 @@ export async function main() {
               // the black window to a known length; the refresh carries on and
               // the HUD picks it up whenever it lands.
               await Promise.race([refreshUserData(), sleep(8000)])
-              await sleep(500)
-              // No teleport back to the lobby spawn (user, 2026-11-04). The one
-              // that used to be here misfired in production: players reported
-              // landing outside the scene, and sometimes in Genesis Plaza. The
-              // run keeps the avatar inside the course the whole time
-              // (avatar-lock.ts), so when it ends the player is already
-              // somewhere valid and can simply walk back. A teleport that can
-              // put somebody outside the scene is worse than no teleport,
-              // because the explorer will not move a player who is already out.
+              // Back to the lobby when the RUN ends, not when a hole ends
+              // (user, 2026-11-04). It is the same teleport that used to
+              // strand players, with the two things it was missing: the wall
+              // (components/scene-bounds.ts) means the player cannot be
+              // outside the scene by now, which is the condition the explorer
+              // silently requires, and teleportVerified reads the position
+              // back instead of trusting a call that resolves either way.
+              await sleep(RUN_END_TELEPORT_DELAY_MS)
+              const [spawnPos, spawnCam] = GAME_SPAWN.TRAINING
+              const landed = await teleportVerified(
+                Vector3.create(spawnPos.x, spawnPos.y, spawnPos.z),
+                Vector3.create(spawnCam.x, spawnCam.y, spawnCam.z)
+              )
+              if (!landed) console.log('[main] the player could not be moved back to the lobby')
             } finally {
               // The run held the avatar still from its first tee
               // (orbit-camera.ts); only free it once it is back in the lobby,
