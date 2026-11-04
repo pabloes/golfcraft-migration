@@ -482,20 +482,48 @@ async function golfclubCalls(datas: string[]): Promise<number[]> {
   }
 }
 
+type OwnedClub = { tokenId: string; model: number }
+
+// Preferred source: our own index (web/server/nft/), which follows the
+// contract's Transfer events, so this is one plain GET against an endpoint we
+// own instead of three RPC rounds against a public node. `ready` tells an
+// empty answer ("this wallet owns none") from an index that is still seeding,
+// and only a ready one is believed; anything else falls through to the chain.
+async function fetchNftGolfclubsFromIndex(address: string): Promise<OwnedClub[] | null> {
+  const base = USE_REMOTE_SERVER ? 'https://golfcraftgame.com' : 'http://localhost:2569'
+  try {
+    const answer = await fetch(`${base}/api/nft-golfclubs?address=${address}`).then((r) => r.json())
+    if (!answer?.ready || !Array.isArray(answer.clubs)) {
+      console.log('[bootstrap] NFT club index not ready, reading the contract')
+      return null
+    }
+    return answer.clubs
+      .filter((c: any) => c && c.model !== null && c.model !== undefined)
+      .map((c: any) => ({ tokenId: String(c.tokenId), model: Number(c.model) }))
+  } catch (err) {
+    console.log('[bootstrap] NFT club index unreachable, reading the contract:', err)
+    return null
+  }
+}
+
+async function fetchNftGolfclubsFromChain(address: string): Promise<OwnedClub[]> {
+  const [balance] = await golfclubCalls(['0x70a08231' + word(address)])
+  const count = Math.min(balance || 0, MAX_NFT_GOLFCLUBS)
+  console.log('[bootstrap] NFT golf clubs on chain:', balance, 'for', address)
+  if (!count) return []
+  const indexes = Array.from({ length: count }, (_, i) => i)
+  const tokenIds = await golfclubCalls(indexes.map((i) => '0x2f745c59' + word(address) + word(i.toString(16))))
+  const models = await golfclubCalls(tokenIds.map((t) => '0x1f56940f' + word(t.toString(16))))
+  return tokenIds.map((tokenId, i) => ({ tokenId: String(tokenId), model: models[i] }))
+}
+
 async function fetchNftGolfclubs(address: string, inventory: any[]): Promise<any[]> {
   nftClubsReadFailed = false
   if (!/^0x[0-9a-f]{40}$/.test(address)) return []
   try {
-    const [balance] = await golfclubCalls(['0x70a08231' + word(address)])
-    const count = Math.min(balance || 0, MAX_NFT_GOLFCLUBS)
-    console.log('[bootstrap] NFT golf clubs on chain:', balance, 'for', address)
-    if (!count) return []
-    const indexes = Array.from({ length: count }, (_, i) => i)
-    const tokenIds = await golfclubCalls(indexes.map((i) => '0x2f745c59' + word(address) + word(i.toString(16))))
-    const models = await golfclubCalls(tokenIds.map((t) => '0x1f56940f' + word(t.toString(16))))
+    const owned = (await fetchNftGolfclubsFromIndex(address)) ?? (await fetchNftGolfclubsFromChain(address))
     const known = new Set(inventory.map((i) => String(i.CustomData?.tokenId || '')))
-    const clubs = tokenIds
-      .map((tokenId, i) => ({ tokenId: String(tokenId), model: models[i] }))
+    const clubs = owned
       .filter((c) => !known.has(c.tokenId))
       .map(({ tokenId, model }) => ({
         ItemId: `golfclub-${model}`,
@@ -508,7 +536,7 @@ async function fetchNftGolfclubs(address: string, inventory: any[]): Promise<any
     console.log('[bootstrap] NFT golf clubs:', clubs.map((c) => `${c.CustomData.tokenId}:${c.ItemId}`).join(' ') || 'none')
     return clubs
   } catch (err) {
-    console.log('[bootstrap] NFT golf clubs RPC failed:', err)
+    console.log('[bootstrap] NFT golf clubs read failed:', err)
     nftClubsReadFailed = true
     return []
   }

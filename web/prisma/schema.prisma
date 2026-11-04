@@ -421,3 +421,24 @@ model market_supply {
 
   @@id([day, contractAddress, tokenId])
 }
+
+//Who owns each golf club NFT right now, from the contract's Transfer events
+//(web/server/nft/indexer.ts). `model` is getGolfclubId, written once at mint.
+model nft_owner {
+  contractAddress String   @db.VarChar(45)
+  tokenId         Int
+  owner           String   @db.VarChar(45)
+  model           Int?
+  updatedAt       DateTime @db.DateTime(0)
+
+  @@id([contractAddress, tokenId])
+  @@index([contractAddress, owner], map: "idx_nft_owner_owner")
+}
+
+//How far the index above has read, per contract.
+model nft_sync {
+  contractAddress String    @id @db.VarChar(45)
+  lastBlock       BigInt    @default(0)
+  seededAt        DateTime? @db.DateTime(0)
+  updatedAt       DateTime? @db.DateTime(0)
+}

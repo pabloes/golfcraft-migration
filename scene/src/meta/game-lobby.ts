@@ -11,6 +11,7 @@ import { getTierFromSub, sleep } from '../../../common/utils'
 import MESSAGE from '../../../server/rooms/mesages'
 import { globalStore } from '../services/globalStore/globalStore'
 import { clearAttachedGolfclubs, handleAttachedGolfclubs } from '../components/attached-golfclub'
+import { clearAvatarRanks, handleAvatarRanks } from '../components/avatar-rank'
 import { getSessionTicket, refreshUserData } from './bootstrap'
 import { showMessage } from '../components/lobby/server-notification'
 import { reportPing } from '../ui/ping-state'
@@ -60,14 +61,20 @@ export async function joinGameLobby(opts: JoinOptions): Promise<void> {
       sendPing()
       const pingTimer = setInterval(sendPing, 5000)
 
-      // The players map arrives with the first state patch.
-      lobbyRoom.onStateChange.once(() => handleAttachedGolfclubs(lobbyRoom, { realm, address: user.publicKey || user.userId }))
+      // The players map arrives with the first state patch. The clubs go
+      // first: avatar-rank chains onto the room callbacks they install.
+      lobbyRoom.onStateChange.once(() => {
+        const who = { realm, address: user.publicKey || user.userId }
+        handleAttachedGolfclubs(lobbyRoom, who)
+        handleAvatarRanks(lobbyRoom, who)
+      })
 
       lobbyRoom.onLeave((code: number) => {
         console.log('[game-lobby] left', code)
         pingStopped = true
         clearInterval(pingTimer)
         clearAttachedGolfclubs()
+        clearAvatarRanks()
         // 4000+ are the server's own closes (consented / kicked): stay out.
         if (code < 4000) {
           sleep(5000).then(() => joinGameLobby(opts))

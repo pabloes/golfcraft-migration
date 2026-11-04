@@ -48,6 +48,10 @@ enum MESSAGE {
     PARTY_START,
     PARTY_STARTED,
     PARTY_CANCELLED,
-    PARTY_ERROR
+    PARTY_ERROR,
+    // The sender's current rank, so the badge over their avatar follows a
+    // rank-up without rejoining (scene/src/components/avatar-rank.ts).
+    // Appended, like the party messages: never renumber this enum.
+    ACTIVE_TIER
 }
 export default MESSAGE

@@ -15,6 +15,7 @@ import {PrismaClient} from "@prisma/client";
 import {dailyMissionsApi} from "./daily-missions";
 import {statsApi} from "./stats";
 import {marketApi} from "./market";
+import {nftApi} from "./nft";
 import {authApi} from "./auth";
 import {raffle} from "./raffle/raffle";
 import {promisify} from "util";
@@ -123,6 +124,7 @@ router.use(express.json());
     seasonsApi(router, prisma);
     statsApi(router, prisma);
     marketApi(router, prisma);
+    nftApi(router, prisma);
     authApi(router, prisma);
 
     await dailyMissionsApi(router, process.env.PROD);

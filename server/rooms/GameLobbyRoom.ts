@@ -15,6 +15,7 @@ import {USE_REMOTE_SERVER} from "../../common/constants";
 import * as crypto from 'crypto';
 import {promisify} from "util";
 import { discordHook } from '../../common/discord-hooks'
+import {getNftGolfclubModelCount} from "../nft-golfclubs";
 
 export const getLobbyRoom = () => lobbyRoom;
 const setLobbyRoom = (room) => lobbyRoom = room;
@@ -115,6 +116,18 @@ export class GameLobbyRoom extends Room<LobbyState> {
             const player = this.state.players.get(client.sessionId)
             player.activeGolfclub = Number(id);
             console.log("player", player.toJSON());
+        });
+
+        //The rank badge every client draws over this player's avatar
+        //(scene/src/components/avatar-rank.ts). onJoin takes the tier from the
+        //join options and never looks again, so a rank-up mid-session would
+        //only show to others after a rejoin. Clamped to the real tier range.
+        this.onMessage(MESSAGE.ACTIVE_TIER, (client, tier)=>{
+            const player = this.state.players.get(client.sessionId);
+            if(!player) return;
+            const value = Number(tier);
+            if(isNaN(value) || value < 0 || value > 49) return;
+            player.tier = value;
         });
 
         this.onMessage(MESSAGE.LEAVE_DEMO_ROOM, (client) => {
@@ -226,24 +239,21 @@ export class GameLobbyRoom extends Room<LobbyState> {
             });
         }
         if((Date.now() - ((lastTimeEnergyBonusReceived||0)*1000)) > A_DAY){
+            //+1 Energy per DISTINCT golf club model the wallet holds, once a
+            //day. The club list used to come from a The Graph subgraph that
+            //has had no indexer allocated since January, so this paid nobody
+            //between 2026-01-08 and this change; it now reads our own index
+            //(web/server/nft/), which follows the contract's Transfer events.
+            //As in SDK6 the statistic is only stamped when something was
+            //actually paid, so a player who buys their first club gets it on
+            //their next connection instead of waiting a day.
             let energyBonus = 0;
             const address = user.publicKey;
             try{
-                const result = await fetch(`https://gateway-arbitrum.network.thegraph.com/api/${process.env.THEGRAPH_API_KEY}/subgraphs/id/Ccskr6qXCAGpb6h43rYNzQsQzmwMPgSTyPB3rwgyTYm5`, {
-                    headers:{"Content-Type":"application/json"},
-                    body:JSON.stringify({
-                        "query":`{\n  golfclubs(where:{player:\"${address}\"}) {\n    id, golfclubid  }\n}`
-                        }),
-                    method:"POST"
-                }).then(r => r.json(), (err) =>{ throw err });
-                const idMap = result.data.golfclubs.map(g=>g.golfclubid).reduce((acc, current)=>{
-                    acc[current]=true
-                    return acc;
-                },{});
-                console.log("golfclub idMap",idMap)
-                energyBonus += idMap? Object.keys(idMap).length :0;
+                energyBonus = await getNftGolfclubModelCount(address);
+                console.log("golfclub models for the energy bonus", address, energyBonus);
             }catch (error){
-                console.error("fetch theGraph golfclubs error",redactError(error))
+                console.error("nft golfclub index error",redactError(error))
             }
 
             if(energyBonus){
