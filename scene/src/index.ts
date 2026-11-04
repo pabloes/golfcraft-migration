@@ -15,6 +15,7 @@ import { sleep } from '../../common/utils'
 import { bootstrap } from './meta/bootstrap'
 import { setupUI } from './ui'
 import { startGameWindow } from './services/game-window'
+import { startSceneBounds } from './components/scene-bounds'
 import { returnToMenuIfRequested } from './ui/lobby-menu-state'
 import { joinGameLobby } from './meta/game-lobby'
 import { createStreamScreens } from './components/lobby/stream-screens/stream-screens'
@@ -38,6 +39,11 @@ export async function main() {
 
   const sceneRoot: Entity = engine.addEntity()
   Transform.create(sceneRoot, { position: Vector3.create(24, 0, 24) })
+
+  // An invisible wall around the block (and a floor under it) while a hole is
+  // on, so nobody can walk or fall out of the scene. Without it, "no teleport
+  // at the end of a hole" only holds for the modes that lock the avatar.
+  startSceneBounds()
 
   try {
     const { colyseus, PlayFabId, user, realm } = await bootstrap()
@@ -84,7 +90,11 @@ export async function main() {
               gameState.playing = false
               gameState.courseId = null
               spawnLobby()
-              await refreshUserData()
+              // Bounded: it hits PlayFab, a Polygon RPC and our own API, and
+              // it runs with the screen black. Racing it against a sleep keeps
+              // the black window to a known length; the refresh carries on and
+              // the HUD picks it up whenever it lands.
+              await Promise.race([refreshUserData(), sleep(8000)])
               await sleep(500)
               // No teleport back to the lobby spawn (user, 2026-11-04). The one
               // that used to be here misfired in production: players reported

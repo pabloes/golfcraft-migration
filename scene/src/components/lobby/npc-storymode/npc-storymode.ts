@@ -928,7 +928,11 @@ export const createNpcTest = (parent: Entity, opts: CreateNpcOptions): Entity | 
       // COMPLETED, so the write is already done; the short wait just covers
       // PlayFab read-after-write. (SDK6 called refreshUserData() here.)
       await sleep(1000)
-      await refreshUserData()
+      // Bounded: this hits PlayFab, a Polygon RPC and our own API, and it runs
+      // with the screen black and the player standing on a course that is
+      // already gone. Unbounded it could hold that state for as long as the
+      // slowest of them took.
+      await withTimeout(refreshUserData(), 8000).catch((err) => console.log('[npc] refresh after the mission failed', err))
       await opts.onFinish(leaveCode) // respawn lobby (= SDK6 show())
       // SDK6 teleported back to GAME_SPAWN.MISSION here (handleLeavePlay). Taken
       // out on 2026-11-04 at the user's request: in production that teleport

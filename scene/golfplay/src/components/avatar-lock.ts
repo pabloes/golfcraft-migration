@@ -23,9 +23,15 @@ import { Vector3 } from '@dcl/sdk/math'
 import { movePlayerTo } from '~system/RestrictedActions'
 
 const RUN_LOCK_MAX_MS = 180000
-// Scene-local metres of the 3x3 parcel block the courses and the lobby sit in.
-const FENCE_MIN = 1
-const FENCE_MAX = 47
+// Scene-local metres of the 3x3 parcel block the courses and the lobby sit in,
+// whose real borders are 0 and 48. The margin used to be 1 m, which at running
+// speed is about a fifth of a second: less than one scene tick while a course
+// is loading, so a player could be past the border before the fence sampled
+// again, and once outside the fence's own movePlayerTo is refused like every
+// other (components/scene-bounds.ts explains why). The wall is the real
+// defence now; this stays as the backstop for the moment before it is up.
+const FENCE_MIN = 3
+const FENCE_MAX = 45
 let lockedForRun = false
 let activeCameras = 0
 let lastReleaseAt = 0
@@ -54,7 +60,14 @@ const fence = () => {
 export const freeAvatarForNow = () => {
   if (!lockedForRun || activeCameras) return
   freeForNow = true
-  lastInside = null
+  // Seed it with where the player is standing right now (on the ball, at the
+  // hole). Starting from null meant that a player whose very first sample was
+  // already outside got yanked to the middle of the scene, at the ball's
+  // height, instead of back to where they were a step earlier.
+  const standing = Transform.getOrNull(engine.PlayerEntity)
+  lastInside = standing && inside(standing.position)
+    ? Vector3.create(standing.position.x, standing.position.y, standing.position.z)
+    : null
   InputModifier.deleteFrom(engine.PlayerEntity)
   if (!fenceAdded) {
     fenceAdded = true
