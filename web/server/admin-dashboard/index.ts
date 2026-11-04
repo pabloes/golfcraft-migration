@@ -11,12 +11,18 @@
 // to reach the other tables. This page is a standalone HTML file plus its own
 // JSON API, like stats/ and market/, so there is no client rebuild.
 //
-// AUTHENTICATION: one shared token in ADMIN_DASHBOARD_TOKEN, sent as the
-// `x-admin-token` header (never a query string, which ends up in access logs).
-// With no token set, every route here REFUSES, page included: an admin page
-// that falls open on a missing env var is worse than no admin page. Nothing
-// here ever answers with a secret, and the token is not in the page's HTML:
-// the owner types it and the browser keeps it in sessionStorage.
+// AUTHENTICATION: one password in ADMIN_DASHBOARD_PASSWORD (the older
+// ADMIN_DASHBOARD_TOKEN is still read, so an existing deploy keeps working
+// until that variable is removed), sent as the `x-admin-token` header, never
+// a query string, which ends up in access logs. With none set, every route
+// here REFUSES, page included: an admin page that falls open on a missing env
+// var is worse than no admin page. Nothing here ever answers with a secret,
+// and it is not in the page's HTML: the owner types it and the browser keeps
+// it in sessionStorage.
+//
+// Nothing the public can reach names an environment variable. A stranger who
+// finds this URL gets "wrong password" and no hint about how it is wired
+// (user, 2026-11-04); the operator's detail goes to the server log instead.
 //
 // `gameWindow` carries the wallet allow-list, which is why /api/config filters
 // it out. It is served HERE, to an authenticated caller only.
@@ -29,8 +35,8 @@ import {FreeEnergyConfig, getFreeEnergyStatus} from "../../../common/free-energy
 import {GameWindowConfig, getGameWindowStatus} from "../../../common/game-window";
 
 const PAGE = path.resolve(__dirname, "dashboard.html");
-//a 4-character token on a public URL guarding a broadcast to every player is
-//not a password; refuse and say so rather than pretend it is one
+//a 4-character password on a public URL guarding a broadcast to every
+//player is not a password; refuse rather than pretend it is one
 const TOKEN_MIN = 12;
 const WS_TIMEOUT_MS = 5000;
 //the config table's key column is VARCHAR(45)
@@ -207,11 +213,11 @@ const KNOWN: {[key: string]: KnownKey} = {
 };
 
 export function adminDashboardApi(router, prisma: PrismaClient) {
-    const token = process.env.ADMIN_DASHBOARD_TOKEN || "";
+    const token = process.env.ADMIN_DASHBOARD_PASSWORD || process.env.ADMIN_DASHBOARD_TOKEN || "";
     const configured = token.length >= TOKEN_MIN;
     //never the value, and never a hint of how wrong it is beyond the length rule
-    if (!token) console.log("ADMIN_DASHBOARD_TOKEN is not set: /admin-dashboard will refuse every request");
-    else if (!configured) console.log(`ADMIN_DASHBOARD_TOKEN is shorter than ${TOKEN_MIN} characters: /admin-dashboard will refuse every request`);
+    if (!token) console.log("ADMIN_DASHBOARD_PASSWORD is not set: /admin-dashboard will refuse every request");
+    else if (!configured) console.log(`ADMIN_DASHBOARD_PASSWORD is shorter than ${TOKEN_MIN} characters: /admin-dashboard will refuse every request`);
 
     function sameToken(given: any): boolean {
         const a = Buffer.from(String(given ?? ""), "utf8");
@@ -222,8 +228,8 @@ export function adminDashboardApi(router, prisma: PrismaClient) {
 
     function requireToken(req, res, next) {
         res.set("Cache-Control", "no-store");
-        if (!configured) return res.status(503).send({error: "the admin dashboard is not configured on this server"});
-        if (!sameToken(req.header("x-admin-token"))) return res.status(401).send({error: "wrong token"});
+        if (!configured) return res.status(503).send({error: "this page is not available"});
+        if (!sameToken(req.header("x-admin-token"))) return res.status(401).send({error: "wrong password"});
         next();
     }
 
@@ -232,8 +238,8 @@ export function adminDashboardApi(router, prisma: PrismaClient) {
     //dashboard whose every button answers 503.
     router.get("/admin-dashboard", (req, res) => {
         res.set("Cache-Control", "no-store");
-        if (!configured) return res.status(503).type("text/plain")
-            .send("The admin dashboard is not configured: set ADMIN_DASHBOARD_TOKEN on this service and restart it.");
+        //the operator reads the reason in the log; a stranger reads nothing
+        if (!configured) return res.status(503).type("text/plain").send("This page is not available.");
         return res.sendFile(PAGE);
     });
 
