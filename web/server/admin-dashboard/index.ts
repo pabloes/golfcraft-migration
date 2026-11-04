@@ -344,7 +344,9 @@ export function adminDashboardApi(router, prisma: PrismaClient) {
             return res.status(answer.status).send(answer.body);
         } catch (error: any) {
             console.log("admin broadcast could not reach the game server", error?.message);
-            return res.status(502).send({error: "the game server did not answer"});
+            return res.status(502).send({error: error?.message === "timeout"
+                ? "the game server did not answer in time"
+                : "the game server could not be reached"});
         }
     });
 
@@ -369,7 +371,23 @@ export function adminDashboardApi(router, prisma: PrismaClient) {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
                 body: JSON.stringify({...body, apiKey: process.env.GOLF_API_KEY})
-            }).then(async r => ({status: r.status, body: await r.json()})),
+            }).then(async r => {
+                //A game server without these routes answers 404 with an HTML
+                //error page, and parsing that as JSON used to surface as "the
+                //game server did not answer", which blames the network for a
+                //server that answered perfectly well (user, 2026-11-04).
+                const text = await r.text();
+                try {
+                    return {status: r.status, body: JSON.parse(text)};
+                } catch (_) {
+                    return {
+                        status: r.status,
+                        body: {error: r.status === 404
+                            ? "the game server does not have this route yet: it needs deploying"
+                            : `the game server answered ${r.status}`}
+                    };
+                }
+            }),
             new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), WS_TIMEOUT_MS))
         ]);
     }

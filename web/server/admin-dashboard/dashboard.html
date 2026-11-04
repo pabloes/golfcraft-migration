@@ -440,7 +440,8 @@
       if (data.error) {
         ["srv-inscene", "srv-playing", "srv-connections", "srv-memory"].forEach(function (id) { fill(id, "–"); });
         el("p", { class: "msg err" }, $("server-rooms"), data.error);
-        $("broadcast-reach").textContent = "server unreachable";
+        //say what the server said, not a guess about the network
+        $("broadcast-reach").textContent = data.error;
         return;
       }
       fill("srv-inscene", data.inScene);
