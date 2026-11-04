@@ -59,6 +59,8 @@
   .game-row:last-child { border-bottom: 0; }
   .game-name { font-weight: 500; }
   .note { color: var(--text-3); font-size: 13px; margin-top: 10px; }
+  .disclaimer { color: var(--text-2); font-size: 14px; line-height: 1.5; margin: 0 0 22px; max-width: 680px;
+                border-left: 3px solid var(--accent); padding: 10px 0 10px 14px; background: rgba(232,65,152,0.07); border-radius: 0 10px 10px 0; }
   footer { display: flex; justify-content: space-between; gap: 16px; color: var(--text-3); font-size: 13px; padding: 24px 16px 32px; }
   .empty { color: var(--text-3); padding: 18px 0; }
   @media (max-width: 900px) { .tiles { grid-template-columns: repeat(2, minmax(0,1fr)); } .two { grid-template-columns: minmax(0,1fr); } }
@@ -73,6 +75,12 @@
 
 <main>
   <p class="lede">Every GolfCraft wearable, emote and collectible traded in the Decentraland marketplace, plus how many of the game's own NFTs exist. <a href="/stats">See the player stats</a>.</p>
+
+  <!-- The owner's point, and the thing these numbers are most likely to be
+       misread as: GolfCraft has never sold an item. Every figure on this page
+       is players reselling something they earned, so none of this money ever
+       reached the game. Said at the top, before any number. -->
+  <p class="disclaimer">GolfCraft has never sold a single item. Every wearable, emote and collectible here was earned by playing, given away free, and the figures below are players reselling them to each other. None of this money went to the game.</p>
 
   <section class="tiles">
     <div class="card tile">
