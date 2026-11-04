@@ -118,7 +118,14 @@ export const seasonPlayState = () => {
   const friendsAction = lobbyMenuState.actions.friendsAction ? lobbyMenuState.actions.friendsAction() : ''
   // While in a party the button is the way out; the 3D board says the same.
   const friendsLabel = lobbyMenuState.actions.friendsLabel ? (friendsAction === 'leave' ? 'LEAVE PARTY' : lobbyMenuState.actions.friendsLabel()) : ''
-  const canFriends = canPlay && !!lobbyMenuState.actions.playWithFriends && friendsLabel !== ''
+  // A party costs ONE energy, paid by whoever opens it (2026-11-04), so only
+  // CREATE needs a bank: joining the party a friend opened, or leaving it,
+  // must work at zero.
+  const partyIsFree = friendsAction === 'join' || friendsAction === 'leave'
+  const canFriends =
+    (canPlay || (partyIsFree && !connecting && gameOpen)) &&
+    !!lobbyMenuState.actions.playWithFriends &&
+    friendsLabel !== ''
   const roomTier = lobbyMenuState.actions.friendsRoomTier ? lobbyMenuState.actions.friendsRoomTier() : -1
   // A party member can't start a solo run as well (the 3D board hides its
   // PLAY too): LEAVE PARTY first.

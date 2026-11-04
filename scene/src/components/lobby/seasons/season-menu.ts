@@ -337,12 +337,15 @@ export const createSeasonMenu = async (
   }
 
   // SDK6 swapped Play for the teleport button at zero energy; with no
-  // tournaments to send the player to, we just hide Play. The party button
-  // follows the same energy rule (a run costs 1 EN per player) and takes Play's
-  // place while the player is committed to a party.
+  // tournaments to send the player to, we just hide Play. Since 2026-11-04 a
+  // party costs ONE energy, paid by whoever opens it, so only CREATE needs a
+  // bank: joining or leaving one never costs anything and must stay available
+  // at zero.
   function refreshFriendsButton() {
     //a free-Energy week plays with an empty bank
     const energy = isEnergyFree() ? 1 : lobbyHudState.resources.EN || 0
+    const partyAction = seasonParty?.getAction()
+    const partyIsFree = partyAction === 'join' || partyAction === 'leave'
 
     // The party lobby repaints this on every state change; outside the
     // monthly window it must not bring PLAY / CREATE back.
@@ -354,13 +357,15 @@ export const createSeasonMenu = async (
       return
     }
 
-    if (!energy || !seasonParty) {
+    if (!seasonParty || (!energy && !partyIsFree)) {
       friendsButton.hide()
       setFriendsLabel('')
       hideCancelButton()
       if (!energy) playButton.hide()
       return
     }
+    //the solo run still costs one, whatever the party does
+    if (!energy) playButton.hide()
 
     const action = seasonParty.getAction()
     if (action === 'busy') {

@@ -814,10 +814,19 @@ export class SeasonPartyRoom extends Room<SeasonPartyRoomState> {
             if (await isEnergyFree()) {
                 console.log("free energy week: not charging the party");
             } else {
-                this.state.players.filter(p => this.isActive(p) && p.eligible).forEach(player => {
-                    promisify(PlayFabServer.SubtractUserVirtualCurrency)({PlayFabId: player.PlayFabId, VirtualCurrency: "EN", Amount: 1})
-                        .catch(error => console.log("season-party subtract EN error", player.displayName, error));
-                });
+                //ONE energy for the whole party, paid by whoever opened it
+                //(user, 2026-11-04). It used to charge every member who was
+                //scoring points, which made playing with friends cost the
+                //group N energy for the same four holes. players[0] is the
+                //host seat: the creator, or whoever took it when the creator
+                //left before the start, and the room plays at that player's
+                //level, so the one who pays is the one the room is built for.
+                const host = this.state.players[0];
+                if (host && this.isActive(host)) {
+                    console.log("season-party: charging the host only", host.displayName);
+                    promisify(PlayFabServer.SubtractUserVirtualCurrency)({PlayFabId: host.PlayFabId, VirtualCurrency: "EN", Amount: 1})
+                        .catch(error => console.log("season-party subtract EN error", host.displayName, error));
+                }
             }
         }
         this.state.currentGame++;
