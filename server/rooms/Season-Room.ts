@@ -12,7 +12,7 @@ import {createFrameReproduction} from "../../common/frame-reproductor";
 import {createEventManager} from "../../scene/golfplay/src/services/EventManagerFactory";
 import {EVENT} from "../../scene/golfplay/src/gameplay-handlers/handler-def";
 import {isEnergyFree} from "../energy";
-import {isSpectator, LiveGameMetadata, spectatorAuth, wantsToSpectate} from "./spectator";
+import {disconnectIfOnlySpectators, isSpectator, LiveGameMetadata, spectatorAuth, wantsToSpectate} from "./spectator";
 import MESSAGE from "./mesages";
 import {
     cloneJSON, defaultChestRewardChances, deserializeRecipe,
@@ -399,6 +399,15 @@ export class SeasonRoom extends Room<SeasonRoomState> {
                     onUpdateBall: ({position, velocity}) => {
                         Object.assign(this.golfPlay.getPhysicBall().body.position, position);
                         Object.assign(this.golfPlay.getPhysicBall().body.velocity, velocity);
+                        //Publish it, as season-party-room does for each of its
+                        //players. The player's own client runs the same frames
+                        //locally and ignores this; a spectator has no physics
+                        //and this is the only thing that tells it where the
+                        //ball is (rooms/spectator.ts). Until 2026-11-04 the
+                        //state's ball never moved from the tee.
+                        this.state.ball.position.x = position.x;
+                        this.state.ball.position.y = position.y;
+                        this.state.ball.position.z = position.z;
                     },
                     onFinish: () => {
                         this.frameReproduction = null;
@@ -920,6 +929,8 @@ console.log("accumulatedValue", JSON.stringify(sortedAccumulatedResult,null, "  
             console.log("disposing golfplay", this.user?.displayName)
             this.golfPlay?.dispose();
         }
+        //the player has gone for good: anyone watching goes with them
+        disconnectIfOnlySpectators(this);
     }
 
     //What */live-games shows about this room without opening it. Names only:

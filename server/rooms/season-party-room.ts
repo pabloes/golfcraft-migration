@@ -39,7 +39,7 @@ import {
 } from "./Season-Room";
 import {PartyMember, takeParty} from "./season-party-registry";
 import {isEnergyFree} from "../energy";
-import {isSpectator, LiveGameMetadata, spectatorAuth, wantsToSpectate} from "./spectator";
+import {disconnectIfOnlySpectators, isSpectator, LiveGameMetadata, spectatorAuth, wantsToSpectate} from "./spectator";
 
 //Slots kept in the room for people watching, on top of the party's own size.
 const MAX_SPECTATORS = 20;
@@ -249,6 +249,8 @@ export class SeasonPartyRoom extends Room<SeasonPartyRoomState> {
             player.client = await this.allowReconnection(client, 20);
         } catch (error) {
             await this.markLeft(player);
+            //the last member has gone: anyone watching goes with them
+            disconnectIfOnlySpectators(this);
         }
     }
 

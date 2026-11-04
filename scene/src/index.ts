@@ -71,7 +71,14 @@ export async function main() {
     // while watching, the same way it does while playing. Wired after
     // spawnLobby exists: a closure over a const declared later is a trap the
     // SDK7 sandbox does not forgive (CLAUDE.md section 3, TDZ).
-    const wireSpectatorLobby = () => setSpectatorLobbyHooks(() => destroyBuilding(), () => spawnLobby())
+    const wireSpectatorLobby = () =>
+      setSpectatorLobbyHooks(
+        () => {
+          destroyBuilding()
+          hideNpc()
+        },
+        () => spawnLobby()
+      )
 
     const spawnLobby = () => {
       console.log('[main] spawnLobby (building + golfclub board + NPC)')

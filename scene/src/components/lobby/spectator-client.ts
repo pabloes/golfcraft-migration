@@ -26,6 +26,7 @@ import { fadeInOverlay, fadeOutOverlay } from '../ui/overlay'
 import { showMessage } from './server-notification'
 import { teleportVerified } from '../../services/safe-teleport'
 import { spectateState } from '../../ui/spectate-state'
+import { hideLobbyHud, showLobbyHud } from '../../ui/lobby-hud-state'
 
 // The course is drawn where a played course is drawn, so the lobby's own
 // geometry is where the player expects it.
@@ -33,6 +34,8 @@ const COURSE_OFFSET = 24
 // Where the watcher stands: the same tee the player is put on, which is the
 // one place guaranteed to see the hole.
 const VIEW_HEIGHT = 2
+// How long after the run is over we stay, in case the server does not drop us.
+const OVER_GRACE_MS = 6000
 
 type VisualBall = ReturnType<ReturnType<typeof VisualBallFactory>['createVisualBall']>
 
@@ -145,6 +148,12 @@ export async function startSpectating(colyseus: any, roomId: string, label: stri
   }
   try {
     await fadeInOverlay(1)
+    // The same state a hole puts the scene in: the building and the NPC go,
+    // the lobby HUD goes, the stream screens quieten and the wall goes up.
+    // Hiding only the building left the rest of the lobby standing inside the
+    // course (report, 2026-11-04).
+    globalStore.game.setState({ playing: true })
+    hideLobbyHud()
     hideLobby?.()
     const room = await colyseus.joinById(roomId, { spectate: true })
     const sess: Session = { room, course: null, balls: [], factory: ballFactory(), root: null, disposed: false, currentGame: -1 }
@@ -158,6 +167,16 @@ export async function startSpectating(colyseus: any, roomId: string, label: stri
     room.onLeave(() => {
       showMessage({ timeout: 4000, message: 'The game ended' })
       void stopSpectating()
+    })
+    // A room whose player has gone is disposed by the server, which drops us
+    // too. This is the belt to that braces: if the run is over and nothing has
+    // dropped us after a few seconds, leave on our own.
+    let finishedAt = 0
+    room.onStateChange(() => {
+      const over = !!room.state?.finished
+      if (!over) { finishedAt = 0; return }
+      if (!finishedAt) finishedAt = Date.now()
+      else if (Date.now() - finishedAt > OVER_GRACE_MS) void stopSpectating()
     })
 
     // The courses arrive right after the join; the room's currentGame says
@@ -198,7 +217,10 @@ export async function stopSpectating(): Promise<void> {
   session = null
   spectateState.visible = false
   spectateState.onLeave = null
-  globalStore.game.setState({ spectating: false })
+  // playing goes false BEFORE the lobby is rebuilt, or createNpcTest bails out
+  // and the scientist never comes back (the same trap as §6 #23 d).
+  globalStore.game.setState({ spectating: false, playing: false })
+  showLobbyHud()
   if (!sess || sess.disposed) {
     showLobby?.()
     return
