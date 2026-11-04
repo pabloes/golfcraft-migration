@@ -173,16 +173,25 @@ gameServer.define(`competition-group`, CompetitionGroupRoom)
 gameServer.define(`tournament`, TournamentRoom)
     .filterBy(['roomInstanceId'])
     .enableRealtimeListing();//TODO we filter for now userId, but at some point we could like to show them all together
-const basicAuthMiddleware = basicAuth({
-    // list of users and passwords
-    users: {
-        "golfcraft": "juegazo",
-    },
-    
-    // sends WWW-Authenticate header, which will prompt the user to fill
-    // credentials in
-    challenge: true
-});
+// The monitor lists every live room and can call methods on them, so its
+// password cannot sit in the source: this repo is going public. An unset
+// MONITOR_PASSWORD REFUSES the route instead of falling back to a default,
+// because a default committed here is the same leak with extra steps.
+const MONITOR_USER = process.env.MONITOR_USER || "golfcraft";
+const MONITOR_PASSWORD = process.env.MONITOR_PASSWORD;
+if(!MONITOR_PASSWORD){
+    console.log("MONITOR_PASSWORD is not set: */monitor will refuse every request");
+}
+const basicAuthMiddleware = MONITOR_PASSWORD
+    ? basicAuth({
+        users: {[MONITOR_USER]: MONITOR_PASSWORD},
+
+        // sends WWW-Authenticate header, which will prompt the user to fill
+        // credentials in
+        challenge: true
+    })
+    //no challenge: a browser prompt would suggest there is a password to find
+    : (req, res) => res.status(503).send("monitor is not configured");
 var router = express.Router();
 
 app.use('*/ping', (req, res)=>{
@@ -236,6 +245,80 @@ app.get('*/online', async (req, res)=>{
   }catch(error){
     console.log("/online error", error);
     res.status(500).send({error: "unavailable"});
+  }
+});
+
+//Everything below is for the owner's admin dashboard (web/server/admin-dashboard).
+//Only the web service calls these, with GOLF_API_KEY, the same key /api/hole-start
+//checks; the key travels in the BODY and not in a query string, which ends up in
+//access logs. A broadcast and a room listing are not worth a session mechanism.
+const ADMIN_MESSAGE_MAX = 300;
+const ADMIN_TIMEOUT_MIN = 1000;
+const ADMIN_TIMEOUT_MAX = 2 * 60 * 1000;
+const ADMIN_TIMEOUT_DEFAULT = 15000;
+
+//The colyseus monitor can only message ONE client at a time
+//(Room.prototype._sendMessageToClient), which is why the owner could not
+//announce anything. Everyone in the scene sits in gameLobbyRoom, players in a
+//match included, so that room IS "everybody in the game", and its clients
+//already understand the "server" message (scene/src/meta/game-lobby.ts shows it
+//as a toast). The scene strips <color=..> markup, so this is plain text.
+app.post('*/admin-broadcast', async (req, res)=>{
+  try{
+    const {apiKey, message, timeout} = req.body || {};
+    if(apiKey !== process.env.GOLF_API_KEY) return res.status(400).send({error: "NON AUTH"});
+    const text = String(message ?? "").trim().slice(0, ADMIN_MESSAGE_MAX);
+    if(!text) return res.status(400).send({error: "empty message"});
+    const asked = Number(timeout);
+    const ms = isFinite(asked) ? Math.min(ADMIN_TIMEOUT_MAX, Math.max(ADMIN_TIMEOUT_MIN, Math.round(asked))) : ADMIN_TIMEOUT_DEFAULT;
+    const lobbyRoom = getLobbyRoom();
+    //nobody has joined the lobby since this process started: say so rather than
+    //answering 200 to a broadcast that reached no one
+    if(!lobbyRoom) return res.status(503).send({error: "lobby room is not up"});
+    const sent = lobbyRoom.clients.length;
+    lobbyRoom.broadcast("server", {message: text, timeout: ms});
+    //worth a log line: it is the one action here that every player sees
+    console.log("admin broadcast to", sent, "clients:", text);
+    res.send({sent, timeout: ms});
+  }catch(error){
+    console.log("/admin-broadcast error", redactedMessage(error?.message));
+    res.status(500).send({error: "broadcast failed"});
+  }
+});
+
+//What the monitor's own HTTP API answers at */monitor/api (rooms, clients,
+//cpu, memory), without handing the dashboard the monitor's password. No
+//wallet, PlayFabId or session ticket is in any of it.
+app.post('*/admin-status', async (req, res)=>{
+  try{
+    const {apiKey} = req.body || {};
+    if(apiKey !== process.env.GOLF_API_KEY) return res.status(400).send({error: "NON AUTH"});
+    const now = Date.now();
+    const rooms = await matchMaker.query({});
+    const listed = rooms.map(room => ({
+      roomId: room.roomId,
+      name: room.name,
+      clients: room.clients,
+      maxClients: room.maxClients,
+      locked: room.locked || false,
+      //createdAt is a Date in local storage and a string over redis
+      elapsedTime: Math.max(0, now - new Date(room.createdAt).getTime())
+    })).sort((a, b) => b.clients - a.clients || a.name.localeCompare(b.name));
+    const lobbyRoom = getLobbyRoom();
+    res.send({
+      rooms: listed,
+      connections: listed.reduce((total, room) => total + room.clients, 0),
+      inScene: lobbyRoom?.state.players.size || 0,
+      playing: listed.filter(room => !NON_GAME_ROOMS.includes(room.name)).reduce((total, room) => total + room.clients, 0),
+      server: process.env.SERVER || "",
+      //the process, not the host: these apps share a CapRover machine
+      uptime: Math.round(process.uptime()),
+      memoryMB: Math.round(process.memoryUsage().rss / (1024 * 1024)),
+      now
+    });
+  }catch(error){
+    console.log("/admin-status error", redactedMessage(error?.message));
+    res.status(500).send({error: "status unavailable"});
   }
 });
 

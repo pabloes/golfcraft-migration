@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>GolfCraft Admin</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/static/images/favicon/favicon-32x32.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lilita+One&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #121646; --card: #1b2160; --card-edge: rgba(255,255,255,0.08);
+    --chip: rgba(255,255,255,0.06); --text-1: #fff; --text-2: #b9c2ff; --text-3: #8f98dc;
+    --live: #6cd83a; --warn: #f2a93b; --bad: #e8536b; --accent: #e84198; --series: #1ca590;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--text-1); font: 400 15px/1.45 Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+  main, header.top, footer { max-width: 1000px; margin: 0 auto; padding: 0 16px; }
+  a { color: var(--text-2); }
+  header.top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 20px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 14px; text-decoration: none; color: var(--text-1); }
+  .brand img { height: 48px; width: auto; display: block; }
+  .brand h1 { font: 400 30px/1 "Lilita One", Inter, sans-serif; margin: 0; letter-spacing: 0.5px; }
+  .status { display: flex; align-items: center; gap: 10px; color: var(--text-3); font-size: 13px; }
+  .card { background: var(--card); border: 1px solid var(--card-edge); border-radius: 16px; padding: 18px 20px; }
+  section { margin-top: 16px; }
+  h2 { font: 400 21px/1.2 "Lilita One", Inter, sans-serif; margin: 0 0 4px; letter-spacing: 0.4px; }
+  h3 { font: 600 16px/1.2 Inter, sans-serif; margin: 0; }
+  .lede { color: var(--text-2); margin: 16px 0 18px; max-width: 760px; }
+  .sub, .help { color: var(--text-3); font-size: 13px; }
+  .help { margin: 6px 0 14px; max-width: 760px; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .pill { display: inline-block; padding: 3px 10px; border-radius: 999px; background: var(--chip); font-size: 12px; font-weight: 600; letter-spacing: 0.4px; color: var(--text-2); }
+  .pill.on { background: rgba(108,216,58,0.16); color: #a6ef7d; }
+  .pill.soon { background: rgba(242,169,59,0.16); color: #ffcf84; }
+  .pill.off { background: rgba(255,255,255,0.07); color: var(--text-3); }
+  .pill.bad { background: rgba(232,83,107,0.16); color: #ff9aab; }
+  label { font-size: 13px; color: var(--text-2); display: block; margin-bottom: 4px; }
+  input, select, textarea, button { font: inherit; }
+  input[type=text], input[type=number], input[type=password], input[type=datetime-local], select, textarea {
+    background: rgba(0,0,0,0.25); color: var(--text-1); border: 1px solid var(--card-edge);
+    border-radius: 9px; padding: 8px 10px; width: 100%;
+  }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--series); outline-offset: 1px; }
+  textarea { resize: vertical; min-height: 72px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+  .field { min-width: 180px; flex: 1 1 180px; }
+  .field.small { flex: 0 0 110px; min-width: 110px; }
+  .field.mode { flex: 0 0 240px; min-width: 200px; }
+  button { background: var(--series); color: #04231e; border: 0; border-radius: 10px; padding: 9px 16px; font-weight: 600; cursor: pointer; }
+  button:hover { filter: brightness(1.1); }
+  button[disabled] { opacity: 0.45; cursor: default; filter: none; }
+  button.ghost { background: var(--chip); color: var(--text-2); }
+  button.danger { background: rgba(232,83,107,0.18); color: #ff9aab; }
+  button.send { background: var(--accent); color: #fff; }
+  .actions { display: flex; gap: 10px; align-items: center; margin-top: 14px; flex-wrap: wrap; }
+  .msg { font-size: 13px; }
+  .msg.ok { color: #a6ef7d; }
+  .msg.err { color: #ff9aab; }
+  .event { margin-bottom: 12px; }
+  .utc { font-size: 12px; color: var(--text-3); margin-top: 4px; min-height: 16px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--card-edge); font-size: 14px; }
+  th { color: var(--text-3); font-weight: 500; font-size: 13px; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr:last-child td { border-bottom: 0; }
+  .tiles { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; margin-bottom: 14px; }
+  .tile { background: var(--chip); border-radius: 12px; padding: 12px; }
+  .tile .value { font-size: 24px; font-weight: 600; }
+  details { margin-top: 10px; }
+  details > summary { cursor: pointer; color: var(--text-2); font-size: 14px; }
+  .gate { max-width: 420px; margin: 60px auto; }
+  .counter { font-size: 12px; color: var(--text-3); text-align: right; }
+  footer { color: var(--text-3); font-size: 13px; padding: 26px 16px 34px; display: flex; gap: 16px; justify-content: space-between; flex-wrap: wrap; }
+  .hidden { display: none !important; }
+  @media (max-width: 760px) { .tiles { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+</style>
+</head>
+<body>
+
+<div class="gate card" id="gate">
+  <h2>GolfCraft admin</h2>
+  <p class="sub">This page needs the admin token (ADMIN_DASHBOARD_TOKEN on the web service).</p>
+  <form id="gate-form">
+    <label for="gate-token">Token</label>
+    <input type="password" id="gate-token" autocomplete="current-password" autofocus>
+    <div class="actions"><button type="submit">Open</button><span class="msg err" id="gate-msg"></span></div>
+  </form>
+</div>
+
+<div id="app" class="hidden">
+<header class="top">
+  <a class="brand" href="/"><img src="/static/images/logo.png" alt=""><h1>Admin</h1></a>
+  <div class="status">
+    <span id="clock">&nbsp;</span>
+    <button class="ghost" id="reload" type="button">Reload</button>
+    <button class="ghost" id="lock" type="button">Lock</button>
+  </div>
+</header>
+
+<main>
+  <p class="lede">Events and announcements. The full database editor is still at <a href="/admin">/admin</a>; everything here writes the same <code>config</code> table.</p>
+
+  <section>
+    <div class="head"><h2>Events</h2><span class="sub" id="events-sub">&nbsp;</span></div>
+    <div id="events"></div>
+  </section>
+
+  <section class="card">
+    <div class="head">
+      <h2>Message to everyone</h2>
+      <span class="pill" id="broadcast-reach">&nbsp;</span>
+    </div>
+    <p class="help">Goes to every player in the scene right now, as the toast at the top of their screen. Plain text only: the scene removes <code>&lt;color=…&gt;</code> markup. Players who log in later will not see it.</p>
+    <textarea id="broadcast-text" maxlength="300" placeholder="Free Energy week starts now: Ranked runs cost nothing until Monday."></textarea>
+    <div class="counter"><span id="broadcast-count">0</span>/300</div>
+    <div class="actions">
+      <div class="field small">
+        <label for="broadcast-timeout">Shown for</label>
+        <select id="broadcast-timeout">
+          <option value="10000">10 s</option>
+          <option value="30000" selected>30 s</option>
+          <option value="60000">1 min</option>
+          <option value="120000">2 min</option>
+        </select>
+      </div>
+      <button class="send" id="broadcast-send" type="button">Send to everyone</button>
+      <span class="msg" id="broadcast-msg"></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="head"><h2>Game server</h2><button class="ghost" id="server-refresh" type="button">Refresh</button></div>
+    <p class="help">The same rooms and clients the colyseus monitor shows. The monitor itself is at <code>&lt;game server&gt;/monitor</code>, behind its own password.</p>
+    <div class="tiles">
+      <div class="tile"><div class="sub">In the scene</div><div class="value" id="srv-inscene">–</div></div>
+      <div class="tile"><div class="sub">Playing</div><div class="value" id="srv-playing">–</div></div>
+      <div class="tile"><div class="sub">Connections</div><div class="value" id="srv-connections">–</div></div>
+      <div class="tile"><div class="sub">Memory</div><div class="value" id="srv-memory">–</div></div>
+    </div>
+    <div id="server-rooms"></div>
+  </section>
+
+  <section class="card">
+    <details id="others">
+      <summary>Other config rows (raw JSON)</summary>
+      <p class="help">The 3D panels and the counters the site keeps. These can be edited but not created or removed here: use <a href="/admin">/admin</a> for that.</p>
+      <div id="other-rows"></div>
+    </details>
+  </section>
+</main>
+
+<footer>
+  <span>GolfCraft admin · <a href="/stats">stats</a> · <a href="/market-report">market report</a></span>
+  <span id="now-utc">&nbsp;</span>
+</footer>
+</div>
+
+<script>
+(function () {
+  var TOKEN_KEY = "golfcraft.adminToken";
+  var state = { token: "", data: null, known: [], rows: {} };
+  var $ = function (id) { return document.getElementById(id); };
+
+  // every value here comes out of the database, so it is written with
+  // textContent and never as HTML
+  function el(tag, attrs, parent, text) {
+    var node = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) {
+      if (k === "class") node.className = attrs[k]; else node.setAttribute(k, attrs[k]);
+    });
+    if (text != null) node.textContent = text;
+    if (parent) parent.appendChild(node);
+    return node;
+  }
+  function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+
+  function api(method, route, body) {
+    return fetch(route, {
+      method: method,
+      headers: body ? { "Content-Type": "application/json", "x-admin-token": state.token }
+                    : { "x-admin-token": state.token },
+      body: body ? JSON.stringify(body) : undefined
+    }).then(function (r) {
+      return r.json().catch(function () { return { error: "HTTP " + r.status }; }).then(function (data) {
+        if (!r.ok) throw new Error(data && data.error ? data.error : "HTTP " + r.status);
+        return data;
+      });
+    });
+  }
+
+  function say(node, text, ok) {
+    node.textContent = text || "";
+    node.className = "msg" + (text ? (ok ? " ok" : " err") : "");
+    if (text && ok) setTimeout(function () { if (node.textContent === text) say(node, ""); }, 4000);
+  }
+
+  // ---- dates. The rows are UTC instants; the pickers are the owner's own
+  // clock, so each one echoes the UTC it will store underneath itself.
+  function toPicker(iso) {
+    if (!iso) return "";
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    var p = function (n) { return String(n).padStart(2, "0"); };
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + "T" + p(d.getHours()) + ":" + p(d.getMinutes());
+  }
+  function fromPicker(value) {
+    if (!value) return "";
+    var d = new Date(value);
+    return isNaN(d.getTime()) ? "" : d.toISOString();
+  }
+  function utcLabel(value) {
+    var iso = fromPicker(value);
+    return iso ? "= " + iso.slice(0, 16).replace("T", " ") + " UTC" : "";
+  }
+  function stamp(ms) {
+    if (!ms) return "–";
+    return new Date(ms).toISOString().slice(0, 16).replace("T", " ") + " UTC";
+  }
+  function left(ms) {
+    var s = Math.max(0, Math.round(ms / 1000));
+    if (s < 60) return s + "s";
+    if (s < 3600) return Math.round(s / 60) + "min";
+    if (s < 86400) return Math.round(s / 3600) + "h";
+    return Math.round(s / 86400) + "d";
+  }
+  function pretty(value) { return JSON.stringify(value, null, 2); }
+
+  // ---- the controls, one builder per `kind` the API reports
+  function card(spec) {
+    var row = state.rows[spec.key];
+    var box = el("div", { class: "card event" }, $("events"));
+    var head = el("div", { class: "head" }, box);
+    el("h3", {}, head, spec.label);
+    var pill = el("span", { class: "pill off" }, head, "");
+    el("p", { class: "help" }, box, spec.help);
+    var body = el("div", {}, box);
+    var actions = el("div", { class: "actions" }, box);
+    var msg = el("span", { class: "msg" });
+    var save = el("button", { type: "button" }, actions, "Save");
+    var drop = el("button", { type: "button", class: "danger" }, actions, "Remove row");
+    actions.appendChild(msg);
+    if (!row) drop.disabled = true;
+
+    var control = ({ window: windowControl, gameWindow: gameWindowControl, number: numberControl })[spec.kind] || jsonControl;
+    var ctl = control(body, spec, row ? row.parsed : null);
+    pill.className = "pill " + ctl.badge().tone;
+    pill.textContent = ctl.badge().text;
+
+    save.onclick = function () {
+      var value = ctl.read();
+      if (value && value.error) return say(msg, value.error, false);
+      save.disabled = true;
+      api("PUT", "/api/admin-dashboard/config", { key: spec.key, value: value.value })
+        .then(function () { say(msg, "Saved", true); return load(); })
+        .catch(function (e) { save.disabled = false; say(msg, e.message, false); });
+    };
+    drop.onclick = function () {
+      if (!confirm("Remove the " + spec.key + " row? " + spec.label + " goes back to its default.")) return;
+      drop.disabled = true;
+      api("DELETE", "/api/admin-dashboard/config/" + encodeURIComponent(spec.key))
+        .then(function () { return load(); })
+        .catch(function (e) { drop.disabled = false; say(msg, e.message, false); });
+    };
+  }
+
+  // {"from","to"} / {"enabled":bool}: the shape freeEnergy and giveaway share.
+  // "No row" is one of the modes because that IS the documented default state
+  // of both, and it is the only way back to it.
+  function windowControl(body, spec, value) {
+    var status = state.data.status[spec.key] || {};
+    var mode = !value ? "none" : value.enabled === false ? "off" : (value.from && value.to) ? "scheduled" : value.enabled === true ? "on" : "off";
+    var line = el("div", { class: "row" }, body);
+    var pickers = el("div", { class: "row", style: "margin-top:12px" }, body);
+
+    var modeField = el("div", { class: "field mode" }, line);
+    el("label", { for: "mode-" + spec.key }, modeField, "State");
+    var select = el("select", { id: "mode-" + spec.key }, modeField);
+    [["scheduled", "Scheduled (ends by itself)"], ["on", "On until I turn it off"], ["off", "Off"], ["none", "No row (default)"]]
+      .forEach(function (o) { el("option", { value: o[0] }, select, o[1]).selected = o[0] === mode; });
+
+    function picker(label, iso) {
+      var field = el("div", { class: "field" }, pickers);
+      el("label", {}, field, label);
+      var input = el("input", { type: "datetime-local" }, field);
+      input.value = toPicker(iso);
+      var utc = el("div", { class: "utc" }, field, utcLabel(input.value));
+      input.oninput = function () { utc.textContent = utcLabel(input.value); };
+      return input;
+    }
+    var from = picker("From (your time)", value && value.from);
+    var to = picker("To (your time, exclusive)", value && value.to);
+
+    function sync() {
+      var scheduled = select.value === "scheduled";
+      pickers.style.opacity = scheduled ? "1" : "0.4";
+      from.disabled = to.disabled = !scheduled;
+    }
+    select.onchange = sync;
+    sync();
+
+    return {
+      read: function () {
+        if (select.value === "none") return { error: 'use "Remove row" to go back to the default' };
+        if (select.value === "off") return { value: { enabled: false } };
+        if (select.value === "on") return { value: { enabled: true } };
+        if (!from.value || !to.value) return { error: "a scheduled event needs both dates" };
+        return { value: { from: fromPicker(from.value), to: fromPicker(to.value) } };
+      },
+      badge: function () {
+        if (!value) return { tone: "off", text: "NO ROW" };
+        if (status.free) return { tone: "on", text: status.until ? "RUNNING · " + left(status.until - state.data.now) + " left" : "RUNNING" };
+        if (status.since && status.since > state.data.now) return { tone: "soon", text: "STARTS IN " + left(status.since - state.data.now) };
+        if (value.enabled === false) return { tone: "off", text: "OFF" };
+        return { tone: "off", text: "ENDED" };
+      }
+    };
+  }
+
+  function gameWindowControl(body, spec, value) {
+    var status = state.data.status.gameWindow || {};
+    var line = el("div", { class: "row" }, body);
+    function num(label, v, min, max) {
+      var field = el("div", { class: "field small" }, line);
+      el("label", {}, field, label);
+      var input = el("input", { type: "number", min: min, max: max }, field);
+      input.value = v;
+      return input;
+    }
+    var from = num("From day", (value && value.fromDay) || 1, 1, 28);
+    var to = num("To day", (value && value.toDay) || 7, 1, 31);
+    var forceField = el("div", { class: "field mode" }, line);
+    el("label", {}, forceField, "Override");
+    var force = el("select", {}, forceField);
+    [["", "Follow the calendar"], ["open", "Force OPEN"], ["closed", "Force CLOSED"]]
+      .forEach(function (o) { el("option", { value: o[0] }, force, o[1]).selected = o[0] === ((value && value.force) || ""); });
+
+    var walletsField = el("div", { style: "margin-top:12px" }, body);
+    el("label", {}, walletsField, "Wallets that can always play, one per line");
+    var wallets = el("textarea", { placeholder: "0x…", spellcheck: "false" }, walletsField);
+    wallets.value = ((value && value.allowWallets) || []).join("\n");
+
+    return {
+      read: function () {
+        var list = wallets.value.split(/[\s,;]+/).map(function (w) { return w.trim(); }).filter(Boolean);
+        return { value: { fromDay: Number(from.value), toDay: Number(to.value), force: force.value || null, allowWallets: list } };
+      },
+      badge: function () {
+        if (!value) return { tone: "on", text: "NO ROW · ALWAYS OPEN" };
+        if (status.windowOpen) return { tone: "on", text: status.closesAt ? "OPEN · closes in " + left(status.closesAt - state.data.now) : "FORCED OPEN" };
+        return { tone: "bad", text: status.opensAt ? "CLOSED · opens in " + left(status.opensAt - state.data.now) : "FORCED CLOSED" };
+      }
+    };
+  }
+
+  function numberControl(body, spec, value) {
+    var line = el("div", { class: "row" }, body);
+    var field = el("div", { class: "field small" }, line);
+    el("label", {}, field, "Value");
+    var input = el("input", { type: "number" }, field);
+    input.value = value == null ? "" : value;
+    return {
+      read: function () {
+        if (input.value === "") return { error: "write a number" };
+        return { value: Number(input.value) };
+      },
+      badge: function () {
+        if (value == null) return { tone: "off", text: "NO ROW" };
+        return { tone: "on", text: String(value) };
+      }
+    };
+  }
+
+  function jsonControl(body, spec, value) {
+    var area = el("textarea", { spellcheck: "false", rows: "6" }, body);
+    area.value = value == null ? "" : pretty(value);
+    return {
+      read: function () {
+        if (!area.value.trim()) return { error: "write some JSON" };
+        try { return { value: JSON.parse(area.value) }; }
+        catch (e) { return { error: "that is not valid JSON" }; }
+      },
+      badge: function () { return value == null ? { tone: "off", text: "NO ROW" } : { tone: "on", text: "SET" }; }
+    };
+  }
+
+  // ---- other rows: edit only, so no mode selector and no Remove
+  function otherRow(row) {
+    var box = el("div", { class: "card event" }, $("other-rows"));
+    var head = el("div", { class: "head" }, box);
+    el("h3", {}, head, row.key);
+    if (row.parseError) el("span", { class: "pill bad" }, head, "BROKEN JSON");
+    var area = el("textarea", { spellcheck: "false", rows: "4" }, box);
+    area.value = row.parseError ? row.value : pretty(row.parsed);
+    var actions = el("div", { class: "actions" }, box);
+    var save = el("button", { type: "button", class: "ghost" }, actions, "Save");
+    var msg = el("span", { class: "msg" }, actions);
+    save.onclick = function () {
+      var value;
+      try { value = JSON.parse(area.value); } catch (e) { return say(msg, "that is not valid JSON", false); }
+      save.disabled = true;
+      api("PUT", "/api/admin-dashboard/config", { key: row.key, value: value })
+        .then(function () { say(msg, "Saved", true); save.disabled = false; })
+        .catch(function (e) { save.disabled = false; say(msg, e.message, false); });
+    };
+  }
+
+  function render() {
+    clear($("events"));
+    state.known.forEach(card);
+    clear($("other-rows"));
+    var others = state.data.rows.filter(function (r) { return !r.known; });
+    others.forEach(otherRow);
+    $("others").parentNode.classList.toggle("hidden", !others.length);
+    $("events-sub").textContent = "server clock " + stamp(state.data.now);
+    $("now-utc").textContent = "Server time " + stamp(state.data.now);
+  }
+
+  function load() {
+    return api("GET", "/api/admin-dashboard/state").then(function (data) {
+      state.data = data;
+      state.known = data.known;
+      state.rows = {};
+      data.rows.forEach(function (r) { if (!r.parseError) state.rows[r.key] = r; });
+      render();
+    }).catch(function (e) {
+      if (/wrong token/i.test(e.message)) return lock();
+      alert("Could not load the config: " + e.message);
+    });
+  }
+
+  function loadServer() {
+    var fill = function (id, text) { $(id).textContent = text; };
+    return api("GET", "/api/admin-dashboard/server").then(function (data) {
+      clear($("server-rooms"));
+      if (data.error) {
+        ["srv-inscene", "srv-playing", "srv-connections", "srv-memory"].forEach(function (id) { fill(id, "–"); });
+        el("p", { class: "msg err" }, $("server-rooms"), data.error);
+        $("broadcast-reach").textContent = "server unreachable";
+        return;
+      }
+      fill("srv-inscene", data.inScene);
+      fill("srv-playing", data.playing);
+      fill("srv-connections", data.connections);
+      fill("srv-memory", data.memoryMB + " MB");
+      $("broadcast-reach").textContent = data.inScene + " player" + (data.inScene === 1 ? "" : "s") + " in the scene";
+      if (!data.rooms.length) { el("p", { class: "sub" }, $("server-rooms"), "No rooms open."); return; }
+      var table = el("table", {}, $("server-rooms"));
+      var tr = el("tr", {}, el("thead", {}, table));
+      ["Room", "Id", "Clients", "Max", "Up for"].forEach(function (h, i) { el("th", { class: i >= 2 ? "num" : "" }, tr, h); });
+      var tbody = el("tbody", {}, table);
+      data.rooms.forEach(function (room) {
+        var line = el("tr", {}, tbody);
+        el("td", {}, line, room.name);
+        el("td", { class: "sub" }, line, room.roomId);
+        el("td", { class: "num" }, line, String(room.clients));
+        //colyseus reports an uncapped room's maxClients as Infinity, i.e. null over JSON
+        el("td", { class: "num" }, line, room.maxClients == null || !isFinite(room.maxClients) ? "∞" : String(room.maxClients));
+        el("td", { class: "num sub" }, line, left(room.elapsedTime));
+      });
+    });
+  }
+
+  function broadcast() {
+    var text = $("broadcast-text").value.trim();
+    var msg = $("broadcast-msg");
+    if (!text) return say(msg, "write a message first", false);
+    if (!confirm("Send this to every player in the game right now?\n\n" + text)) return;
+    var button = $("broadcast-send");
+    button.disabled = true;
+    api("POST", "/api/admin-dashboard/broadcast", { message: text, timeout: Number($("broadcast-timeout").value) })
+      .then(function (data) {
+        button.disabled = false;
+        say(msg, "Sent to " + data.sent + " player" + (data.sent === 1 ? "" : "s"), true);
+        $("broadcast-text").value = "";
+        $("broadcast-count").textContent = "0";
+      })
+      .catch(function (e) { button.disabled = false; say(msg, e.message, false); });
+  }
+
+  function open(token) {
+    state.token = token;
+    try { sessionStorage.setItem(TOKEN_KEY, token); } catch (e) {}
+    $("gate").classList.add("hidden");
+    $("app").classList.remove("hidden");
+    load();
+    loadServer();
+  }
+  function lock() {
+    state.token = "";
+    try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) {}
+    $("app").classList.add("hidden");
+    $("gate").classList.remove("hidden");
+    $("gate-token").value = "";
+    $("gate-token").focus();
+  }
+
+  $("gate-form").onsubmit = function (e) {
+    e.preventDefault();
+    var token = $("gate-token").value;
+    if (!token) return;
+    state.token = token;
+    api("POST", "/api/admin-dashboard/session", {})
+      .then(function () { open(token); })
+      .catch(function (err) { state.token = ""; say($("gate-msg"), err.message, false); });
+  };
+  $("reload").onclick = function () { load(); loadServer(); };
+  $("lock").onclick = lock;
+  $("server-refresh").onclick = loadServer;
+  $("broadcast-send").onclick = broadcast;
+  $("broadcast-text").oninput = function () { $("broadcast-count").textContent = String($("broadcast-text").value.length); };
+
+  setInterval(function () { if (state.token) loadServer(); }, 30000);
+  setInterval(function () {
+    if (state.data) $("clock").textContent = new Date().toISOString().slice(11, 16) + " UTC";
+  }, 1000);
+
+  var saved = "";
+  try { saved = sessionStorage.getItem(TOKEN_KEY) || ""; } catch (e) {}
+  if (saved) {
+    state.token = saved;
+    api("POST", "/api/admin-dashboard/session", {}).then(function () { open(saved); }).catch(lock);
+  }
+})();
+</script>
+</body>
+</html>
