@@ -66,12 +66,23 @@ if printf '%s' "$ANSWER" | grep -q "Cannot POST"; then
     echo "Either deploy ws, or run it again with MONITOR_PASSWORD=... in front." >&2
     exit 1
   fi
-  ROOM_ID="$(curl -s -u "$MON_USER:$MON_PASS" "$HOST/monitor/api/" | node -e "
+  MON_BODY="$(curl -s -u "$MON_USER:$MON_PASS" -w "\n%{http_code}" "$HOST/monitor/api/")"
+  MON_CODE="$(printf '%s' "$MON_BODY" | tail -1)"
+  if [ "$MON_CODE" != "200" ]; then
+    #a 401 answers with an empty body or a login page, and JSON.parse on that
+    #used to end in a node stack trace instead of a sentence
+    echo "the monitor refused those credentials (HTTP $MON_CODE). Check MONITOR_USER / MONITOR_PASSWORD." >&2
+    exit 1
+  fi
+  ROOM_ID="$(printf '%s' "$MON_BODY" | sed '$d' | node -e "
 let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{
-  const r=(JSON.parse(s).rooms||[]).filter(x=>x.name==='gameLobbyRoom').sort((a,b)=>b.clients-a.clients)[0];
-  if(!r) process.exit(3);
+  let rooms=[];
+  try { rooms=(JSON.parse(s).rooms||[]) } catch(e) { console.error('the monitor did not answer JSON'); process.exit(4) }
+  const r=rooms.filter(x=>x.name==='gameLobbyRoom').sort((a,b)=>b.clients-a.clients)[0];
+  if(!r){ console.error('no gameLobbyRoom is up'); process.exit(3) }
   console.log(r.roomId);
 })")"
+  if [ -z "$ROOM_ID" ]; then echo "could not find the lobby room" >&2; exit 1; fi
   ARGS="$(node -e "console.log(encodeURIComponent(JSON.stringify(['server', {message: process.argv[1], timeout: Number(process.argv[2])}])))" "$MESSAGE" "$TIMEOUT")"
   curl -s -u "$MON_USER:$MON_PASS" "$HOST/monitor/api/room/call?roomId=$ROOM_ID&method=broadcast&args=$ARGS" >/dev/null
   echo "sent through the monitor to room $ROOM_ID"
