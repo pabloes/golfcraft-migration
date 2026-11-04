@@ -21,7 +21,7 @@ import { gameOptions, setControlScheme, type ControlScheme } from '../services/g
 import { talkToNpc } from '../components/lobby/npc-storymode/npc-storymode'
 import { getGolfclubCollection, selectGolfclub, upgradeGolfclubAttribute } from '../components/lobby/lobby-training'
 import { BoardGolfclub } from '../components/lobby/golfclub-screen/golfclub-screen-ui'
-import { GOLF_CLUB_NAMES, getPlayFabId } from '../meta/bootstrap'
+import { GOLF_CLUB_NAMES, getPlayFabId, nftClubsReadFailed } from '../meta/bootstrap'
 import { seasonCatalog } from '../components/lobby/seasons/season-catalog'
 import {
   aimLengths,
@@ -533,6 +533,22 @@ export const WorkshopView = () => {
     pages > 1 ? pageButton('clubs-prev', 'ic_chev_left_w', page > 0, page - 1, 6) : null,
     pages > 1 ? text(px, fs, `${page + 1} / ${pages}`, 50, 214, 52, 16, 13, P.white, 'middle-center') : null,
     pages > 1 ? pageButton('clubs-next', 'ic_chev_right_w', page < pages - 1, page + 1, 102) : null,
+    // The chain read for the wallet's NFT clubs failed, so the collection is
+    // missing them. Say it where they should be instead of leaving the player
+    // to work out that their clubs are gone. Sits in the pager's slot, which
+    // is free exactly when the collection came back short.
+    nftClubsReadFailed && pages <= 1
+      ? box(px, 'clubs-warn', 6, 200, 140, 44, { color: WARN_BG, radius: 10, border: 2, borderColor: SHORT }, [
+          <Label
+            key="clubs-warn-text"
+            value={'Could not read your\nNFT clubs'}
+            fontSize={fs(11)}
+            color={SHORT}
+            textAlign="middle-center"
+            uiTransform={{ width: '100%', height: '100%' }}
+          />
+        ])
+      : null,
 
     ...attributeRow('power', 58),
     ...attributeRow('control', 158),

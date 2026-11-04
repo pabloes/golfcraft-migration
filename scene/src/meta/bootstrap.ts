@@ -428,34 +428,67 @@ async function resolveActiveGolfclubModel(tokenId: string): Promise<number | nul
 // SDK6 services/golfclubs.ts:getNFTGolfClubs listed the wallet's NFT clubs
 // from the (now dead) subgraph as synthetic 5/5/5 items. We read the same from
 // the Golfclub ERC721: balanceOf, then tokenOfOwnerByIndex and getGolfclubId
-// per token, each step one JSON-RPC batch. Tokens the inventory already
-// carries are skipped. Guests have no wallet; any failure lists none.
+// per token. Tokens the inventory already carries are skipped. Guests have no
+// wallet; any failure lists none.
 const MAX_NFT_GOLFCLUBS = 100
 const word = (hex: string) => hex.replace(/^0x/, '').padStart(64, '0')
 
-async function golfclubCalls(datas: string[]): Promise<number[]> {
-  const response = await fetch(POLYGON_RPC, {
+// True when the chain read above failed for a player who does have a wallet,
+// so the WORKSHOP can say so instead of just showing a short collection. The
+// whole point: a holder of 9 clubs saw only the basic one and the CocoBay
+// promo, and nothing on screen or in the log said why (2SC828R, 2026-11-04).
+export let nftClubsReadFailed = false
+
+const rpcCall = (body: unknown) =>
+  fetch(POLYGON_RPC, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(
-      datas.map((data, id) => ({ jsonrpc: '2.0', id, method: 'eth_call', params: [{ to: GOLFCLUB_CONTRACT, data }, 'latest'] }))
-    )
-  })
-  const json = await response.json()
-  if (!Array.isArray(json)) throw new Error('RPC batch not supported')
-  const out: number[] = []
-  for (const r of json) {
-    if (!r?.result || r.result === '0x') throw new Error(`eth_call ${r?.id} failed`)
-    out[r.id] = parseInt(r.result, 16)
+    body: JSON.stringify(body)
+  }).then((r) => r.json())
+
+const callBody = (data: string, id: number) => ({
+  jsonrpc: '2.0',
+  id,
+  method: 'eth_call',
+  params: [{ to: GOLFCLUB_CONTRACT, data }, 'latest']
+})
+
+const decodeResult = (r: any): number => {
+  if (!r?.result || r.result === '0x') throw new Error(`eth_call ${r?.id} failed ${JSON.stringify(r?.error ?? '')}`)
+  return parseInt(r.result, 16)
+}
+
+// One eth_call per `data`. The whole step goes in a single JSON-RPC batch when
+// the runtime and the endpoint allow it (one HTTP request), and otherwise one
+// request per call. The batch is the ONLY place the scene sends an array body:
+// every other chain read here (balanceOfBatch for the materials row,
+// getGolfclubId for the equipped club) is a plain single call, so a runtime
+// that does not pass an array through broke this read and nothing else.
+async function golfclubCalls(datas: string[]): Promise<number[]> {
+  try {
+    const json = await rpcCall(datas.map((data, id) => callBody(data, id)))
+    if (!Array.isArray(json)) throw new Error('RPC batch not supported')
+    const out: number[] = []
+    for (const r of json) out[r.id] = decodeResult(r)
+    if (out.length !== datas.length || out.some((v) => v === undefined || isNaN(v))) {
+      throw new Error('RPC batch answered short')
+    }
+    return out
+  } catch (err) {
+    console.log('[bootstrap] golfclub RPC batch failed, retrying one call at a time:', err)
+    const out: number[] = []
+    for (let i = 0; i < datas.length; i++) out[i] = decodeResult(await rpcCall(callBody(datas[i], 1)))
+    return out
   }
-  return out
 }
 
 async function fetchNftGolfclubs(address: string, inventory: any[]): Promise<any[]> {
+  nftClubsReadFailed = false
   if (!/^0x[0-9a-f]{40}$/.test(address)) return []
   try {
     const [balance] = await golfclubCalls(['0x70a08231' + word(address)])
     const count = Math.min(balance || 0, MAX_NFT_GOLFCLUBS)
+    console.log('[bootstrap] NFT golf clubs on chain:', balance, 'for', address)
     if (!count) return []
     const indexes = Array.from({ length: count }, (_, i) => i)
     const tokenIds = await golfclubCalls(indexes.map((i) => '0x2f745c59' + word(address) + word(i.toString(16))))
@@ -466,7 +499,9 @@ async function fetchNftGolfclubs(address: string, inventory: any[]): Promise<any
       .filter((c) => !known.has(c.tokenId))
       .map(({ tokenId, model }) => ({
         ItemId: `golfclub-${model}`,
-        ItemClass: 'GolfClub',
+        // The same class PlayFab gives the inventory clubs, so a reader that
+        // filters by it sees the NFT ones too.
+        ItemClass: 'Golfclub',
         DisplayName: GOLF_CLUB_NAMES[model] || 'GOLF CLUB',
         CustomData: { tokenId, attribute_aim: '5', attribute_power: '5', attribute_control: '5', xp: 9999999 }
       }))
@@ -474,6 +509,7 @@ async function fetchNftGolfclubs(address: string, inventory: any[]): Promise<any
     return clubs
   } catch (err) {
     console.log('[bootstrap] NFT golf clubs RPC failed:', err)
+    nftClubsReadFailed = true
     return []
   }
 }
