@@ -38,6 +38,7 @@ import {
     sumDrops
 } from "./Season-Room";
 import {PartyMember, takeParty} from "./season-party-registry";
+import {isEnergyFree} from "../energy";
 
 // "Play ranked with friends": a Season run (4 rounds against recorded ghosts)
 // for 2-4 players at once. Season-Room is single player by design (one ball,
@@ -768,10 +769,14 @@ export class SeasonPartyRoom extends Room<SeasonPartyRoomState> {
         if (this.state.currentGame === 0) {
             //Season-Room charges the energy once the first round is played; a
             //player above the room's level scores no season points, so plays free
-            this.state.players.filter(p => this.isActive(p) && p.eligible).forEach(player => {
-                promisify(PlayFabServer.SubtractUserVirtualCurrency)({PlayFabId: player.PlayFabId, VirtualCurrency: "EN", Amount: 1})
-                    .catch(error => console.log("season-party subtract EN error", player.displayName, error));
-            });
+            if (await isEnergyFree()) {
+                console.log("free energy week: not charging the party");
+            } else {
+                this.state.players.filter(p => this.isActive(p) && p.eligible).forEach(player => {
+                    promisify(PlayFabServer.SubtractUserVirtualCurrency)({PlayFabId: player.PlayFabId, VirtualCurrency: "EN", Amount: 1})
+                        .catch(error => console.log("season-party subtract EN error", player.displayName, error));
+                });
+            }
         }
         this.state.currentGame++;
         this.state.finished = false;

@@ -19,7 +19,13 @@ export const gameWindowState = {
   // Server clock minus ours, so countdowns don't depend on the phone's clock.
   offsetMs: 0,
   // The "closed" dialog, shown when the player tries to start something.
-  noticeVisible: false
+  noticeVisible: false,
+  // A free-Energy window (common/free-energy.ts) rides on the same answer.
+  // The server decides whether to charge; this only has to let a player with
+  // no Energy press PLAY, or the offer would be invisible to exactly the
+  // players it is meant for.
+  freeEnergy: false,
+  freeEnergyUntil: null as number | null
 }
 
 import { globalStore } from './globalStore/globalStore'
@@ -46,6 +52,9 @@ export const onGameWindowChange = (fn: () => void) => {
 
 export const serverNow = () => Date.now() + gameWindowState.offsetMs
 export const canStartGame = () => !gameWindowState.loaded || gameWindowState.open
+
+// True while a run costs no Energy. Every energy gate in the lobby reads this.
+export const isEnergyFree = () => gameWindowState.freeEnergy
 
 // Every place that starts a match calls this first: false (and the dialog)
 // when the game is closed for this player.
@@ -113,6 +122,10 @@ export const refreshGameWindow = async () => {
     gameWindowState.windowOpen = !!data.windowOpen
     gameWindowState.opensAt = data.opensAt ?? null
     gameWindowState.closesAt = data.closesAt ?? null
+    const wasFree = gameWindowState.freeEnergy
+    gameWindowState.freeEnergy = !!data.freeEnergy
+    gameWindowState.freeEnergyUntil = data.freeEnergyUntil ?? null
+    if (wasFree !== gameWindowState.freeEnergy) console.log('[game-window] free energy:', gameWindowState.freeEnergy)
     if (typeof data.now === 'number') gameWindowState.offsetMs = data.now - Date.now()
     if (gameWindowState.open) gameWindowState.noticeVisible = false
     else {
@@ -132,8 +145,12 @@ export const refreshGameWindow = async () => {
 function gameWindowSystem() {
   if (!started) return
   const now = serverNow()
-  const edge = gameWindowState.open ? gameWindowState.closesAt : gameWindowState.opensAt
-  const dueAtEdge = edge !== null && now >= edge + 2000 && Date.now() - lastFetch > 5000
+  const windowEdge = gameWindowState.open ? gameWindowState.closesAt : gameWindowState.opensAt
+  // the end of a free-Energy week is an edge too: the lobby must start asking
+  // for Energy again without waiting out the 10 minute poll
+  const freeEdge = gameWindowState.freeEnergy ? gameWindowState.freeEnergyUntil : null
+  const edges = [windowEdge, freeEdge].filter((e): e is number => e !== null && now >= e + 2000)
+  const dueAtEdge = edges.length > 0 && Date.now() - lastFetch > 5000
   if (dueAtEdge || Date.now() - lastFetch > REFRESH_MS) void refreshGameWindow()
 }
 

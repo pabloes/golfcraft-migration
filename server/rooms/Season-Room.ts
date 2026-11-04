@@ -11,6 +11,7 @@ import MESSAGES from "./mesages";
 import {createFrameReproduction} from "../../common/frame-reproductor";
 import {createEventManager} from "../../scene/golfplay/src/services/EventManagerFactory";
 import {EVENT} from "../../scene/golfplay/src/gameplay-handlers/handler-def";
+import {isEnergyFree} from "../energy";
 import MESSAGE from "./mesages";
 import {
     cloneJSON, defaultChestRewardChances, deserializeRecipe,
@@ -827,7 +828,12 @@ console.log("accumulatedValue", JSON.stringify(sortedAccumulatedResult,null, "  
 
     async prepareNext(client, {user, PlayFabId}){
         if(this.state.currentGame === 0){
-            promisify(PlayFabServer.SubtractUserVirtualCurrency)({PlayFabId:this.PlayFabId, VirtualCurrency:"EN",Amount:1});
+            //a free-Energy window (admin config `freeEnergy`) plays for nothing
+            if(await isEnergyFree()){
+                console.log("free energy week: not charging", this.PlayFabId);
+            }else{
+                promisify(PlayFabServer.SubtractUserVirtualCurrency)({PlayFabId:this.PlayFabId, VirtualCurrency:"EN",Amount:1});
+            }
         }
         this.state.currentGame++;
         this.state.finishedPlayer = false;

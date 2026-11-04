@@ -10,7 +10,7 @@ import { getSeasonRewardsStock } from '../components/lobby/seasons/season-reward
 import { clearPointerState } from './ui-theme'
 import { fetchDailyMissions } from '../meta/bootstrap'
 import { lobbyHudState } from './lobby-hud-state'
-import { canStartGame } from '../services/game-window'
+import { canStartGame, isEnergyFree } from '../services/game-window'
 // @ts-ignore - common/constants has @ts-nocheck
 import { USE_REMOTE_SERVER } from '../../../common/constants'
 // @ts-ignore - season-tier-definitions has @ts-nocheck
@@ -105,7 +105,10 @@ export const seasonPlayState = () => {
   // balances are still loading: say so instead of a bare disabled PLAY.
   const connecting = !r.loaded || !lobbyMenuState.actions.playSeason
   const friendsConnecting = connecting || !lobbyMenuState.actions.playWithFriends
-  const canPlay = !connecting && gameOpen && energy > 0
+  // A free-Energy week lets a player with nothing in the bank play: without
+  // this the offer would be invisible to exactly the players it is for.
+  const free = isEnergyFree()
+  const canPlay = !connecting && gameOpen && (free || energy > 0)
   const friendsAction = lobbyMenuState.actions.friendsAction ? lobbyMenuState.actions.friendsAction() : ''
   // While in a party the button is the way out; the 3D board says the same.
   const friendsLabel = lobbyMenuState.actions.friendsLabel ? (friendsAction === 'leave' ? 'LEAVE PARTY' : lobbyMenuState.actions.friendsLabel()) : ''
@@ -119,7 +122,8 @@ export const seasonPlayState = () => {
     gameOpen,
     canPlay: canPlay && !inParty,
     canFriends,
-    playCaption: connecting ? 'connecting...' : !gameOpen ? 'closed' : inParty ? 'in a party' : energy > 0 ? '1 energy' : 'no energy',
+    freeEnergy: free,
+    playCaption: connecting ? 'connecting...' : !gameOpen ? 'closed' : inParty ? 'in a party' : free ? 'free this week' : energy > 0 ? '1 energy' : 'no energy',
     friendsCaption: canFriends ? friendsLabel : friendsConnecting && gameOpen ? 'CONNECTING...' : 'PLAY\nWITH FRIENDS',
     // The FRIENDS button shows the waiting party's rank in place of its icon.
     friendsRoomTier: canFriends ? roomTier : -1,

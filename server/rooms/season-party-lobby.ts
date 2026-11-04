@@ -7,6 +7,7 @@ import {tryFn} from "../../common/utils";
 import {createPartyToken, registerParty} from "./season-party-registry";
 import {gameClosedMessage, getGameAccessFor} from "../game-window-gate";
 import {resolvePlayer} from "./session-auth";
+import {DEFAULT_MAX, partyMaxPlayers, refreshPartyMaxPlayers} from "../party-size";
 
 // "Play ranked with friends" waiting room. One instance, one waiting party:
 // nobody can create another until this one is cancelled or starts.
@@ -21,7 +22,10 @@ import {resolvePlayer} from "./session-auth";
 //     create another for CREATE_LOCK_MS: nobody holds the only slot by
 //     re-creating it over and over.
 // On start the slot is freed right away, so a new party can form.
-const MAX_PARTY_PLAYERS = 4;
+//Was a hardcoded 4 until 2026-11-04; now the admin's `partyMaxPlayers` row,
+//with a ceiling the server will not cross (server/party-size.ts explains why
+//there is no "unlimited": one cannon world per player, all ticked together).
+//The number travels in the state so no client has to guess it.
 const PARTY_IDLE_MS = 60000;
 const CREATE_LOCK_MS = 5000;
 
@@ -66,6 +70,10 @@ class SeasonPartyLobbyState extends Schema {
     @type("uint8")
     secondsLeft = 0;
 
+    //how many may join, so the clients never show a different number
+    @type("uint8")
+    maxPlayers = DEFAULT_MAX;
+
     lastCountChange = 0;
 }
 
@@ -73,6 +81,7 @@ class PartyError extends Error {}
 
 export class SeasonPartyLobbyRoom extends Room<SeasonPartyLobbyState> {
     private interval: ReturnType<typeof setInterval>;
+    private maxInterval: ReturnType<typeof setInterval>;
     private users = new Map<string, any>();
     //address -> time until which it can't create a party
     private createLocks = new Map<string, number>();
@@ -97,7 +106,7 @@ export class SeasonPartyLobbyRoom extends Room<SeasonPartyLobbyState> {
             const member = await this.resolveMember(client);
             if (!this.state.open || this.state.starting) throw new PartyError("There is no party waiting");
             if (this.state.members.find(m => m.address === member.address)) throw new PartyError("You are already in the party");
-            if (this.state.members.length >= MAX_PARTY_PLAYERS) throw new PartyError("The party is full");
+            if (this.state.members.length >= partyMaxPlayers()) throw new PartyError("The party is full");
             this.state.members.push(member);
             this.touch();
         }));
@@ -118,6 +127,11 @@ export class SeasonPartyLobbyRoom extends Room<SeasonPartyLobbyState> {
         }));
 
         this.interval = setInterval(() => tryFn(() => this.checkIdle(), (error) => console.log("season-party-lobby checkIdle error", error)), 1000);
+        //the admin can change the party size without a deploy; the number is
+        //re-read on its own cache (5 min) and published in the state
+        const syncMax = () => refreshPartyMaxPlayers().then(max => { this.state.maxPlayers = max; }, () => {});
+        void syncMax();
+        this.maxInterval = setInterval(() => void syncMax(), 60000);
     }
 
     onJoin(client: Client, {user, clientInfo}: any = {}) {
@@ -133,6 +147,7 @@ export class SeasonPartyLobbyRoom extends Room<SeasonPartyLobbyState> {
 
     onDispose() {
         clearInterval(this.interval);
+        clearInterval(this.maxInterval);
     }
 
     private isSlotTaken() {

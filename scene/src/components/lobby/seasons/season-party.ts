@@ -23,7 +23,11 @@ import { guardGameStart } from '../../../services/game-window'
 import { getSessionTicket } from '../../../meta/bootstrap'
 import { returnToMenuIfRequested } from '../../../ui/lobby-menu-state'
 
-const MAX_PARTY_PLAYERS = 4
+// How many fit in a party. The server owns the number (admin row
+// `partyMaxPlayers`) and publishes it in the lobby state, so the captions and
+// the full-party check here can never disagree with what the server enforces.
+// The fallback only matters before the first state patch arrives.
+const MAX_PARTY_FALLBACK = 16
 // A CREATE / JOIN the lobby never answers (no state with me in it, no
 // PARTY_ERROR) means the socket died without closing: rejoin.
 const ANSWER_TIMEOUT_MS = 10000
@@ -174,6 +178,12 @@ export const createSeasonParty = async (
     return !!lobby?.state?.members
   }
 
+  // The server's number, never ours (see MAX_PARTY_FALLBACK).
+  function maxPlayers() {
+    const max = Number(lobby?.state?.maxPlayers)
+    return max > 0 ? max : MAX_PARTY_FALLBACK
+  }
+
   // Every refusal is shown, and the lobby dialog comes back if the press came
   // from there (startFriends closes it before calling click).
   function refuse(message: string) {
@@ -226,7 +236,7 @@ export const createSeasonParty = async (
     if (!guardGameStart()) return
     if (lobby.state.starting) return refuse('That party is already starting')
     if (lobby.state.open) {
-      if (lobby.state.members.length >= MAX_PARTY_PLAYERS) return refuse('The party is full')
+      if (lobby.state.members.length >= maxPlayers()) return refuse('The party is full')
       send(MESSAGE.PARTY_JOIN, true)
     } else {
       send(MESSAGE.PARTY_CREATE, true)
@@ -268,11 +278,11 @@ export const createSeasonParty = async (
     const count = lobby.state.members.length
     if (isMember()) {
       return count > 1
-        ? `STARTS IN ${seconds}s (${count}/${MAX_PARTY_PLAYERS})`
+        ? `STARTS IN ${seconds}s (${count}/${maxPlayers()})`
         : `WAITING FRIENDS... ${seconds}s`
     }
     if (lobby.state.starting) return 'PARTY STARTING...'
-    if (lobby.state.open) return `JOIN PARTY (${count}/${MAX_PARTY_PLAYERS}) ${seconds}s`
+    if (lobby.state.open) return `JOIN PARTY (${count}/${maxPlayers()}) ${seconds}s`
     return 'CREATE PARTY'
   }
 
@@ -318,7 +328,7 @@ export const createSeasonParty = async (
 
     seasonWaitState.visible = true
     seasonWaitState.mode = 'party'
-    seasonWaitState.title = `Ranked with friends (${members.length}/${MAX_PARTY_PLAYERS})`
+    seasonWaitState.title = `Ranked with friends (${members.length}/${maxPlayers()})`
     seasonWaitState.secondsLeft = secondsLeft
     seasonWaitState.roomTierName = tierName
     seasonWaitState.info =

@@ -21,7 +21,9 @@ import {raffle} from "./raffle/raffle";
 import {promisify} from "util";
 import {deserializeRecipe, getCatFromTier, getPointsToTier, getTierFromSub} from "../../common/utils";
 import {getGameAccess, GameWindowConfig} from "../../common/game-window";
+import {getFreeEnergyStatus, FreeEnergyConfig} from "../../common/free-energy";
 const GAME_WINDOW_KEY = "gameWindow";
+const FREE_ENERGY_KEY = "freeEnergy";
 import {textImageApi} from "./text-image/text-image";
 import {seasonsApi} from "./seasons";
 import {runChecks} from "../../chain-playfab/security/securityChecks";
@@ -301,15 +303,32 @@ console.log("set-affiliate-code",code, playerAddress, PlayFabId, displayName)
     })
     //When the game can be played (common/game-window.ts) for one wallet. The
     //config row is edited in the admin; a missing or unreadable row means open.
+    //It also carries the free-Energy window (common/free-energy.ts): the game
+    //server asks whether to charge for a run and the scene has to let a player
+    //with 0 Energy press PLAY while it lasts. It rides here rather than in its
+    //own route because this is the only thing the scene re-polls (every 10
+    //minutes), so a window that opens or closes is picked up without a reload.
     router.get("/api/game-window", async (req, res) => {
         try{
             const address = typeof req.query.address === "string" ? req.query.address : null;
-            return res.send(getGameAccess(await readGameWindowConfig(), address));
+            const [windowConfig, energyConfig] = await Promise.all([readGameWindowConfig(), readFreeEnergyConfig()]);
+            const energy = getFreeEnergyStatus(energyConfig);
+            return res.send({...getGameAccess(windowConfig, address), freeEnergy: energy.free, freeEnergyUntil: energy.until});
         }catch(error:any){
             console.log("/api/game-window error", error?.message);
-            return res.send(getGameAccess(null, null));
+            return res.send({...getGameAccess(null, null), freeEnergy: false, freeEnergyUntil: null});
         }
     });
+    async function readFreeEnergyConfig(): Promise<FreeEnergyConfig | null> {
+        const row = await prisma.config.findFirst({where:{key:FREE_ENERGY_KEY}});
+        if (!row?.value) return null;
+        try{
+            return JSON.parse(row.value);
+        }catch(error){
+            console.log("freeEnergy config is not valid JSON, ignoring it", row.value);
+            return null;
+        }
+    }
     async function readGameWindowConfig(): Promise<GameWindowConfig | null> {
         const row = await prisma.config.findFirst({where:{key:GAME_WINDOW_KEY}});
         if (!row?.value) return null;

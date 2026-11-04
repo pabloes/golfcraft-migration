@@ -9,8 +9,6 @@ import { createBuilding, destroyBuilding } from './components/lobby/building'
 import { createLobbyTraining, destroyLobbyTraining, destroyLobbyBoards } from './components/lobby/lobby-training'
 import { fadeInOverlay, fadeOutOverlay } from './components/ui/overlay'
 import { refreshUserData } from './meta/bootstrap'
-import { movePlayerTo } from '~system/RestrictedActions'
-import { GAME_SPAWN } from './components/spawns'
 import { globalStore } from './services/globalStore/globalStore'
 // @ts-ignore - common/utils has @ts-nocheck
 import { sleep } from '../../common/utils'
@@ -88,11 +86,14 @@ export async function main() {
               spawnLobby()
               await refreshUserData()
               await sleep(500)
-              const [spawnPos, spawnCam] = GAME_SPAWN.TRAINING
-              await movePlayerTo({
-                newRelativePosition: Vector3.create(spawnPos.x, spawnPos.y, spawnPos.z),
-                cameraTarget: Vector3.create(spawnCam.x, spawnCam.y, spawnCam.z)
-              })
+              // No teleport back to the lobby spawn (user, 2026-11-04). The one
+              // that used to be here misfired in production: players reported
+              // landing outside the scene, and sometimes in Genesis Plaza. The
+              // run keeps the avatar inside the course the whole time
+              // (avatar-lock.ts), so when it ends the player is already
+              // somewhere valid and can simply walk back. A teleport that can
+              // put somebody outside the scene is worse than no teleport,
+              // because the explorer will not move a player who is already out.
             } finally {
               // The run held the avatar still from its first tee
               // (orbit-camera.ts); only free it once it is back in the lobby,

@@ -28,7 +28,7 @@ import { claimSeasonReward, getSeasonActionStatus } from './season-rewards-bridg
 import { lobbyHudState } from '../../../ui/lobby-hud-state'
 import { isDialogPress, lobbyMenuState } from '../../../ui/lobby-menu-state'
 import { showMessage } from '../server-notification'
-import { canStartGame, formatUtc, gameWindowState, guardGameStart, onGameWindowChange } from '../../../services/game-window'
+import { canStartGame, formatUtc, gameWindowState, guardGameStart, isEnergyFree, onGameWindowChange } from '../../../services/game-window'
 
 const SEASON_CATALOG: Record<string, { name: string }> = seasonCatalog as any
 
@@ -313,8 +313,12 @@ export const createSeasonMenu = async (
       value += `You are rank ${tierDefinition?.name} ${getPointsOnCurrentTier(userTierSub)}/${
         seasonPointsPerCategory[getCatFromTier(tier)]
       }\n(${userTierSub} Season points) `
-      value += `\n\n\n\n\nEnergy: ${energy} ( Recharges 1 every 2.4 hours )`
-      if (!energy) value += `\nMeanwhile, You can play Community Tournaments`
+      if (isEnergyFree()) {
+        value += `\n\n\n\n\nFREE ENERGY WEEK\nEvery run is free`
+      } else {
+        value += `\n\n\n\n\nEnergy: ${energy} ( Recharges 1 every 2.4 hours )`
+        if (!energy) value += `\nMeanwhile, You can play Community Tournaments`
+      }
       text.text = value
     }
 
@@ -326,7 +330,8 @@ export const createSeasonMenu = async (
   // follows the same energy rule (a run costs 1 EN per player) and takes Play's
   // place while the player is committed to a party.
   function refreshFriendsButton() {
-    const energy = lobbyHudState.resources.EN || 0
+    //a free-Energy week plays with an empty bank
+    const energy = isEnergyFree() ? 1 : lobbyHudState.resources.EN || 0
 
     // The party lobby repaints this on every state change; outside the
     // monthly window it must not bring PLAY / CREATE back.

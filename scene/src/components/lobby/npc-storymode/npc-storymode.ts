@@ -8,11 +8,9 @@ import { GolfplayClientFactory } from '../golfplay-client'
 import { fadeInOverlay, fadeOutOverlay } from '../../ui/overlay'
 import { getMusicForCollection, reproduceMapMusic, stopMapMusic } from '../../../services/map-music'
 import { refreshUserData } from '../../../meta/bootstrap'
-import { movePlayerTo } from '~system/RestrictedActions'
 import { signedFetch } from '~system/SignedFetch'
 // @ts-ignore - common/constants has @ts-nocheck
 import { USE_REMOTE_SERVER } from '../../../../../common/constants'
-import { GAME_SPAWN } from '../../spawns'
 import { showBanner } from '../../../ui/centerpanel-state'
 import { hideTopBar } from '../../../ui/topbar-state'
 import MESSAGE from '../../../../../server/rooms/mesages'
@@ -932,14 +930,14 @@ export const createNpcTest = (parent: Entity, opts: CreateNpcOptions): Entity | 
       await sleep(1000)
       await refreshUserData()
       await opts.onFinish(leaveCode) // respawn lobby (= SDK6 show())
-      // Teleport the player back to the lobby/NPC spawn (SDK6 GAME_SPAWN.MISSION
-      // via handleLeavePlay) — otherwise they're stranded where the ball holed.
+      // SDK6 teleported back to GAME_SPAWN.MISSION here (handleLeavePlay). Taken
+      // out on 2026-11-04 at the user's request: in production that teleport
+      // sometimes left the player outside the scene and sometimes in Genesis
+      // Plaza. The player finishes the hole inside the course, which is inside
+      // the scene, so they can walk back to the lobby; a teleport that can
+      // strand somebody is worse than none, since the explorer refuses to move
+      // a player who is already outside.
       await sleep(500)
-      const [spawnPos, spawnCam] = GAME_SPAWN.MISSION
-      await movePlayerTo({
-        newRelativePosition: Vector3.create(spawnPos.x, spawnPos.y, spawnPos.z),
-        cameraTarget: Vector3.create(spawnCam.x, spawnCam.y, spawnCam.z)
-      })
       await fadeOutOverlay(1)
       // Started from the lobby dialog's LET'S GO: show it again.
       returnToMenuIfRequested()
