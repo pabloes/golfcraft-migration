@@ -7,6 +7,7 @@ import {PlayFab, PlayFabServer} from "playfab-sdk";
 import {promisify} from "util";
 import missionCheckers from "./checkers/mission-checkers";
 import {giveRewards} from "./give-rewards";
+import { discordHook } from '../../../common/discord-hooks'
 const MISSIONS_JSON_FILE = `.daily-missions.json`;
 const MINUTE = 1000*60;
 const HOUR = MINUTE*60;
@@ -254,6 +255,6 @@ export async function dailyMissionsApi(router, PROD){
     }
 
     function callDiscordMissions(str){
-        callDiscordHook(str,"https://discord.com/api/webhooks/REDACTED")
+        callDiscordHook(str,discordHook('DISCORD_HOOK_DAILY_MISSIONS'))
     }
 }

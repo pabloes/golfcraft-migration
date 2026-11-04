@@ -15,6 +15,7 @@ import {lobbyResetRoom} from "./live-room-manager";
 import {USE_REMOTE_SERVER} from "../../common/constants";
 import {callDiscordHook} from "../../common/discord";
 import {getTotalResultsText} from "../../common/live-tournament-utils";
+import { discordHook } from '../../common/discord-hooks'
 const FIRST_SHOT_PERIOD = 10000;
 class LivePlayer extends Schema {
     @type("string")
@@ -228,7 +229,7 @@ export class LiveTournamentRoom extends Room<LiveRoomState> {
             await sleep(3000);
             this.broadcast(MESSAGE.LIVE_TOURNAMENT_END, this.state.toJSON());
             if(this.state.players.length){
-                callDiscordHook(`Live Tournament organized by ${this.state.players[0].displayName} has finished\n\n${getTotalResultsText(this.state)}`,"https://discord.com/api/webhooks/REDACTED")
+                callDiscordHook(`Live Tournament organized by ${this.state.players[0].displayName} has finished\n\n${getTotalResultsText(this.state)}`,discordHook('DISCORD_HOOK_LIVE_TOURNAMENT'))
             }
             //TODO everyone should leave the room
         }

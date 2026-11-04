@@ -30,6 +30,7 @@ import {getAllowedFindArgs} from "./prisma-read-allow-list";
 const fallback = require("express-history-api-fallback");
 const fs = require("fs");
 const http = require("http");
+import { discordHook } from '../../common/discord-hooks'
 console.log("FOO")
 if(!process.env.PLAYFAB_TITLE_ID || !process.env.PLAYFAB_SECRET_KEY){
     console.log("missing PlayFab config");
@@ -239,7 +240,7 @@ console.log("set-affiliate-code",code, playerAddress, PlayFabId, displayName)
                 }
 
             }
-            callDiscordHook(str, "https://discord.com/api/webhooks/REDACTED");
+            callDiscordHook(str, discordHook('DISCORD_HOOK_WEB_ALERTS'));
 
             res.send(str.replace(/\n/g, "<br>"));
         }catch(error){
@@ -436,9 +437,11 @@ function handleProcessExit(){
     }
 }
 
-function callDiscordHook(str:any, url = "https://discord.com/api/webhooks/REDACTED"){
+function callDiscordHook(str:any, url = discordHook('DISCORD_HOOK_WEB_DEFAULT')){
     console.log(str);
     if(!process.env.PROD) return;
+    //an unconfigured webhook (common/discord-hooks.ts) only logs
+    if(!url) return;
     var body = typeof str === "string"?{
         username:"Bot admin",
         content: `${str}`

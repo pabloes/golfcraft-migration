@@ -31,6 +31,7 @@ import {CURRENCY} from "../../common/currency-codes";
 import {callDiscordHook} from "../../common/discord";
 import {pushChests} from "./chests-generator";
 import {gameClosedMessage, getGameAccessFor} from "../game-window-gate";
+import { discordHook } from '../../common/discord-hooks'
 const API_URL = process.env.PROD ? `https://golfcraftgame.com` : `http://localhost:2569`;
 const playfabServerApiKey = process.env.PLAYFAB_API_KEY;
 const NUM_PLAYERS = 4;
@@ -670,7 +671,7 @@ console.log("accumulatedValue", JSON.stringify(sortedAccumulatedResult,null, "  
                     const reward = deserializeRecipe(chest.reward);
                     if(reward.wearable){
                         foundWearables++;
-                        callDiscordHook(`${displayName} found a wearable in a gift!`,"https://discord.com/api/webhooks/REDACTED")
+                        callDiscordHook(`${displayName} found a wearable in a gift!`,discordHook('DISCORD_HOOK_WEARABLE_FOUND'))
                     }else{
                         const VirtualCurrency = Object.keys(reward)[0];
                         rewards[VirtualCurrency] += reward[VirtualCurrency];

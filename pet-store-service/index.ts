@@ -14,7 +14,8 @@ import fs = require("fs");
 import weightedRandom from "./weightedRandom";
 const Web3 = require("web3");
 const HDWalletProvider = require("@truffle/hdwallet-provider");
-const PUBLIC_VOXTER_DISCORD_CHANNEL_URL = "https://discord.com/api/webhooks/REDACTED";
+import { discordHook } from '../common/discord-hooks'
+const PUBLIC_VOXTER_DISCORD_CHANNEL_URL = discordHook('DISCORD_HOOK_VOXTER_PUBLIC');
 const MAX_GAS_PRICE = 1000;
 
 if(!process.env.PLAYFAB_TITLE_ID){
@@ -59,7 +60,7 @@ const app = express();
 app.use(cors({ origin: true }));
 app.use(bodyParser());
 // Set a new Bot
-const SURPRISE_DISCORD_CHANNEL_URL = "https://discord.com/api/webhooks/REDACTED"
+const SURPRISE_DISCORD_CHANNEL_URL = discordHook('DISCORD_HOOK_SURPRISE')
 if(!fs.existsSync(`stock-sales.json`)){
     fs.writeFileSync(`stock-sales.json`, JSON.stringify({}));
 }

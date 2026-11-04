@@ -1,5 +1,6 @@
 import {getCompleteParticipationsCount, getLastSentRewardPoints} from "../../../common/tournament-creator-report";
 import {callDiscordHook} from "../../../../common/discord";
+import { discordHook } from '../../../../common/discord-hooks'
 
 export async function handleParticipationsRewards(prisma, {organizer, organizer_display_name}){
     const TOURNAMENT_PARTICIPATION_MILESTONES = [
@@ -10,7 +11,7 @@ export async function handleParticipationsRewards(prisma, {organizer, organizer_
         1000
     ];
     const completeParticipationsCount = await getCompleteParticipationsCount({organizer, prisma});
-    callDiscordHook(`Tournament organizer ${organizer_display_name}: ${completeParticipationsCount} points`, "https://discord.com/api/webhooks/REDACTED");
+    callDiscordHook(`Tournament organizer ${organizer_display_name}: ${completeParticipationsCount} points`, discordHook('DISCORD_HOOK_LIVE_TOURNAMENT'));
     const lastSentRewardPoints = await getLastSentRewardPoints({organizer:organizer.toLowerCase(), prisma});
     const currentParticipationMilestoneIndex = TOURNAMENT_PARTICIPATION_MILESTONES.reduce((acc, current, index)=> completeParticipationsCount >= current ? index:acc, 0);
     const lastSentRewardMilestoneIndex = TOURNAMENT_PARTICIPATION_MILESTONES.reduce((acc, current, index)=> lastSentRewardPoints === current ? index:acc, 0);

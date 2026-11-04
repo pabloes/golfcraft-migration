@@ -5,7 +5,7 @@ import wearablesAbi from "./abi/wearables.abi.json";
 import namesAbi from "./abi/names.abi.json";
 import * as fs from "fs";
 import fetch from "cross-fetch";
-const THEGRAPH_API_URL = "https://gateway.thegraph.com/api/REDACTED_API_KEY/deployments/id/QmccAwofKfT9t4XKieDqwZre1UUZxuHw5ynB35BHwHAJDT";
+const THEGRAPH_API_URL = `https://gateway.thegraph.com/api/${process.env.THEGRAPH_WEARABLES_API_KEY}/deployments/id/QmccAwofKfT9t4XKieDqwZre1UUZxuHw5ynB35BHwHAJDT`;
 const namesContract = new ethers.Contract("0x2A187453064356c898cAe034EAed119E1663ACb8", namesAbi as any, provider);
 import _report from "./.wearables-report.json";
 const report:any = _report;

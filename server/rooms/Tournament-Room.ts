@@ -19,6 +19,7 @@ import {pushChests} from "./chests-generator";
 import {recordHoleStart} from "../hole-start";
 import MESSAGES from "./mesages";
 import {withoutSecrets} from "../../common/redact";
+import { discordHook } from '../../common/discord-hooks'
 
 const HALLOWEEN_WEARABLE_STATISTIC = "wearable:halloween-2022";//TODO make it dynamic depending on event-key
 const OPEN_CHEST_STATISTIC = "chests_open";
@@ -445,7 +446,7 @@ export class TournamentRoom extends Room<CompetitionGroupState> {
         },1000);
 
         const callDiscord = (str)=>{
-            callDiscordHook(str,"https://discord.com/api/webhooks/REDACTED")
+            callDiscordHook(str,discordHook('DISCORD_HOOK_TOURNAMENT'))
         }
 
         if(this.participation.data.courseStates.length === 12){
@@ -476,7 +477,7 @@ export class TournamentRoom extends Room<CompetitionGroupState> {
                     const reward = deserializeRecipe(chest.reward);
                     if(reward.wearable){
                         foundWearables++;
-                        callDiscordHook(`${displayName} found a wearable in a gift!`,"https://discord.com/api/webhooks/REDACTED")
+                        callDiscordHook(`${displayName} found a wearable in a gift!`,discordHook('DISCORD_HOOK_WEARABLE_FOUND'))
                     }else{
                         const VirtualCurrency = Object.keys(reward)[0];
                         rewards[VirtualCurrency] += reward[VirtualCurrency];

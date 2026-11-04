@@ -6,6 +6,7 @@ import path from 'path';
 import express from 'express'
 import cors from 'cors';
 import basicAuth = require("express-basic-auth");
+import { discordHook } from '../../common/discord-hooks'
 
 const STREAM_URL_FILE = "streamURL";
 
@@ -72,7 +73,9 @@ function handleProcessExit(){
     username?:string,
     embeds?:any[],
   }
-  function callDiscordHook(str:string|DiscordJSON, url = "https://discord.com/api/webhooks/REDACTED"){
+  function callDiscordHook(str:string|DiscordJSON, url = discordHook('DISCORD_HOOK_ADMIN')){
+    //an unconfigured webhook (common/discord-hooks.ts) only logs
+    if(!url) { console.log(str); return; }
   console.log(str);
 
   var body = typeof str === "string"?{

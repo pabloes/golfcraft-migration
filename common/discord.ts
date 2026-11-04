@@ -1,8 +1,11 @@
 import fetch from "cross-fetch";
 import {redactedMessage} from "./redact";
+import { discordHook } from './discord-hooks'
 
-export function callDiscordHook(str:string, url = "https://discord.com/api/webhooks/REDACTED" ){
+export function callDiscordHook(str:string, url = discordHook('DISCORD_HOOK_DEFAULT') ){
     console.log(str);
+    //an unconfigured webhook (common/discord-hooks.ts) only logs
+    if(!url) return;
     try{
         var body = {
             username:"Caddie",

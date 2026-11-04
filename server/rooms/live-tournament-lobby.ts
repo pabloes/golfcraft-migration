@@ -13,6 +13,7 @@ import * as crypto from 'crypto';
 import {promisify} from "util";
 import {registerLobby} from "./live-room-manager";
 import {callDiscordHook} from "../../common/discord";
+import { discordHook } from '../../common/discord-hooks'
 
 class PlayerState extends Schema {
     sessionId;
@@ -101,7 +102,7 @@ export class LiveTournamentLobbyRoom extends Room<LiveTournamentLobbyState> {
         this.onMessage(MESSAGE.CREATE_LIVE_ROOM, (client, {
             roomIndex = 0, realm, address, displayName, PlayFabId,
             numberOfMaps, useOwnMaps, maxDifficulty, courseIds})=>{
-            callDiscordHook(`${displayName} is creating a Live tournament!`, "https://discord.com/api/webhooks/REDACTED")
+            callDiscordHook(`${displayName} is creating a Live tournament!`, discordHook('DISCORD_HOOK_LIVE_TOURNAMENT'))
             this.state.rooms[roomIndex].lastActivityTime = Date.now();
             this.state.rooms[roomIndex].numberOfMaps = numberOfMaps;
             this.state.rooms[roomIndex].maxDifficulty = maxDifficulty;

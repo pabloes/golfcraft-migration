@@ -6,6 +6,7 @@ import {promisify} from "util";
 import {PlayFabServer} from "playfab-sdk";
 import {getRandomFromList, sleep} from "../../common/utils";
 import {withoutSecrets} from "../../common/redact";
+import { discordHook } from '../../common/discord-hooks'
 
 const ChestRewardChances = [
     {GC:1, weight:2000},
@@ -133,7 +134,7 @@ export class DclAwardsRoom extends Room<DclAwardsRoomState> {
                     ... weightedRandom(_ChestRewardChances, _ChestRewardChances.map(i=>i.weight)).item,
                     weight:undefined
                 };
-                callDiscordHook(`${JSON.stringify(reward)} ${displayName} ${PlayFabId}`, "https://discord.com/api/webhooks/REDACTED");
+                callDiscordHook(`${JSON.stringify(reward)} ${displayName} ${PlayFabId}`, discordHook('DISCORD_HOOK_DCL_AWARDS_LOG'));
                 if(reward.wearable){
                     await promisify(PlayFabServer.UpdatePlayerStatistics)({
                         PlayFabId,
@@ -148,7 +149,7 @@ export class DclAwardsRoom extends Room<DclAwardsRoomState> {
                         reward
                     });
 
-                    callDiscordHook(`${displayName} found a DCL Awards wearable!`,"https://discord.com/api/webhooks/REDACTED")
+                    callDiscordHook(`${displayName} found a DCL Awards wearable!`,discordHook('DISCORD_HOOK_WEARABLE_FOUND'))
                     this.state.wearablesGiven++;
                 }else{
                     const VCNames = {

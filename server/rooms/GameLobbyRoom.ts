@@ -14,6 +14,7 @@ import { matchMaker } from "colyseus";
 import {USE_REMOTE_SERVER} from "../../common/constants";
 import * as crypto from 'crypto';
 import {promisify} from "util";
+import { discordHook } from '../../common/discord-hooks'
 
 export const getLobbyRoom = () => lobbyRoom;
 const setLobbyRoom = (room) => lobbyRoom = room;
@@ -203,7 +204,7 @@ export class GameLobbyRoom extends Room<LobbyState> {
         console.log("IP Hash:", ipHash);
 
         if(!~realm.indexOf("127.0.0.1")){
-            callDiscordHook(`${user.displayName} is at Golfcraft, realm ${realm}, hash ${ipHash}`, "https://discord.com/api/webhooks/REDACTED");
+            callDiscordHook(`${user.displayName} is at Golfcraft, realm ${realm}, hash ${ipHash}`, discordHook('DISCORD_HOOK_PLAYER_CONNECTED'));
         }
 
         const [lastDayConnectedTimeS, lastTimeEnergyBonusReceived] = await promisify(PlayFabServer.GetPlayerStatistics)({
@@ -228,7 +229,7 @@ export class GameLobbyRoom extends Room<LobbyState> {
             let energyBonus = 0;
             const address = user.publicKey;
             try{
-                const result = await fetch(`https://gateway-arbitrum.network.thegraph.com/api/REDACTED_API_KEY/subgraphs/id/Ccskr6qXCAGpb6h43rYNzQsQzmwMPgSTyPB3rwgyTYm5`, {
+                const result = await fetch(`https://gateway-arbitrum.network.thegraph.com/api/${process.env.THEGRAPH_API_KEY}/subgraphs/id/Ccskr6qXCAGpb6h43rYNzQsQzmwMPgSTyPB3rwgyTYm5`, {
                     headers:{"Content-Type":"application/json"},
                     body:JSON.stringify({
                         "query":`{\n  golfclubs(where:{player:\"${address}\"}) {\n    id, golfclubid  }\n}`

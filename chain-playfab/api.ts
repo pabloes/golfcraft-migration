@@ -9,6 +9,7 @@ var bodyParser = require('body-parser');
 import fetch from "cross-fetch";
 import {logsHandler} from "../common/log-buffer";
 import {redactError, redactedMessage} from "../common/redact";
+import { discordHook } from '../common/discord-hooks'
 
 const MINT_PRICE_DM = 120;
 const app = express();
@@ -34,7 +35,7 @@ export const VALID_PARCELS: number[][] = [ //TODO
     [48,-45],[48,-44],[48,-43],
     [49,-45],[49,-44],[49,-43]
 ];
-const PUBLIC_GOLFCLUB_DISCORD_CHANNEL_URL = "https://discord.com/api/webhooks/REDACTED";
+const PUBLIC_GOLFCLUB_DISCORD_CHANNEL_URL = discordHook('DISCORD_HOOK_GOLFCLUB_PUBLIC');
 const LOG_FILE_NAME = `golfclub-minter.log`;
 const lastTimeUnlock = {};
 app.post(`*/mint-golf-club`, async (req, res)=>{
@@ -94,7 +95,9 @@ app.post(`*/mint-golf-club`, async (req, res)=>{
 console.log("listening on PORT "+(process.env.PORT || "2567"))
 app.listen(process.env.PORT || "2567")
 
-async function callDiscordHook(str:any, url = "https://discord.com/api/webhooks/REDACTED"){
+async function callDiscordHook(str:any, url = discordHook('DISCORD_HOOK_DEFAULT')){
+    //an unconfigured webhook (common/discord-hooks.ts) only logs
+    if(!url) { console.log(str); return; }
   console.log(str);
   try{
       var body = typeof str === "string"?{

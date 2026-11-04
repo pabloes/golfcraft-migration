@@ -62,6 +62,7 @@ import {LiveTournamentLobbyRoom} from "./rooms/live-tournament-lobby";
 import {LiveTournamentRoom} from "./rooms/live-tournament-room";
 import {SeasonPartyLobbyRoom} from "./rooms/season-party-lobby";
 import {SeasonPartyRoom} from "./rooms/season-party-room";
+import { discordHook } from '../common/discord-hooks'
 
 require('dotenv').config();
 const port = Number(process.env.PORT || 2567) + Number(process.env.NODE_APP_INSTANCE || 0);
@@ -426,7 +427,9 @@ function handleProcessExit(){
             content: `WS SERVER: ${str}`
         };
   
-    var url = "https://discord.com/api/webhooks/REDACTED";
+    var url = discordHook('DISCORD_HOOK_ADMIN');
+    //an unconfigured webhook (common/discord-hooks.ts) only logs
+    if(!url) return;
   
     return await fetch(url,
         {

@@ -15,6 +15,7 @@ import {promisify} from "util";
 import {processHookRequest} from "./playfab-hook-processor";
 import fetch from "cross-fetch";
 import {getRandomInt, shuffle} from "../../../../common/utils";
+import { discordHook } from '../../../../common/discord-hooks'
 const VALID_PARCELS: number[][] = [
     [47,-45],[48,-45],[49,-45],
     [47,-44],[48,-44],[49,-44],
@@ -251,7 +252,7 @@ export const coursesApi = (router, app, prisma)=>{
             await prisma.confessions.create({
                 data: {text}
             });
-            callDiscordHook(text,"https://discord.com/api/webhooks/REDACTED")
+            callDiscordHook(text,discordHook('DISCORD_HOOK_COURSES'))
             return res.send({result:true})
         }catch(error){
             return res.status(500).send({error:"Error"});

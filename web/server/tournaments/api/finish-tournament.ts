@@ -12,6 +12,7 @@ import {
 import {getCompleteParticipationsCount, getLastSentRewardPoints} from "../../../common/tournament-creator-report";
 import {callDiscordHook} from "../../../../common/discord";
 import {handleParticipationsRewards} from "./handle-tournament-organizer-rewards";
+import { discordHook } from '../../../../common/discord-hooks'
 const MATERIALS_PLAYFABS = {
     WD:"DCB653CA22218FFB",
     ST:"B9C5095171696CF1",
@@ -307,8 +308,8 @@ export async function finishTournament(tournament, prisma){
     }
 }
 async function callDiscordPublic(str){
-    await callDiscordHook(str,"https://discord.com/api/webhooks/REDACTED")
+    await callDiscordHook(str,discordHook('DISCORD_HOOK_LIVE_TOURNAMENT'))
 }
 async function callDiscordPrivate(str){
-    await callDiscordHook(str, "https://discord.com/api/webhooks/REDACTED")
+    await callDiscordHook(str, discordHook('DISCORD_HOOK_TOURNAMENT'))
 }

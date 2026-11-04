@@ -52,3 +52,6 @@ design/gdd.html
 # generated here, so it must travel with the repo, or a clean worktree deploys
 # a server whose switches and trigger areas never change anything.
 !lib/expression-storage/_expression-storage.js
+
+# Local copy of the Discord webhook URLs and other deploy secrets: never commit.
+deploy/*.env

@@ -1,6 +1,7 @@
 import {PlayFabServer} from "playfab-sdk";
 import {promisify} from "util";
 import {callDiscordHook} from "../../../../common/discord";
+import { discordHook } from '../../../../common/discord-hooks'
 
 export async function processHookRequest(req){
     if(req.body.EventName === "title_statistic_version_changed"){
@@ -32,5 +33,5 @@ ${Leaderboard.map(l=>`${l.DisplayName} - ${l.StatValue}`).join(`\n`)}
 }
 
 async function callDiscordPublicLeaderboard(str){
-    await callDiscordHook(str,"https://discord.com/api/webhooks/REDACTED")
+    await callDiscordHook(str,discordHook('DISCORD_HOOK_PLAYFAB_EVENTS'))
 }
