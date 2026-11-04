@@ -4,11 +4,12 @@
 // E/F, click shoots. It works on mobile through the HUD buttons, but the player
 // still has to walk the avatar after every shot.
 //
-// CAMERA_AIM_MODE collapses that into one step, Golf With Your Friends style: a
-// camera circles the ball for the whole hole, the player turns it, and the shot
-// leaves the way it looks. The avatar is hidden and kept still with
-// InputModifier. Flip it to compare the two schemes.
-export const CAMERA_AIM_MODE = true
+// The camera scheme collapses that into one step, Golf With Your Friends
+// style: a camera circles the ball for the whole hole, the player turns it, and
+// the shot leaves the way it looks. The avatar is hidden and kept still with
+// InputModifier. Which scheme a player gets is a per-account option now
+// (services/game-options.ts: isCameraAimMode(), 'new' by default, 'legacy' for
+// SDK6's two-step control), read when each hole's client is created.
 
 // Phones only (platform.ts isMobile). The mobile explorer does not update
 // PrimaryPointerInfo during a touch drag while a VirtualCamera is active, so

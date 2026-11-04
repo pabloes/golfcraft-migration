@@ -31,7 +31,7 @@ import { createVisualChest } from './visualChest'
 import { showMessage } from './server-notification'
 import { createFixBugButton as createFixBugButtonStub } from './golfplay-client-season'
 import { createAimCamera } from '../../../golfplay/src/components/aim-camera'
-import { CAMERA_AIM_MODE } from '../../config/controls'
+import { isCameraAimMode } from '../../services/game-options'
 import { mobileShootState } from '../../ui/mobile-shoot-state'
 import { reportPing } from '../../ui/ping-state'
 import { reconnectRoom } from './room-reconnect'
@@ -167,7 +167,7 @@ const GolfplayClientFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: string })
     // CAMERA_AIM_MODE: the aim camera (orbit on desktop, the avatar anchored on
     // the ball on phones, see aim-camera.ts) keeps the avatar still for the
     // whole hole and gives the shoot control its aim. Null in the classic scheme.
-    const aimCam = CAMERA_AIM_MODE
+    const aimCam = isCameraAimMode()
       ? createAimCamera(parent, {
           ballEntity: ball.getEntity(),
           getBallPosition: () => physicBall.body.position,

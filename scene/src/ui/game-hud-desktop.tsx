@@ -23,7 +23,7 @@ import { getTierFromSub } from '../../../common/utils'
 // @ts-ignore - season-tier-definitions has @ts-nocheck
 import { seasonTierDefinitions } from '../../../common/season-tier-definitions'
 import { hudScale, type Canvas, type Px } from './ui-scale'
-import { CAMERA_AIM_MODE } from '../config/controls'
+import { isCameraAimMode } from '../services/game-options'
 
 // ---------------------------------------------------------------------------
 // A labelled stat box: small caption on top, big value under it.
@@ -353,7 +353,7 @@ export const ControlsHelp = () => {
   const { canvas, s } = hudScale()
   const { px, fs } = s
   const items: ReactEcs.JSX.Element[] = []
-  if (CAMERA_AIM_MODE) {
+  if (isCameraAimMode()) {
     items.push(helpItem(px, fs, [keyCap(px, fs, 'MOUSE', true)], 'Orbit'))
     items.push(helpItem(px, fs, [keyCap(px, fs, 'A', false), keyCap(px, fs, 'D', false)], 'Turn'))
     items.push(helpItem(px, fs, [keyCap(px, fs, 'W', false), keyCap(px, fs, 'S', false)], 'Zoom'))

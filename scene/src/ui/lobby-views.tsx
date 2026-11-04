@@ -17,6 +17,7 @@ import {
   P, at, img, imgW, imgBox, text, box, fullFrame, button2, squareButton, sideCard, nextPrizeStrip, yellowTag, resIcon, rankBadge, border, energyChip
 } from './ui2'
 import { isMobile } from '../services/platform'
+import { gameOptions, setControlScheme, type ControlScheme } from '../services/game-options'
 import { talkToNpc } from '../components/lobby/npc-storymode/npc-storymode'
 import { getGolfclubCollection, selectGolfclub, upgradeGolfclubAttribute } from '../components/lobby/lobby-training'
 import { BoardGolfclub } from '../components/lobby/golfclub-screen/golfclub-screen-ui'
@@ -880,5 +881,74 @@ export const MoreGamesView = () => {
     img(px, 'ic_gamepad_w', 498 + (163 - 30) / 2, 96, 30 / imgW('ic_gamepad_w'), SOON_EDGE),
     text(px, fs, 'MORE SOON', 498, 128, 163, 20, 15, P.pale, 'middle-center'),
     text(px, fs, 'The next game shows up here', 512, 150, 135, 30, 10, P.pale, 'middle-center', true)
+  ])
+}
+
+// ---------------------------------------------------------------- OPTIONS
+// Game options (user, 2026-11-04): the control scheme, kept on the account
+// (services/game-options.ts). Two cards, the chosen one marked; a change
+// applies from the player's next hole. The cards end above y 232 so the
+// phone's bottom-right buttons stay clear.
+const OPTION_CARDS: { scheme: ControlScheme; title: string; tag: string; lines: string[]; color: Color4 }[] = [
+  {
+    scheme: 'new',
+    title: 'NEW CONTROLS',
+    tag: 'Recommended',
+    lines: [
+      'The camera circles the ball and follows every shot.',
+      'Desktop: mouse or A / D turn the aim, W / S zoom, E / F set the power, click shoots.',
+      'Phone: drag to aim, + / - for the power, SHOOT.'
+    ],
+    color: P.purple
+  },
+  {
+    scheme: 'legacy',
+    title: 'LEGACY CONTROLS',
+    tag: 'GolfCraft classic',
+    lines: [
+      'You walk your avatar to the ball; the camera stays with you.',
+      'Step 1: E / F turn the aim, click sets it.',
+      'Step 2: E / F set the power, click shoots.',
+      'Phone: the < > arrows turn, + / - set the power, SHOOT.'
+    ],
+    color: P.teal
+  }
+]
+
+export const OptionsView = () => {
+  const L = fullLayout()
+  const { px, fs } = scaler(L.scale)
+  const current = gameOptions.controls
+  const cards = OPTION_CARDS.map((card, i) => {
+    const x = 152 + i * 259
+    const chosen = current === card.scheme
+    return [
+      box(px, `opt-${card.scheme}`, x, 58, 250, 172, { color: card.color, radius: 14, border: chosen ? 4 : 2, borderColor: chosen ? C.yellow : P.white, shadow: 4 }),
+      text(px, fs, card.title, x + 12, 66, 160, 22, 16),
+      yellowTag(px, fs, card.tag, x + 250 - 12 - 96, 68, 96, 20, 10),
+      ...card.lines.map((line, j) => text(px, fs, line, x + 12, 94 + j * 24, 226, 24, 10, P.white, 'middle-left', true)),
+      chosen
+        ? box(px, `opt-${card.scheme}-on`, x + 12, 190, 226, 30, { color: C.yellow, radius: 10, justify: 'center', align: 'center' }, [
+            <Label value={gameOptions.saving ? 'SAVING...' : gameOptions.saveError ? 'SELECTED (not saved to your account)' : 'SELECTED'} fontSize={fs(11)} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />
+          ])
+        : button2(
+            px,
+            { id: `opt-${card.scheme}-select`, x: x + 12, y: 190, w: 226, h: 30, color: P.navy, radius: 10, border: 2, borderColor: P.white, disabled: gameOptions.saving, onClick: () => { setControlScheme(card.scheme).catch(() => {}) } },
+            [<Label value="SELECT" fontSize={fs(12)} color={P.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(26) }} />]
+          )
+    ]
+  })
+
+  return fullFrame(L, [
+    squareButton(px, 'view-back', 140, 6, 'ic_chev_left_w', 0.8, back),
+    box(px, 'options-title', 194, 9, 200, 38, { color: P.navyDeep, radius: 12, border: 2, borderColor: P.navyEdge, justify: 'center', align: 'center' }, [
+      <Label value="GAME OPTIONS" fontSize={fs(16)} color={C.yellow} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />
+    ]),
+    squareButton(px, 'view-close', 617, 6, 'ic_close_w', 0.67, closeLobbyMenu),
+
+    box(px, 'options-info', 6, 58, 140, 172, { color: P.navyDeep, radius: 14, border: 2, borderColor: P.navyEdge }),
+    text(px, fs, 'CONTROLS', 15, 66, 120, 16, 12, P.pale),
+    text(px, fs, 'Pick how you aim and shoot. Your choice is saved to your account and applies from your next hole.', 15, 86, 122, 110, 11, P.white, 'middle-left', true),
+    ...cards.flat()
   ])
 }

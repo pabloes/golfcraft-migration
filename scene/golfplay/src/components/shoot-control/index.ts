@@ -2,7 +2,7 @@ import { engine, Entity, inputSystem, InputAction, PointerEventType } from '@dcl
 import { Vector3, Quaternion } from '@dcl/sdk/math'
 import * as utils from '@dcl-sdk/utils'
 import { createShootControlVisual } from './shoot-control-visual'
-import { CAMERA_AIM_MODE } from '../../../../src/config/controls'
+import { isCameraAimMode } from '../../../../src/services/game-options'
 import { isMobile } from '../../../../src/services/platform'
 import { mobileShootState } from '../../../../src/ui/mobile-shoot-state'
 import { createControlHint } from './bottom-panel'
@@ -65,11 +65,13 @@ const createShootControl = (
   parent: Entity,
   { position, rotation, golfclub, hideGolfclub, currentGame, getAimYaw }: CreateShootControlOptions
 ) => {
+  // The player's control scheme, fixed for this hole (services/game-options.ts).
+  const cameraAim = isCameraAimMode()
   const _innerState = {
     // With the camera doing the aiming there is no manual rotation step, which
     // is exactly what `rotationEnabled: false` already means everywhere below:
     // every path that would return to step 1 goes to step 2 instead.
-    rotationEnabled: !CAMERA_AIM_MODE,
+    rotationEnabled: !cameraAim,
     bottomPanelEnabled: true
   }
 
@@ -81,7 +83,7 @@ const createShootControl = (
     power: 50,
     // Aiming with the camera removes the rotation step, so the control opens
     // straight on power.
-    step: CAMERA_AIM_MODE ? 2 : 1,
+    step: cameraAim ? 2 : 1,
     ePressed: false,
     fPressed: false,
     n3Pressed: false,
@@ -221,7 +223,7 @@ const createShootControl = (
         mobileHoldActive = false
       }
       // Without the orbit camera the arrows turn the shot itself.
-      if (!CAMERA_AIM_MODE && mobileShootState.aimHold && s.step === 1) {
+      if (!cameraAim && mobileShootState.aimHold && s.step === 1) {
         store.setState({ rotation: s.rotation + mobileShootState.aimHold * s.VELOCITY })
       }
     } else if (click) {

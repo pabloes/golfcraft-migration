@@ -7,7 +7,7 @@
 import { AvatarModifierArea, AvatarModifierType, Entity, Transform, engine } from '@dcl/sdk/ecs'
 import { Vector3 } from '@dcl/sdk/math'
 import { getPlayer } from '@dcl/sdk/players'
-import { CAMERA_AIM_MODE } from '../config/controls'
+import { isCameraAimMode } from './game-options'
 
 let modArea: Entity | null = null
 
@@ -19,7 +19,7 @@ export const hideAvatars = () => {
   AvatarModifierArea.create(modArea, {
     area: Vector3.create(16 * 3, 40, 16 * 3),
     modifiers: [AvatarModifierType.AMT_HIDE_AVATARS, AvatarModifierType.AMT_DISABLE_PASSPORTS],
-    excludeIds: CAMERA_AIM_MODE || !userId ? [] : [userId]
+    excludeIds: isCameraAimMode() || !userId ? [] : [userId]
   })
 }
 

@@ -28,6 +28,7 @@ import { decorateRemotePhysicParts } from '../../golfplay/physics/course-element
 import { updateLobbyResources, lobbyHudState } from '../ui/lobby-hud-state'
 import { globalStore } from '../services/globalStore/globalStore'
 import { explorerTag } from '../services/platform'
+import { applyGameOptionsFromUserData } from '../services/game-options'
 
 // PlayFab session ticket from the last login, kept so refreshUserData() can
 // re-fetch player data (resources + current_mission) after a mission — the
@@ -511,6 +512,8 @@ async function initializePlayerAccount(
 ): Promise<void> {
   const payload = login.InfoResultPayload || {}
   const address = String(user.publicKey || user.userId).toLowerCase()
+  // The account's game options (the control scheme), before any hole starts.
+  applyGameOptionsFromUserData(payload.UserData)
   if (login.NewlyCreated || !payload.UserReadOnlyData?.initialized?.Value) {
     try {
       await executeCloudScript(login.SessionTicket, 'initializePlayer', { user: { publicKey: address } })

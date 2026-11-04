@@ -19,7 +19,7 @@ import { getPlayer } from '@dcl/sdk/players'
 import { globalStore } from '../services/globalStore/globalStore'
 import { lobbyHudState } from './lobby-hud-state'
 import { lobbyMenuState, closeOrBack, showLobbyView, nextSeasonPrize, seasonPlayState } from './lobby-menu-state'
-import { TutorialView, WorkshopView, PrizesView, DailyMissionsView, SeasonView, MoreGamesView } from './lobby-views'
+import { TutorialView, WorkshopView, PrizesView, DailyMissionsView, SeasonView, MoreGamesView, OptionsView } from './lobby-views'
 import { C, hex, fmt, materialIcon } from './ui-theme'
 import { fullLayout, scaler, type Px } from './ui-scale'
 import { P, at, img, imgW, imgBox, text, box, fullFrame, button2, imageButton, squareButton, sideCard, nextPrizeStrip, resIcon, rankBadge, border, energyChip } from './ui2'
@@ -82,6 +82,7 @@ export const LobbyMenu = () => {
   if (lobbyMenuState.view === 'prizes') return <PrizesView />
   if (lobbyMenuState.view === 'daily') return <DailyMissionsView />
   if (lobbyMenuState.view === 'games') return <MoreGamesView />
+  if (lobbyMenuState.view === 'options') return <OptionsView />
 
   const L = fullLayout()
   const { px, fs } = scaler(L.scale)
@@ -128,15 +129,22 @@ export const LobbyMenu = () => {
   const name = displayName.length > 10 ? `${displayName.slice(0, 9)}…` : displayName
 
   // ------------------------------------------------------------- top bar
-  const resourceWidths = [72, 108, 87, 108]
+  // The resources bar made room for OPTIONS (user, 2026-11-04): compact
+  // numbers (161.8K) in narrower chips, the button between the bar and the X.
+  const resourceWidths = [62, 86, 76, 86]
   const top = [
     img(px, 'logo', 142, 3, 64 / imgW('logo')),
-    box(px, 'resources', 212, 6, 399, 44, { color: P.navy, radius: 12, border: 2, borderColor: P.navyEdge, align: 'center', padding: { left: px(4), right: px(4) } }, [
+    box(px, 'resources', 212, 6, 330, 44, { color: P.navy, radius: 12, border: 2, borderColor: P.navyEdge, align: 'center', padding: { left: px(4), right: px(4) } }, [
       resourceChip(px, fs, 'EN', num(energy), resourceWidths[0], true),
-      resourceChip(px, fs, 'GC', num(r.GC), resourceWidths[1], true),
-      resourceChip(px, fs, 'DM', num(r.DM), resourceWidths[2], true),
-      resourceChip(px, fs, 'FT', num(r.FT), resourceWidths[3], false)
+      resourceChip(px, fs, 'GC', short(r.GC), resourceWidths[1], true),
+      resourceChip(px, fs, 'DM', short(r.DM), resourceWidths[2], true),
+      resourceChip(px, fs, 'FT', short(r.FT), resourceWidths[3], false)
     ]),
+    button2(
+      px,
+      { id: 'options', x: 548, y: 6, w: 64, h: 44, color: P.navy, radius: 12, border: 2, borderColor: P.navyEdge, row: false, onClick: () => showLobbyView('options') },
+      [<Label value="OPTIONS" fontSize={fs(10)} color={P.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(14) }} />]
+    ),
     squareButton(px, 'close', 617, 6, 'ic_close_w', 0.67, closeOrBack)
   ]
 
