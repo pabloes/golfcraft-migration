@@ -14,6 +14,7 @@ import {PlayFabServer} from "playfab-sdk";
 import {PrismaClient} from "@prisma/client";
 import {dailyMissionsApi} from "./daily-missions";
 import {statsApi} from "./stats";
+import {marketApi} from "./market";
 import {authApi} from "./auth";
 import {raffle} from "./raffle/raffle";
 import {promisify} from "util";
@@ -121,6 +122,7 @@ router.use(express.json());
     tournamentApi(router, prisma);
     seasonsApi(router, prisma);
     statsApi(router, prisma);
+    marketApi(router, prisma);
     authApi(router, prisma);
 
     await dailyMissionsApi(router, process.env.PROD);

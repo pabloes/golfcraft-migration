@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GolfCraft Market Report</title>
+<meta name="description" content="What GolfCraft wearables, emotes and game NFTs have traded for in Decentraland.">
+<link rel="icon" type="image/png" sizes="32x32" href="/static/images/favicon/favicon-32x32.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lilita+One&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #121646; --card: #1b2160; --card-edge: rgba(255,255,255,0.08);
+    --chip: rgba(255,255,255,0.06); --text-1: #fff; --text-2: #b9c2ff; --text-3: #8f98dc;
+    --grid: rgba(255,255,255,0.08); --series: #1ca590; --series-2: #b46fe0; --series-3: #f2a93b;
+    --live: #6cd83a; --accent: #e84198;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--text-1); font: 400 15px/1.45 Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+  main, header.top, footer { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+  a { color: var(--text-2); }
+  header.top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 20px; }
+  .brand { display: flex; align-items: center; gap: 14px; text-decoration: none; color: var(--text-1); }
+  .brand img { height: 56px; width: auto; display: block; }
+  .brand h1 { font: 400 32px/1 "Lilita One", Inter, sans-serif; margin: 0; letter-spacing: 0.5px; }
+  .status { display: flex; align-items: center; gap: 8px; color: var(--text-3); font-size: 13px; text-align: right; }
+  .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--live); flex: none; }
+  .live-dot.off { background: var(--text-3); }
+  .lede { color: var(--text-2); margin: 18px 0 20px; max-width: 680px; }
+  .card { background: var(--card); border: 1px solid var(--card-edge); border-radius: 16px; padding: 20px; }
+  main { transition: opacity 0.2s; }
+  body.refreshing main { opacity: 0.6; }
+  .label { color: var(--text-2); font-size: 14px; font-weight: 500; }
+  .sub { color: var(--text-3); font-size: 13px; }
+  .tiles { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 16px; }
+  .tile .value { font-size: 32px; font-weight: 600; line-height: 1.1; margin: 10px 0 6px; letter-spacing: -0.5px; }
+  .tile .value small { font-size: 16px; font-weight: 500; color: var(--text-3); letter-spacing: 0; }
+  section { margin-top: 16px; }
+  h2 { font: 400 22px/1.2 "Lilita One", Inter, sans-serif; margin: 0 0 4px; letter-spacing: 0.4px; }
+  .chart-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 12px; flex-wrap: wrap; }
+  svg.chart { width: 100%; height: 240px; display: block; }
+  .bar { fill: var(--series); }
+  .bar:hover { fill: var(--series-2); }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--card-edge); font-size: 14px; }
+  th { color: var(--text-3); font-weight: 500; font-size: 13px; white-space: nowrap; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.muted, .muted { color: var(--text-3); }
+  tbody tr:last-child td { border-bottom: 0; }
+  th button.sort { background: none; border: 0; color: inherit; font: inherit; cursor: pointer; padding: 0; display: inline-flex; gap: 4px; align-items: center; }
+  th[aria-sort] button.sort { color: var(--text-1); }
+  .table-wrap { overflow-x: auto; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; background: var(--chip); font-size: 12px; color: var(--text-2); }
+  .two { display: grid; grid-template-columns: minmax(0,7fr) minmax(0,5fr); gap: 16px; align-items: start; }
+  .game-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--card-edge); }
+  .game-row:last-child { border-bottom: 0; }
+  .game-name { font-weight: 500; }
+  .note { color: var(--text-3); font-size: 13px; margin-top: 10px; }
+  footer { display: flex; justify-content: space-between; gap: 16px; color: var(--text-3); font-size: 13px; padding: 24px 16px 32px; }
+  .empty { color: var(--text-3); padding: 18px 0; }
+  @media (max-width: 900px) { .tiles { grid-template-columns: repeat(2, minmax(0,1fr)); } .two { grid-template-columns: minmax(0,1fr); } }
+  @media (max-width: 520px) { .brand h1 { font-size: 24px; } .tile .value { font-size: 26px; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/"><img src="/static/images/logo.png" alt=""><h1>Market report</h1></a>
+  <div class="status"><span class="live-dot" id="status-dot"></span><span id="updated">Loading…</span></div>
+</header>
+
+<main>
+  <p class="lede">Every GolfCraft wearable, emote and collectible traded in the Decentraland marketplace, plus how many of the game's own NFTs exist. <a href="/stats">See the player stats</a>.</p>
+
+  <section class="tiles">
+    <div class="card tile">
+      <div class="label">All-time volume</div>
+      <div class="value" id="volume-usd">–</div>
+      <div class="sub" id="volume-mana">&nbsp;</div>
+    </div>
+    <div class="card tile">
+      <div class="label">Sales</div>
+      <div class="value" id="sales">–</div>
+      <div class="sub" id="sales-sub">&nbsp;</div>
+    </div>
+    <div class="card tile">
+      <div class="label">Collectors</div>
+      <div class="value" id="buyers">–</div>
+      <div class="sub" id="buyers-sub">&nbsp;</div>
+    </div>
+    <div class="card tile">
+      <div class="label">Last 30 days</div>
+      <div class="value" id="last30">–</div>
+      <div class="sub" id="last30-sub">&nbsp;</div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="chart-head">
+      <h2>Volume by month</h2>
+      <div class="sub" id="chart-sub">&nbsp;</div>
+    </div>
+    <svg class="chart" id="chart" viewBox="0 0 1000 240" preserveAspectRatio="none" role="img" aria-label="Monthly trading volume"></svg>
+  </section>
+
+  <section class="two">
+    <div class="card">
+      <div class="chart-head"><h2>Collections</h2><div class="sub" id="collections-sub">&nbsp;</div></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th><button type="button" class="sort" data-sort="name">Collection<span class="arrow" aria-hidden="true"></span></button></th>
+            <th class="num"><button type="button" class="sort" data-sort="sales">Sales<span class="arrow" aria-hidden="true"></span></button></th>
+            <th class="num"><button type="button" class="sort" data-sort="mana">MANA<span class="arrow" aria-hidden="true"></span></button></th>
+            <th class="num"><button type="button" class="sort" data-sort="usd">USD<span class="arrow" aria-hidden="true"></span></button></th>
+            <th class="num"><button type="button" class="sort" data-sort="best">Best sale<span class="arrow" aria-hidden="true"></span></button></th>
+            <th class="num"><button type="button" class="sort" data-sort="lastSale">Last sale<span class="arrow" aria-hidden="true"></span></button></th>
+          </tr></thead>
+          <tbody id="collections-body"></tbody>
+        </table>
+        <div class="empty" id="collections-empty" hidden>No sales indexed yet.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Game NFTs</h2>
+      <div class="sub">Minted by the game, outside the Decentraland marketplace.</div>
+      <div id="game-rows" style="margin-top:10px"></div>
+      <p class="note" id="game-note"></p>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="chart-head"><h2>Biggest sales</h2><div class="sub" id="top-sub">&nbsp;</div></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Collection</th><th>Item</th><th>Kind</th><th class="num">MANA</th><th class="num">USD then</th><th class="num">Date</th></tr></thead>
+        <tbody id="top-body"></tbody>
+      </table>
+      <div class="empty" id="top-empty" hidden>Nothing yet.</div>
+    </div>
+    <p class="note" id="note"></p>
+  </section>
+</main>
+
+<footer>
+  <span>← <a href="https://golfcraftgame.com">golfcraftgame.com</a></span>
+  <span>Updates every hour</span>
+</footer>
+
+<script>
+(function () {
+  var state = { data: null, sort: null };
+  var SORT_DEFAULT = { name: "asc", sales: "desc", mana: "desc", usd: "desc", best: "desc", lastSale: "desc" };
+  var $ = function (id) { return document.getElementById(id); };
+
+  function fmt(n) { return n == null || isNaN(n) ? "–" : Math.round(n).toLocaleString("en-US"); }
+  function compact(n) {
+    if (n == null || isNaN(n)) return "–";
+    if (n < 10000) return Math.round(n).toLocaleString("en-US");
+    return new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(n);
+  }
+  function usd(n) { return n == null || isNaN(n) ? "–" : "$" + compact(n); }
+  function mana(n) { return n == null || isNaN(n) ? "–" : compact(n) + " MANA"; }
+  function day(d) {
+    if (!d) return "–";
+    return new Date(d + "T00:00:00Z").toLocaleDateString("en-US", { timeZone: "UTC", year: "numeric", month: "short", day: "numeric" });
+  }
+  function monthName(m) {
+    return new Date(m + "-01T00:00:00Z").toLocaleDateString("en-US", { timeZone: "UTC", month: "short", year: "2-digit" });
+  }
+  function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); }
+  function html(tag, attrs, parent, text) {
+    var el = document.createElementNS(tag === "svg" || tag === "rect" || tag === "text" || tag === "g" ? "http://www.w3.org/2000/svg" : "http://www.w3.org/1999/xhtml", tag);
+    Object.keys(attrs || {}).forEach(function (k) { el.setAttribute(k, attrs[k]); });
+    if (text != null) el.appendChild(document.createTextNode(text));
+    if (parent) parent.appendChild(el);
+    return el;
+  }
+
+  function drawChart(months) {
+    var svg = $("chart");
+    clear(svg);
+    if (!months.length) return;
+    var W = 1000, H = 240, padB = 26, padT = 10;
+    var max = months.reduce(function (m, x) { return Math.max(m, x.usd || 0); }, 0) || 1;
+    var slot = W / months.length;
+    var bw = Math.max(2, Math.min(42, slot * 0.62));
+    months.forEach(function (m, i) {
+      var h = Math.max(1, ((m.usd || 0) / max) * (H - padB - padT));
+      var x = i * slot + (slot - bw) / 2;
+      var rect = html("rect", { x: x.toFixed(1), y: (H - padB - h).toFixed(1), width: bw.toFixed(1), height: h.toFixed(1), rx: 3, "class": "bar" }, svg);
+      html("title", {}, rect, monthName(m.month) + ": " + usd(m.usd) + " · " + mana(m.mana) + " · " + fmt(m.sales) + " sales");
+    });
+    var step = Math.ceil(months.length / 12);
+    months.forEach(function (m, i) {
+      if (i % step) return;
+      var t = html("text", { x: (i * slot + slot / 2).toFixed(1), y: H - 8, "text-anchor": "middle", fill: "#8f98dc", "font-size": 11 }, svg);
+      t.appendChild(document.createTextNode(monthName(m.month)));
+    });
+  }
+
+  function sorted(list) {
+    var s = state.sort;
+    if (!s) return list;
+    var sign = s.dir === "asc" ? 1 : -1;
+    return list.map(function (v, i) { return { v: v, i: i }; }).sort(function (a, b) {
+      var cmp = 0;
+      if (s.key === "name") cmp = String(a.v.name).localeCompare(String(b.v.name), "en", { sensitivity: "base" });
+      else if (s.key === "lastSale") cmp = String(a.v.lastSale || "").localeCompare(String(b.v.lastSale || ""));
+      else cmp = (Number(a.v[s.key]) || 0) - (Number(b.v[s.key]) || 0);
+      return cmp ? cmp * sign : a.i - b.i;
+    }).map(function (x) { return x.v; });
+  }
+
+  function renderCollections() {
+    var list = state.data.collections || [];
+    var body = $("collections-body");
+    clear(body);
+    sorted(list).forEach(function (c) {
+      var tr = html("tr", {}, body);
+      var name = html("td", {}, tr, c.name);
+      name.title = c.address;
+      html("td", { "class": "num" }, tr, fmt(c.sales));
+      html("td", { "class": "num" }, tr, c.mana ? compact(c.mana) : "–");
+      html("td", { "class": "num" }, tr, c.usd ? usd(c.usd) : "–");
+      html("td", { "class": "num" }, tr, c.best ? compact(c.best) : "–");
+      html("td", { "class": "num" + (c.lastSale ? "" : " muted") }, tr, c.lastSale ? day(c.lastSale) : "never");
+    });
+    $("collections-empty").hidden = list.length > 0;
+    var traded = list.filter(function (c) { return c.sales > 0; }).length;
+    $("collections-sub").textContent = fmt(list.length) + " collections · " + fmt(traded) + " with sales";
+    Array.prototype.forEach.call(document.querySelectorAll("th button.sort"), function (b) {
+      var th = b.parentNode, on = state.sort && state.sort.key === b.dataset.sort;
+      if (on) th.setAttribute("aria-sort", state.sort.dir === "asc" ? "ascending" : "descending");
+      else th.removeAttribute("aria-sort");
+      b.querySelector(".arrow").textContent = on ? (state.sort.dir === "asc" ? "▲" : "▼") : "";
+    });
+  }
+
+  function render() {
+    var d = state.data;
+    $("volume-usd").textContent = usd(d.totals.usd);
+    $("volume-mana").textContent = mana(d.totals.mana) + (d.totals.firstSale ? " since " + day(d.totals.firstSale) : "");
+    $("sales").textContent = fmt(d.totals.sales);
+    var types = (d.byType || []).map(function (t) { return fmt(t.sales) + " by " + (t.type === "bid" ? "bid" : t.type || "order"); });
+    $("sales-sub").textContent = types.join(" · ");
+    $("buyers").textContent = fmt(d.totals.buyers);
+    $("buyers-sub").textContent = fmt(d.totals.sellers) + " sellers";
+    $("last30").textContent = usd(d.last30Days.usd);
+    $("last30-sub").textContent = fmt(d.last30Days.sales) + " sales · " + fmt(d.last30Days.buyers) + " buyers";
+    $("chart-sub").textContent = d.manaUsd ? "MANA at $" + d.manaUsd.usd.toFixed(3) + " on " + day(d.manaUsd.day) : "";
+    drawChart(d.monthly || []);
+    renderCollections();
+
+    var rows = $("game-rows");
+    clear(rows);
+    (d.game || []).forEach(function (g) {
+      var row = html("div", { "class": "game-row" }, rows);
+      var left = html("div", {}, row);
+      html("div", { "class": "game-name" }, left, g.name);
+      html("div", { "class": "sub" }, left, g.standard.toUpperCase() + (g.tokens && g.tokens.length ? " · " + g.tokens.length + " kinds" : ""));
+      var right = html("div", { "class": "num" }, row);
+      html("div", { style: "font-weight:600" }, right, g.totalSupply == null ? "–" : fmt(g.totalSupply));
+      html("div", { "class": "sub" }, right, g.totalSupply == null ? "not counted" : (g.standard === "erc721" ? "minted" : "items minted"));
+      (g.tokens || []).forEach(function (t) {
+        var sub = html("div", { "class": "game-row", style: "padding:4px 0 4px 14px;border-bottom:0" }, rows);
+        html("div", { "class": "sub" }, sub, t.name);
+        html("div", { "class": "sub num" }, sub, fmt(t.supply));
+      });
+    });
+    $("game-note").textContent = "Counted from the contracts on Polygon" + (d.game && d.game[0] && d.game[0].day ? " on " + day(d.game[0].day) : "") +
+      ". These are minted by the game, so they trade outside the Decentraland marketplace and are not in the volume above.";
+
+    var top = $("top-body");
+    clear(top);
+    (d.topSales || []).forEach(function (s) {
+      var tr = html("tr", {}, top);
+      html("td", {}, tr, s.collection || "–");
+      html("td", { "class": "muted" }, tr, s.itemId === "" ? "–" : "#" + s.itemId);
+      var kind = html("td", {}, tr);
+      html("span", { "class": "pill" }, kind, s.type === "bid" ? "bid" : "listing");
+      html("td", { "class": "num" }, tr, compact(s.mana));
+      html("td", { "class": "num" }, tr, s.usd ? usd(s.usd) : "–");
+      html("td", { "class": "num muted" }, tr, day(s.day));
+    });
+    $("top-empty").hidden = (d.topSales || []).length > 0;
+    $("top-sub").textContent = "By MANA paid";
+    var coverage = d.usdCoverage == null ? 1 : d.usdCoverage;
+    $("note").textContent = "Volume is what buyers paid in the Decentraland marketplace, counted in MANA and converted with MANA's price on the day of each sale" +
+      (coverage < 0.999 ? " (" + Math.round(coverage * 100) + "% of sales have a price for their day)." : ".") +
+      " Primary sales from the Decentraland store are included when the marketplace reports them.";
+    $("updated").textContent = "Updated " + new Date(d.updatedAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+    $("status-dot").className = "live-dot";
+  }
+
+  function load() {
+    document.body.classList.add("refreshing");
+    return fetch("/api/market-report", { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (data) { state.data = data; render(); })
+      .catch(function () {
+        $("status-dot").className = "live-dot off";
+        $("updated").textContent = state.data ? "Could not refresh, retrying…" : "The report is unavailable right now, retrying…";
+      })
+      .then(function () { document.body.classList.remove("refreshing"); });
+  }
+
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest ? e.target.closest("th button.sort") : null;
+    if (!b || !state.data) return;
+    var key = b.dataset.sort;
+    state.sort = state.sort && state.sort.key === key
+      ? { key: key, dir: state.sort.dir === "asc" ? "desc" : "asc" }
+      : { key: key, dir: SORT_DEFAULT[key] || "desc" };
+    renderCollections();
+  });
+
+  load();
+  setInterval(load, 60000);
+})();
+</script>
+</body>
+</html>

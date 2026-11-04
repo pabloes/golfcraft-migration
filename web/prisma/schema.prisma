@@ -379,3 +379,45 @@ model live_tournament_participations {
     points      Int
     date        DateTime @default(now()) @db.Timestamp(0)
 }
+//The market report (web/server/market): every sale of a GolfCraft Decentraland
+//collection, the collections themselves, MANA's daily close and a daily count
+//of the game's own NFTs. Filled by the hourly indexer, never in a request.
+model market_collection {
+  contractAddress String    @id @db.VarChar(45)
+  name            String    @default("") @db.VarChar(120)
+  creator         String    @default("") @db.VarChar(45)
+  discoveredAt    DateTime? @db.DateTime(0)
+  lastSyncedAt    DateTime? @db.DateTime(0)
+}
+
+model market_sale {
+  id              String   @id @db.VarChar(64)
+  contractAddress String   @db.VarChar(45)
+  itemId          String   @default("") @db.VarChar(32)
+  tokenId         String   @default("") @db.VarChar(80)
+  type            String   @default("") @db.VarChar(16)
+  priceWei        String   @default("0") @db.VarChar(40)
+  priceMana       Float    @default(0)
+  buyer           String   @default("") @db.VarChar(45)
+  seller          String   @default("") @db.VarChar(45)
+  soldAt          DateTime @db.DateTime(0)
+
+  @@index([soldAt], map: "idx_market_sale_soldAt")
+  @@index([contractAddress, soldAt], map: "idx_market_sale_contract")
+}
+
+model mana_price {
+  day DateTime @id @db.Date
+  usd Float    @default(0)
+}
+
+model market_supply {
+  day             DateTime @db.Date
+  contractAddress String   @db.VarChar(45)
+  //'' is the contract's headline number; an ERC1155 also has one row per token
+  tokenId         String   @default("") @db.VarChar(16)
+  tokenName       String   @default("") @db.VarChar(40)
+  totalSupply     Int      @default(0) @db.UnsignedInt
+
+  @@id([day, contractAddress, tokenId])
+}
