@@ -27,6 +27,8 @@ import { Color4, Vector3 } from '@dcl/sdk/math'
 
 import MESSAGE from '../../../server/rooms/mesages'
 import { globalStore } from '../services/globalStore/globalStore'
+// One table of badge shapes for the UI and for this, rather than two copies.
+import { badgeAspect } from '../ui/ui2'
 // @ts-ignore - common/* has @ts-nocheck
 import { getCatFromTier, getTierFromSub } from '../../../common/utils'
 // @ts-ignore - common/* has @ts-nocheck
@@ -34,7 +36,7 @@ import { TIER_COLORS } from '../../../common/constants'
 // @ts-ignore - common/* has @ts-nocheck
 import { seasonTierDefinitions } from '../../../common/season-tier-definitions'
 
-type Shown = { address: string; root: Entity; badge: Entity; label: Entity; tier: number }
+type Shown = { address: string; root: Entity; badge: Entity; label: Entity; tier: number; at: number; reattached: boolean }
 
 const shown: Record<string, Shown> = {}
 let localAddress = ''
@@ -42,10 +44,15 @@ let hidden = false
 
 // Design, in metres above the name tag. The badge art is 103x106, so a square
 // plane is close enough; the name goes under it, between badge and name tag.
-const BADGE_Y = 0.46
-const BADGE_SIZE = 0.26
-const LABEL_Y = 0.26
-const LABEL_FONT = 1.6
+const BADGE_Y = 0.44
+// The HEIGHT of the badge: its width comes from the art's own ratio
+// (ui2.ts:badgeAspect), because the files are not all the same shape and a
+// square plane stretched the high ranks.
+const BADGE_HEIGHT = 0.26
+const LABEL_Y = 0.22
+// 1.6 made a long name like "GRAND MASTER 5" wider than the avatar (user,
+// 2026-11-04).
+const LABEL_FONT = 1.1
 
 const MAX_TIER = 49
 
@@ -76,7 +83,7 @@ function createBadge(address: string, tier: number): { root: Entity; badge: Enti
   Transform.create(badge, {
     parent: root,
     position: Vector3.create(0, BADGE_Y, 0),
-    scale: Vector3.create(BADGE_SIZE, BADGE_SIZE, BADGE_SIZE)
+    scale: Vector3.create(BADGE_HEIGHT * badgeAspect(tier), BADGE_HEIGHT, 1)
   })
   MeshRenderer.setPlane(badge)
   // Unlit, with the art's own alpha cut out: a PBR material would take the
@@ -117,16 +124,9 @@ function removeBadge(address: string) {
 
 function handleNewPlayer(address: string, tier: number) {
   if (!address || shown[address] || !isDrawable(tier)) return
-  shown[address] = { address, tier, ...createBadge(address, tier) }
+  shown[address] = { address, tier, at: Date.now(), reattached: false, ...createBadge(address, tier) }
 }
 
-function handlePlayerTierChange(address: string, tier: number) {
-  const found = shown[address]
-  if (!found) return handleNewPlayer(address, tier)
-  if (found.tier === tier || !isDrawable(tier)) return
-  removeBadge(address)
-  handleNewPlayer(address, tier)
-}
 
 export function clearAvatarRanks() {
   Object.keys(shown).forEach(removeBadge)
@@ -163,44 +163,68 @@ function ownTierSystem() {
   }
 }
 
+// A new player's badge never appeared (user, 2026-11-04). The old wiring hung
+// off colyseus's onAdd / onChange, chained behind attached-golfclub.ts's own
+// hooks, and it had two ways to miss somebody: a callback that did not reach
+// us, and a player whose `tier` had not arrived yet when their row did. It
+// also created the AvatarAttach the instant the room announced them, which
+// can be before the explorer has their avatar, and an attach that binds to
+// nothing never recovers.
+//
+// So no callbacks: a system reconciles what is drawn against what the room
+// says, which cannot miss an event because it does not listen for any, and
+// re-creates each badge once a few seconds in, which fixes an attach that
+// bound too early.
+const RECONCILE_MS = 1500
+const REATTACH_AFTER_MS = 6000
+let reconciledAt = 0
+let realmFilter = ''
+
+function reconcileSystem() {
+  if (!currentRoom || Date.now() - reconciledAt < RECONCILE_MS) return
+  reconciledAt = Date.now()
+  const players = currentRoom.state?.players
+  if (!players) return
+
+  const wanted = new Map<string, number>()
+  players.forEach((player: any) => {
+    if (!player || player.realm !== realmFilter) return
+    const address = String(player.address || '').toLowerCase()
+    const tier = Number(player.tier)
+    if (address && isDrawable(tier)) wanted.set(address, tier)
+  })
+
+  for (const address of Object.keys(shown)) {
+    if (!wanted.has(address)) removeBadge(address)
+  }
+  for (const [address, tier] of wanted) {
+    const found = shown[address]
+    if (!found) {
+      handleNewPlayer(address, tier)
+    } else if (found.tier !== tier) {
+      removeBadge(address)
+      handleNewPlayer(address, tier)
+    } else if (!found.reattached && Date.now() - found.at > REATTACH_AFTER_MS) {
+      // one free retry, for an attach that may have bound before the avatar
+      // was there; after this the entry is left alone
+      removeBadge(address)
+      handleNewPlayer(address, tier)
+      const made = shown[address]
+      if (made) made.reattached = true
+    }
+  }
+}
+
 export function handleAvatarRanks(lobbyRoom: any, { realm, address }: { realm: string; address: string }) {
   localAddress = String(address || '').toLowerCase()
+  realmFilter = realm
   currentRoom = lobbyRoom
   lastSentTier = null
   if (!systemAdded) {
     systemAdded = true
     engine.addSystem(visibilitySystem)
     engine.addSystem(ownTierSystem)
+    engine.addSystem(reconcileSystem)
   }
-
-  // colyseus.js 0.14 holds ONE callback per hook (a plain property, not a
-  // listener list), and attached-golfclub.ts hooks the same three. So each one
-  // here calls whatever was there before: wire this module AFTER the clubs and
-  // both run. Anything else added later must chain in the same way.
-  const watch = (player: any) => {
-    if (!player || player.realm !== realm) return
-    const playerAddress = String(player.address || '').toLowerCase()
-    handleNewPlayer(playerAddress, Number(player.tier))
-    const previous = player.onChange
-    player.onChange = (changes: any[]) => {
-      if (previous) previous(changes)
-      changes.forEach((change) => {
-        if (change.field === 'tier') handlePlayerTierChange(playerAddress, Number(change.value))
-      })
-    }
-  }
-
-  const players = lobbyRoom.state?.players
-  if (!players) return
-  players.forEach((player: any) => watch(player))
-  const previousAdd = players.onAdd
-  players.onAdd = (player: any) => {
-    if (previousAdd) previousAdd(player)
-    watch(player)
-  }
-  const previousRemove = players.onRemove
-  players.onRemove = (player: any) => {
-    if (previousRemove) previousRemove(player)
-    if (player?.realm === realm) removeBadge(String(player.address || '').toLowerCase())
-  }
+  reconciledAt = 0
 }

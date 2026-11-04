@@ -29,6 +29,10 @@ import { lobbyHudState } from '../../../ui/lobby-hud-state'
 import { isDialogPress, lobbyMenuState } from '../../../ui/lobby-menu-state'
 import { showMessage } from '../server-notification'
 import { canStartGame, formatUtc, gameWindowState, guardGameStart, isEnergyFree, onGameWindowChange } from '../../../services/game-window'
+import { badgeAspect } from '../../../ui/ui2'
+
+// The height of the rank emblem on the 3D board; its width follows the art.
+const EMBLEM_SIZE = 0.7
 
 const SEASON_CATALOG: Record<string, { name: string }> = seasonCatalog as any
 
@@ -67,7 +71,7 @@ export const createSeasonMenu = async (
   // wrong.
   const emblem = createImageButton(entity, {
     position: Vector3.create(0, 2.2, -0.05),
-    scale: Vector3.create(0.7, 0.7, 0.7),
+    scale: Vector3.create(EMBLEM_SIZE, EMBLEM_SIZE, 1),
     rotation: Quaternion.Identity(),
     imageSrc: 'images/season-badges/0.png',
     hoverText: 'This is your current rank'
@@ -286,6 +290,13 @@ export const createSeasonMenu = async (
 
     emblem.show()
     emblem.setImage(`images/season-badges/${tier || 0}.png`)
+    // The badges are not all square (ui2.ts:badgeAspect), so the plane takes
+    // the shape of the one it is showing. It has to happen here and not only
+    // where the emblem is created, because the board outlives a rank-up.
+    const emblemTransform = Transform.getMutableOrNull(emblem.getEntity())
+    if (emblemTransform) {
+      emblemTransform.scale = Vector3.create(EMBLEM_SIZE * badgeAspect(tier || 0), EMBLEM_SIZE, 1)
+    }
 
     // Outside the monthly window the board only says when it opens: no badge
     // (it sat on top of the text) and no buttons.

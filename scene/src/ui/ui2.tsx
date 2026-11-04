@@ -300,13 +300,35 @@ export const initialAvatar = (px: Px, fs: Px, name: string, size: number, index:
   </UiEntity>
 )
 
-// Season rank badge (images/season-badges/<tier>.png).
-export const rankBadge = (px: Px, tier: number, size: number, x?: number, y?: number) => (
-  <UiEntity
-    uiTransform={x === undefined ? { width: px(size), height: px(size), flexShrink: 0 } : at(px, x, y || 0, size, size)}
-    uiBackground={{ texture: { src: `images/season-badges/${tier}.png` }, textureMode: 'stretch' }}
-  />
-)
+// The rank badges are not all the same shape, and the scene cannot read a
+// PNG's size, so the ratios live here. Measured from the files themselves
+// (2026-11-04); re-measure if the art is ever re-cut from
+// images/season-badges.png. Stretching every one into a square is what made
+// GRAND MASTER look wrong next to STONE.
+export const badgeAspect = (tier: number): number => {
+  if (tier >= 45) return 114 / 112 // SUPREME
+  if (tier >= 40) return 113 / 113 // GRAND MASTER
+  if (tier >= 35) return 96 / 113 // MASTER
+  return 103 / 106 // WOOD through DIAMOND
+}
+
+// Season rank badge (images/season-badges/<tier>.png). `size` is the HEIGHT:
+// the width follows the badge's own ratio so every rank reads equally tall,
+// and an absolutely positioned one keeps the centre of the square box its
+// caller reserved, so no caller had to change.
+export const rankBadge = (px: Px, tier: number, size: number, x?: number, y?: number) => {
+  const w = size * badgeAspect(tier)
+  return (
+    <UiEntity
+      uiTransform={
+        x === undefined
+          ? { width: px(w), height: px(size), flexShrink: 0 }
+          : at(px, x + (size - w) / 2, y || 0, w, size)
+      }
+      uiBackground={{ texture: { src: `images/season-badges/${tier}.png` }, textureMode: 'stretch' }}
+    />
+  )
+}
 
 // The full-screen "next prize" strip: the wearable's thumbnail (the FT icon
 // once sold out), "NEXT PRIZE · <tier> · N pts to go" and its name.
