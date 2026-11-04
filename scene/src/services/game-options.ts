@@ -1,20 +1,23 @@
 // Per-player game options, kept in PlayFab UserData so they follow the
 // account (user, 2026-11-04). Today there is one: the control scheme.
 //
-//   'new'    (default) the camera aims: on desktop the orbit camera (mouse /
-//            A D turn, W S zoom, E F power, click shoots), on phones the avatar
-//            anchored on the ball (drag to aim, SHOOT). The camera follows the
-//            ball.
+//   'new'    (default) the camera aims: the orbit camera (mouse / A D turn,
+//            W S zoom, E F power, click shoots), which follows the ball.
 //   'legacy' SDK6's scheme, for players used to it: the avatar walks to the
 //            ball, step 1 turns the aim with E / F and a click sets it, step 2
 //            sets the power with E / F and a click shoots; the camera is the
 //            player's own and stays with the avatar.
+//
+// ⚠ DESKTOP ONLY (user, 2026-11-04). A phone has no keyboard and its touch
+// panel is built around the anchor camera, so phones always get 'new' whatever
+// the account says, and the options screen is not offered there.
 //
 // The scheme is read when a hole's client is created (golfplay-client*.ts,
 // shoot-control, hide-avatars, the controls help), so a change applies from
 // the next hole. bootstrap.ts applies the stored value at login.
 import { updateUserData } from '../meta/playfab-rest'
 import { getSessionTicket } from '../meta/bootstrap'
+import { isMobile } from './platform'
 
 export type ControlScheme = 'new' | 'legacy'
 
@@ -32,8 +35,9 @@ export const gameOptions: {
   saveError: false
 }
 
-// The camera aims (orbit / anchor cameras); false is the legacy two-step control.
-export const isCameraAimMode = () => gameOptions.controls !== 'legacy'
+// The camera aims (orbit camera on desktop, anchor camera on phones); false is
+// the legacy two-step control, which only desktop can choose.
+export const isCameraAimMode = () => isMobile() || gameOptions.controls !== 'legacy'
 
 const parseScheme = (value: unknown): ControlScheme | null =>
   value === 'legacy' || value === 'new' ? value : null

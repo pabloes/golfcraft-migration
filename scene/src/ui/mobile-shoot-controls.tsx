@@ -13,7 +13,6 @@
 import ReactEcs, { Label, UiEntity } from '@dcl/sdk/react-ecs'
 
 import { isMobile } from '../services/platform'
-import { isCameraAimMode } from '../services/game-options'
 import { mobileShootState } from './mobile-shoot-state'
 import { fullLayout, scaler, type Layout, type Px } from './ui-scale'
 import { C } from './ui-theme'
@@ -84,7 +83,7 @@ export const MobileShootControls = () => {
                   holdButton(L, px, 'pitch-down', 210, glyph(px, fs, 'v'), pitch(-1), pitch(0))
                 ]
               : []),
-            ...(st.aimArrows || !isCameraAimMode() ? [holdButton(L, px, 'aim-left', 266, img(px, 'ic_chev_left_w', undefined, undefined, 0.7), aim(-1), aim(0))] : []),
+            ...(st.aimArrows ? [holdButton(L, px, 'aim-left', 266, img(px, 'ic_chev_left_w', undefined, undefined, 0.7), aim(-1), aim(0))] : []),
             <UiEntity
               key="shoot"
               uiTransform={{ ...placeAt(L, px, 316, 302, 116, 52), flexDirection: 'column', justifyContent: 'center', alignItems: 'center', borderRadius: px(15) }}
@@ -94,7 +93,7 @@ export const MobileShootControls = () => {
               <Label value="SHOOT" fontSize={fs(20)} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: px(24) }} />
               <Label value={`${Math.round(st.power)}%`} fontSize={fs(11)} color={P.ink} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: px(14) }} />
             </UiEntity>,
-            ...(st.aimArrows || !isCameraAimMode() ? [holdButton(L, px, 'aim-right', 438, img(px, 'ic_chev_right_w', undefined, undefined, 0.7), aim(1), aim(0))] : [])
+            ...(st.aimArrows ? [holdButton(L, px, 'aim-right', 438, img(px, 'ic_chev_right_w', undefined, undefined, 0.7), aim(1), aim(0))] : [])
           ]
         : null}
 

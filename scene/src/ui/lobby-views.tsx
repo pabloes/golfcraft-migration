@@ -896,8 +896,8 @@ const OPTION_CARDS: { scheme: ControlScheme; title: string; tag: string; lines: 
     tag: 'Recommended',
     lines: [
       'The camera circles the ball and follows every shot.',
-      'Desktop: mouse or A / D turn the aim, W / S zoom, E / F set the power, click shoots.',
-      'Phone: drag to aim, + / - for the power, SHOOT.'
+      'Mouse or A / D turn the aim, W / S zoom the camera.',
+      'E / F set the power, click shoots.'
     ],
     color: P.purple
   },
@@ -906,10 +906,9 @@ const OPTION_CARDS: { scheme: ControlScheme; title: string; tag: string; lines: 
     title: 'LEGACY CONTROLS',
     tag: 'GolfCraft classic',
     lines: [
-      'You walk your avatar to the ball; the camera stays with you.',
+      'You walk your avatar to the ball; the camera stays with you and does not follow the shot.',
       'Step 1: E / F turn the aim, click sets it.',
-      'Step 2: E / F set the power, click shoots.',
-      'Phone: the < > arrows turn, + / - set the power, SHOOT.'
+      'Step 2: E / F set the power, click shoots.'
     ],
     color: P.teal
   }
@@ -948,7 +947,7 @@ export const OptionsView = () => {
 
     box(px, 'options-info', 6, 58, 140, 172, { color: P.navyDeep, radius: 14, border: 2, borderColor: P.navyEdge }),
     text(px, fs, 'CONTROLS', 15, 66, 120, 16, 12, P.pale),
-    text(px, fs, 'Pick how you aim and shoot. Your choice is saved to your account and applies from your next hole.', 15, 86, 122, 110, 11, P.white, 'middle-left', true),
+    text(px, fs, 'Pick how you aim and shoot on a computer. Phones always use the touch controls. Saved to your account, applies from your next hole.', 15, 86, 122, 130, 11, P.white, 'middle-left', true),
     ...cards.flat()
   ])
 }

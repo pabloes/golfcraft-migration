@@ -129,22 +129,27 @@ export const LobbyMenu = () => {
   const name = displayName.length > 10 ? `${displayName.slice(0, 9)}…` : displayName
 
   // ------------------------------------------------------------- top bar
-  // The resources bar made room for OPTIONS (user, 2026-11-04): compact
-  // numbers (161.8K) in narrower chips, the button between the bar and the X.
-  const resourceWidths = [62, 86, 76, 86]
+  // OPTIONS is desktop only (the control scheme does not apply on phones,
+  // services/game-options.ts), so the phone keeps the roomy resources bar and
+  // desktop narrows it with compact numbers to fit the button before the X.
+  const withOptions = !isMobile()
+  const resourceWidths = withOptions ? [62, 86, 76, 86] : [72, 108, 87, 108]
+  const resourceValue = withOptions ? short : num
   const top = [
     img(px, 'logo', 142, 3, 64 / imgW('logo')),
-    box(px, 'resources', 212, 6, 330, 44, { color: P.navy, radius: 12, border: 2, borderColor: P.navyEdge, align: 'center', padding: { left: px(4), right: px(4) } }, [
+    box(px, 'resources', 212, 6, withOptions ? 330 : 399, 44, { color: P.navy, radius: 12, border: 2, borderColor: P.navyEdge, align: 'center', padding: { left: px(4), right: px(4) } }, [
       resourceChip(px, fs, 'EN', num(energy), resourceWidths[0], true),
-      resourceChip(px, fs, 'GC', short(r.GC), resourceWidths[1], true),
-      resourceChip(px, fs, 'DM', short(r.DM), resourceWidths[2], true),
-      resourceChip(px, fs, 'FT', short(r.FT), resourceWidths[3], false)
+      resourceChip(px, fs, 'GC', resourceValue(r.GC), resourceWidths[1], true),
+      resourceChip(px, fs, 'DM', resourceValue(r.DM), resourceWidths[2], true),
+      resourceChip(px, fs, 'FT', resourceValue(r.FT), resourceWidths[3], false)
     ]),
-    button2(
-      px,
-      { id: 'options', x: 548, y: 6, w: 64, h: 44, color: P.navy, radius: 12, border: 2, borderColor: P.navyEdge, row: false, onClick: () => showLobbyView('options') },
-      [<Label value="OPTIONS" fontSize={fs(10)} color={P.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(14) }} />]
-    ),
+    withOptions
+      ? button2(
+          px,
+          { id: 'options', x: 548, y: 6, w: 64, h: 44, color: P.navy, radius: 12, border: 2, borderColor: P.navyEdge, row: false, onClick: () => showLobbyView('options') },
+          [<Label value="OPTIONS" fontSize={fs(10)} color={P.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(14) }} />]
+        )
+      : null,
     squareButton(px, 'close', 617, 6, 'ic_close_w', 0.67, closeOrBack)
   ]
 
