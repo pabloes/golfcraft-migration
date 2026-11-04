@@ -17,6 +17,7 @@ import { JoiningScreen, PartyScreen, HoleResultScreen, RunCompleteScreen } from 
 import { containLayout, fullLayout, scaler, isSmallCanvas } from './ui-scale'
 import { serverNotificationState } from '../components/lobby/server-notification'
 import { GiveawayCard, GiveawayPoster, giveawayInputSystem } from './giveaway'
+import { PartyNotice } from './party-notice'
 import { MobileShootControls } from './mobile-shoot-controls'
 import { isMobile } from '../services/platform'
 import { dismissGameClosedNotice, formatOpeningDay, gameWindowState, showClosedNoticeOnce } from '../services/game-window'
@@ -35,6 +36,7 @@ const ui = () => {
     <UiEntity uiTransform={{ width: '100%', height: '100%' }}>
       <LobbyHud />
       <GiveawayCard />
+      <PartyNotice />
       <hud.MissionTimer />
       <hud.HoleStats />
       <hud.LiveRanking />
