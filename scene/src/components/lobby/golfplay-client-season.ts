@@ -226,14 +226,23 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
     visualCourse.applyAllValues(expressionState)
     let positionBeforeShoot: any
 
-    await movePlayerTo({
-      newRelativePosition: Vector3.create(
-        initialPlayerPosition.x + 24,
-        initialPlayerPosition.y,
-        initialPlayerPosition.z + 24
-      ),
-      cameraTarget: Vector3.create(8 + 24, 1, 8 + 24)
-    })
+    // Only to ENTER the run, not between hole and hole (user, 2026-11-04).
+    // With the aim camera the view belongs to the camera, which sits on the
+    // ball of the new hole, and the avatar is hidden and locked for the whole
+    // run, so moving it between holes achieves nothing and is one more chance
+    // to land somewhere the explorer will not move it from again (§6 #46).
+    // Legacy controls have no aim camera: there the avatar IS the view, so it
+    // still has to be put on each tee or the player is stranded.
+    if (currentGame === 0 || !isCameraAimMode()) {
+      await movePlayerTo({
+        newRelativePosition: Vector3.create(
+          initialPlayerPosition.x + 24,
+          initialPlayerPosition.y,
+          initialPlayerPosition.z + 24
+        ),
+        cameraTarget: Vector3.create(8 + 24, 1, 8 + 24)
+      })
+    }
 
     handleFrameEvents()
 
