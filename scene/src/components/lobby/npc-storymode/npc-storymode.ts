@@ -89,6 +89,66 @@ export const talkToNpc = async () => {
 let container1: Entity | null = null
 let container2: Entity | null = null
 let container_sound: Entity | null = null
+
+// The electricity hum of the sphere machine is only heard next to it (user,
+// 2026-11-04: it carried across the whole lobby). SDK7's AudioSource has no
+// rolloff setting, so the distance to the player drives the volume: full
+// within HUM_NEAR metres, silent past HUM_FAR, and a linear ramp between.
+// set_spheres owns the base volume (SDK6 keeps the hum silent with 0 spheres)
+// and this only scales it.
+const HUM_VOLUME = 0.05
+const HUM_NEAR = 3
+const HUM_FAR = 9
+const HUM_CHECK_MS = 200
+let hum2Base = HUM_VOLUME
+let humSystemAdded = false
+let humCheckedAt = 0
+
+// The containers hang off the scene root, so their world position is the
+// parent's plus their own.
+const worldPositionOf = (entity: Entity) => {
+  const t = Transform.getOrNull(entity)
+  if (!t) return null
+  const parent = t.parent ? Transform.getOrNull(t.parent) : null
+  return Vector3.create(
+    t.position.x + (parent?.position.x || 0),
+    t.position.y + (parent?.position.y || 0),
+    t.position.z + (parent?.position.z || 0)
+  )
+}
+
+const humFalloff = (from: { x: number; y: number; z: number }, to: { x: number; y: number; z: number }) => {
+  const dx = from.x - to.x
+  const dy = from.y - to.y
+  const dz = from.z - to.z
+  const distance = Math.sqrt(dx * dx + dy * dy + dz * dz)
+  if (distance <= HUM_NEAR) return 1
+  if (distance >= HUM_FAR) return 0
+  return 1 - (distance - HUM_NEAR) / (HUM_FAR - HUM_NEAR)
+}
+
+function humProximitySystem() {
+  if (Date.now() - humCheckedAt < HUM_CHECK_MS) return
+  humCheckedAt = Date.now()
+  const player = Transform.getOrNull(engine.PlayerEntity)
+  if (!player) return
+  for (const [entity, base] of [
+    [container1, HUM_VOLUME],
+    [container2, hum2Base]
+  ] as [Entity | null, number][]) {
+    if (!entity) continue
+    const audio = AudioSource.getMutableOrNull(entity)
+    const at = worldPositionOf(entity)
+    if (!audio || !at) continue
+    audio.volume = base * humFalloff(player.position, at)
+  }
+}
+
+const startHumProximity = () => {
+  if (humSystemAdded) return
+  humSystemAdded = true
+  engine.addSystem(humProximitySystem)
+}
 let first_time = true
 let completed_mission = false
 
@@ -117,6 +177,8 @@ export const createNpcTest = (parent: Entity, opts: CreateNpcOptions): Entity | 
     loop: false,
     volume: 1
   })
+
+  startHumProximity()
 
   // Container 1 GLB (mission 1 visual). Has the electricity hum (source_electricity)
   // and the '1. Escape' clip (container_scape) used in the mission-2 cinematic.
@@ -288,8 +350,10 @@ export const createNpcTest = (parent: Entity, opts: CreateNpcOptions): Entity | 
     if (!container2) return
     if (amount < 0) amount = 0
     // SDK6: electricity hum is silent with 0 spheres, audible otherwise.
+    // The proximity system multiplies this by the distance falloff.
+    hum2Base = amount === 0 ? 0 : HUM_VOLUME
     const audio = AudioSource.getMutableOrNull(container2)
-    if (audio) audio.volume = amount === 0 ? 0 : 0.05
+    if (audio) audio.volume = hum2Base
     const animator = Animator.getMutableOrNull(container2)
     if (!animator) return
     for (const s of animator.states) s.playing = false

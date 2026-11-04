@@ -702,23 +702,31 @@ export const bootstrap = async (): Promise<BootstrapResult> => {
       console.log('[bootstrap] fetchConfig failed:', err)
     }
 
-    // Fetch on-chain materials separately. Only meaningful for web3 users
-    // whose wallet matches their PlayFab account; guest userIds are not
-    // wallet addresses and would return empty.
-    if (user.hasConnectedWeb3 && user.userId.startsWith('0x')) {
+    // On-chain materials, read from the ERC1155 itself. The wallet is
+    // `nftWallet`, the same one the golf clubs use (publicKey, falling back to
+    // userId): this used to test `user.userId.startsWith('0x')` and pass
+    // `user.userId`, so any explorer whose userId is not the wallet skipped the
+    // whole block and the player saw five zeros next to their real PlayFab
+    // balances (report, 2026-11-04). A guest has no wallet and is skipped.
+    if (nftWallet) {
       try {
-        const chainMaterials = await fetchBlockchainMaterials(user.userId.toLowerCase())
-        console.log('[bootstrap] blockchain materials:', JSON.stringify(chainMaterials))
+        const chainMaterials = await fetchBlockchainMaterials(nftWallet)
+        console.log('[bootstrap] blockchain materials:', nftWallet, JSON.stringify(chainMaterials))
         updateLobbyResources({
           DMChain: chainMaterials.DMChain || 0,
           Planks: chainMaterials.Planks || 0,
           StoneBlocks: chainMaterials.StoneBlocks || 0,
           IronBars: chainMaterials.IronBars || 0,
-          GoldBars: chainMaterials.GoldBars || 0
+          GoldBars: chainMaterials.GoldBars || 0,
+          // only now are those five numbers the truth; until then the HUD
+          // shows "-" rather than a 0 nobody should believe
+          chainLoaded: true
         })
       } catch (err) {
         console.log('[bootstrap] blockchain materials fetch failed:', err)
       }
+    } else {
+      console.log('[bootstrap] no wallet: blockchain materials not read')
     }
 
     // SDK6 meta.ts called this from the connection task; the parts list lives

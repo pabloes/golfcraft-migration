@@ -29,6 +29,11 @@ export type LobbyResources = {
   // Track if we ever populated the resources so the HUD can show "-" instead
   // of "0" when the request never returned data.
   loaded: boolean
+  // The five blockchain materials come from Polygon, not PlayFab, so they
+  // load separately. Without their own flag a read that failed (or never ran,
+  // for a wallet we could not resolve) showed a confident 0 instead of "-",
+  // which a player reads as "my materials are gone" (report, 2026-11-04).
+  chainLoaded: boolean
 }
 
 // /api/get-daily-missions/:PlayFabId — five missions for the day, done in
@@ -77,7 +82,8 @@ export const lobbyHudState: {
     golfclub: null,
     bonus: 0,
     farmingBonus: 0,
-    loaded: false
+    loaded: false,
+    chainLoaded: false
   }
 }
 

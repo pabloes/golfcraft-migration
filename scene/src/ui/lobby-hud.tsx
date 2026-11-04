@@ -159,7 +159,7 @@ export const LobbyHud = () => {
   // Right-align by pushing the (shrink-wrapped) Label to the right edge of the
   // cell with flexbox — textAlign alone doesn't position a content-sized label.
   // So the number's right edge lands exactly at rightX (just left of its icon).
-  const cellAt = (rightX: number, top: number, value: number) => (
+  const cellAt = (rightX: number, top: number, value: number, loaded = r.loaded) => (
     <UiEntity
       uiTransform={{
         positionType: 'absolute',
@@ -171,7 +171,7 @@ export const LobbyHud = () => {
         alignItems: 'center'
       }}
     >
-      <Label value={renderCount(value, r.loaded)} fontSize={fs(13)} color={Color4.Black()} textWrap="nowrap" />
+      <Label value={renderCount(value, loaded)} fontSize={fs(13)} color={Color4.Black()} textWrap="nowrap" />
     </UiEntity>
   )
   const cell = (col: number, row: number, value: number) => cellAt(colXs[col], rowYs[row], value)
@@ -246,11 +246,11 @@ export const LobbyHud = () => {
         {cell(3, 1, r.GD)}
         {/* Row 3: blockchain materials over the "BLOCKCHAIN MATERIALS" sub-panel
             baked into the same sprite (SDK6 materialsDef y=-156). */}
-        {cellAt(bcColXs[0], bcRowY, r.DMChain)}
-        {cellAt(bcColXs[1], bcRowY, r.Planks)}
-        {cellAt(bcColXs[2], bcRowY, r.StoneBlocks)}
-        {cellAt(bcColXs[3], bcRowY, r.IronBars)}
-        {cellAt(bcColXs[4], bcRowY, r.GoldBars)}
+        {cellAt(bcColXs[0], bcRowY, r.DMChain, r.chainLoaded)}
+        {cellAt(bcColXs[1], bcRowY, r.Planks, r.chainLoaded)}
+        {cellAt(bcColXs[2], bcRowY, r.StoneBlocks, r.chainLoaded)}
+        {cellAt(bcColXs[3], bcRowY, r.IronBars, r.chainLoaded)}
+        {cellAt(bcColXs[4], bcRowY, r.GoldBars, r.chainLoaded)}
       </UiEntity>
       )}
 
