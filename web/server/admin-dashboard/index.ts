@@ -113,7 +113,7 @@ function checkWallets(list: any, field: string): string[] | Bad {
 
 function checkGameWindow(value: any): Checked {
     if (!plainObject(value)) return bad("expected an object");
-    const extra = Object.keys(value).filter(key => !["fromDay", "toDay", "force", "allowWallets"].includes(key));
+    const extra = Object.keys(value).filter(key => !["fromDay", "toDay", "force", "allowWallets", "message"].includes(key));
     if (extra.length) return bad(`unexpected keys: ${extra.join(", ")}`);
     const out: GameWindowConfig = {};
     //the same bounds common/game-window.ts clamps to, so what is stored is
@@ -133,6 +133,12 @@ function checkGameWindow(value: any): Checked {
     const wallets = checkWallets(value.allowWallets, "allowWallets");
     if (!Array.isArray(wallets)) return wallets;
     out.allowWallets = wallets;
+    //what players are told while it is closed; empty means the monthly wording
+    if (value.message !== undefined && value.message !== null && String(value.message).trim()) {
+        const message = String(value.message).trim();
+        if (message.length > 200) return bad("the message is longer than 200 characters");
+        out.message = message;
+    }
     return {value: out};
 }
 

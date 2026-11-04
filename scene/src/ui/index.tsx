@@ -275,7 +275,13 @@ const GameClosedNotice = () => {
       >
         {img(px, 'rb_closed')}
         <Label
-          value={opensAt ? `GolfCraft opens ${formatOpeningDay(opensAt)}` : 'GolfCraft opens soon'}
+          value={
+            gameWindowState.message
+              ? gameWindowState.message
+              : opensAt
+                ? `GolfCraft opens ${formatOpeningDay(opensAt)}`
+                : 'GolfCraft opens soon'
+          }
           fontSize={fs(28)}
           color={C.white}
           textAlign="middle-center"

@@ -9,7 +9,7 @@ import {GAME_CLOSED_MESSAGE} from "../common/game-window";
 
 const API_URL = process.env.PROD ? `https://golfcraftgame.com` : `http://localhost:2569`;
 
-export type GameAccess = {open: boolean, allowed: boolean, windowOpen: boolean, opensAt: number | null, closesAt: number | null};
+export type GameAccess = {open: boolean, allowed: boolean, windowOpen: boolean, opensAt: number | null, closesAt: number | null, message?: string};
 
 export async function getGameAccessFor(address?: string | null): Promise<GameAccess> {
     try {
@@ -24,6 +24,8 @@ export async function getGameAccessFor(address?: string | null): Promise<GameAcc
 }
 
 export function gameClosedMessage(access: GameAccess) {
+    //a maintenance stop says so; the monthly wording would be a lie
+    if (access.message) return access.message;
     if (!access.opensAt) return GAME_CLOSED_MESSAGE;
     return `${GAME_CLOSED_MESSAGE} Next opening: ${new Date(access.opensAt).toUTCString().replace(":00 GMT", " UTC")}`;
 }

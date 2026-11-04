@@ -308,8 +308,10 @@ export const createSeasonMenu = async (
       hideCancelButton()
       if (text) {
         text.text =
-          'GOLFCRAFT IS CLOSED\n\nIt opens the first week\nof every month\n\n' +
-          (gameWindowState.opensAt ? `Next opening:\n${formatUtc(gameWindowState.opensAt)}` : 'Next opening: soon')
+          gameWindowState.message
+            ? gameWindowState.message
+            : 'GOLFCRAFT IS CLOSED\n\nIt opens the first week\nof every month\n\n' +
+              (gameWindowState.opensAt ? `Next opening:\n${formatUtc(gameWindowState.opensAt)}` : 'Next opening: soon')
       }
       return
     }

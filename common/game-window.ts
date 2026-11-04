@@ -17,6 +17,12 @@ export type GameWindowConfig = {
   toDay?: number
   force?: 'open' | 'closed' | null
   allowWallets?: string[]
+  // What players are told while it is closed. The monthly wording is wrong
+  // for a five minute maintenance stop, which is what `force: "closed"` is
+  // really used for: it stops anyone STARTING a game while the matches
+  // already running play to the end, and then the server can be restarted
+  // without cutting anybody off (user, 2026-11-04).
+  message?: string
 }
 
 export type GameWindowStatus = {
@@ -63,7 +69,8 @@ export function isWalletAllowed(config: GameWindowConfig | null | undefined, add
 export function getGameAccess(config: GameWindowConfig | null | undefined, address?: string | null, now: number = Date.now()) {
   const status = getGameWindowStatus(config, now)
   const allowed = isWalletAllowed(config, address)
-  return { ...status, allowed, open: status.windowOpen || allowed }
+  const message = String(config?.message || '').trim().slice(0, 200)
+  return { ...status, allowed, open: status.windowOpen || allowed, message }
 }
 
 export const GAME_CLOSED_MESSAGE = 'GolfCraft is closed right now. It opens the first week of every month.'

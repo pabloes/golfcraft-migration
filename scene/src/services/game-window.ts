@@ -16,6 +16,10 @@ export const gameWindowState = {
   windowOpen: true,
   opensAt: null as number | null,
   closesAt: null as number | null,
+  // Set when the game is closed for a reason that is not the calendar, e.g.
+  // a maintenance stop before a server restart: it is what the closed dialog
+  // says instead of the monthly wording.
+  message: '',
   // Server clock minus ours, so countdowns don't depend on the phone's clock.
   offsetMs: 0,
   // The "closed" dialog, shown when the player tries to start something.
@@ -122,6 +126,7 @@ export const refreshGameWindow = async () => {
     gameWindowState.windowOpen = !!data.windowOpen
     gameWindowState.opensAt = data.opensAt ?? null
     gameWindowState.closesAt = data.closesAt ?? null
+    gameWindowState.message = String(data.message || '')
     const wasFree = gameWindowState.freeEnergy
     gameWindowState.freeEnergy = !!data.freeEnergy
     gameWindowState.freeEnergyUntil = data.freeEnergyUntil ?? null

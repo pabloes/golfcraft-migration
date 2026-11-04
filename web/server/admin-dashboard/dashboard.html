@@ -339,15 +339,40 @@
     [["", "Follow the calendar"], ["open", "Force OPEN"], ["closed", "Force CLOSED"]]
       .forEach(function (o) { el("option", { value: o[0] }, force, o[1]).selected = o[0] === ((value && value.force) || ""); });
 
+    var msgField = el("div", { style: "margin-top:12px" }, body);
+    el("label", {}, msgField, "What players are told while it is closed (empty = the monthly wording)");
+    var message = el("input", { type: "text", maxlength: "200", placeholder: "Back in a few minutes. You can finish the hole you are on." }, msgField);
+    message.value = (value && value.message) || "";
+
     var walletsField = el("div", { style: "margin-top:12px" }, body);
     el("label", {}, walletsField, "Wallets that can always play, one per line");
     var wallets = el("textarea", { placeholder: "0x…", spellcheck: "false" }, walletsField);
     wallets.value = ((value && value.allowWallets) || []).join("\n");
 
+    // Draining before a restart is the thing this card is really used for, and
+    // doing it by hand is three fields and a Save (user, 2026-11-04). These two
+    // set them and save in one press; the server panel's "playing" count is
+    // what then tells you when the last match has finished.
+    var quick = el("div", { class: "row", style: "margin-top:12px" }, body);
+    var stop = el("button", { type: "button" }, quick, "Stop new games");
+    var open = el("button", { type: "button", class: "ghost" }, quick, "Allow games again");
+    //the card's own Save button, which is created just before the control
+    var saveCard = function () { body.parentElement.querySelector(".actions button").click(); };
+    stop.onclick = function () {
+      force.value = "closed";
+      if (!message.value) message.value = "Maintenance: back in a few minutes. You can finish the hole you are on.";
+      saveCard();
+    };
+    open.onclick = function () {
+      force.value = "";
+      message.value = "";
+      saveCard();
+    };
+
     return {
       read: function () {
         var list = wallets.value.split(/[\s,;]+/).map(function (w) { return w.trim(); }).filter(Boolean);
-        return { value: { fromDay: Number(from.value), toDay: Number(to.value), force: force.value || null, allowWallets: list } };
+        return { value: { fromDay: Number(from.value), toDay: Number(to.value), force: force.value || null, allowWallets: list, message: message.value.trim() } };
       },
       badge: function () {
         if (!value) return { tone: "on", text: "NO ROW · ALWAYS OPEN" };
