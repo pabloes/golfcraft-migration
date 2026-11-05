@@ -6,7 +6,7 @@ import { Dialog, NPCType } from 'dcl-npc-toolkit'
 import { globalStore } from '../../../services/globalStore/globalStore'
 import { GolfplayClientFactory } from '../golfplay-client'
 import { fadeInOverlay, fadeOutOverlay } from '../../ui/overlay'
-import { getMusicForCollection, reproduceMapMusic, stopMapMusic } from '../../../services/map-music'
+import { startMapMusicFor, stopMapMusic } from '../../../services/map-music'
 import { refreshUserData } from '../../../meta/bootstrap'
 import { signedFetch } from '~system/SignedFetch'
 // @ts-ignore - common/constants has @ts-nocheck
@@ -824,7 +824,9 @@ export const createNpcTest = (parent: Entity, opts: CreateNpcOptions): Entity | 
     // SDK6 cinematic: start the egypt map music, then fade the screen to black.
     // The course loads behind the black; golfplay-client fades back out when the
     // course visual is ready (fadeOutOverlay).
-    reproduceMapMusic(getMusicForCollection(0))
+    // Every storymode mission is an egypt course, and this runs before the
+    // course exists, so the map is named rather than read from it.
+    startMapMusicFor('egypt')
     fadeInOverlay(1)
     gameState.starting = true
     gameState.playing = true

@@ -55,6 +55,7 @@ import { reportPing } from '../../ui/ping-state'
 import { reconnectRoom } from './room-reconnect'
 import { holdGroundUnderPlayer } from '../scene-bounds'
 import { fitPlayFloorToPlayer } from '../scene-bounds'
+import { startMapMusic } from '../../services/map-music'
 import { BALL_RADIUS, COURSE_REMOVE_DELAY_MS, FADE_BETWEEN_HOLES } from '../../config/hole-end'
 
 const REWARD_NAMES: any = {
@@ -159,6 +160,17 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
     // them to another parcel. The sheet goes just above the course's surface,
     // which is where the ball sits minus its radius.
     fitPlayFloorToPlayer(ballSpawnDefinition.position[1] - BALL_RADIUS)
+
+    // Music for this map, streamed from outside the scene
+    // (services/map-music.ts). The map is read from the course's skybox part.
+    // It carries on across the holes of a run: a track cut off at every hole
+    // would mean nobody ever hears one.
+    try {
+      startMapMusic(courseDefinition)
+    } catch (err) {
+      console.log('[music] could not start', err)
+    }
+
 
     const physicBall = createPhysicBall(world, { position: ballSpawnDefinition.position, onlyKinematic: false })
     physicBall.body.sleep()

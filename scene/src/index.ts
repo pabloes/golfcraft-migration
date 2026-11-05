@@ -17,6 +17,7 @@ import { setupUI } from './ui'
 import { startGameWindow } from './services/game-window'
 import { startSceneBounds, keepBounds, releaseBounds } from './components/scene-bounds'
 import { startPositionWatch } from './services/position-watch'
+import { stopMapMusic } from './services/map-music'
 import { teleportVerified } from './services/safe-teleport'
 import { lobbyMenuState } from './ui/lobby-menu-state'
 import { setSpectatorLobbyHooks, startSpectating } from './components/lobby/spectator-client'
@@ -117,6 +118,8 @@ export async function main() {
               // the player still standing where the course was. The walls and
               // the floor must outlive all of it, not the 5 s grace.
               keepBounds(60000)
+              // The run is over: the map's music goes with it.
+              stopMapMusic()
               await fadeInOverlay(1)
               // handleLeavePlay also clears `playing` (and courseId). Without it
               // the bottom-right course footer stays up in the lobby, and

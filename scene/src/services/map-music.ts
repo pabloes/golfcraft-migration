@@ -1,46 +1,188 @@
-// Map background music (SDK6 scene/src/services/map-music.ts). SDK6 attached an
-// AudioSource to FIRST_PERSON_CAMERA so the looping track follows the player;
-// here we parent the music entity to engine.PlayerEntity for the same effect.
-import { engine, AudioSource, Transform, Entity } from '@dcl/sdk/ecs'
+// Music per map, streamed from outside the scene (user, 2026-11-05).
+//
+// Why a stream and not files in the scene. Four minutes of stereo music is
+// about 3 MB, and every player downloads everything the scene ships, so seven
+// maps of it would be ~17 MB on top of the models. AudioSource cannot help:
+// unity-explorer resolves its audioClipUrl with sceneData.TryGetContentUrl,
+// which only looks inside the deployed scene, so an http URL there never
+// loads. AudioStream is the one component that takes a URL
+// (CreateMediaPlayerSystem.CreateAudioStream hands it straight to the media
+// player), and it is what this uses.
+//
+// What AudioStream does NOT have is a loop flag, or an event when a track
+// ends. That is fine here, because the user asked for long tracks that may
+// play once ("con 4 o 6 minutos va bien"), and because the catalogue carries
+// each track's length: when it runs out, the next one is picked. So the music
+// goes on without looping anything.
+//
+// Hosting: MUSIC_BASE. The web service already serves `*/static` from
+// web/client/dist/static, and `*/music` from web/public/music (added for
+// this), so dropping the files there is enough. Any other host works; it only
+// has to answer CORS and be https.
+import { engine, AudioStream, Transform, Entity } from '@dcl/sdk/ecs'
 
-// SDK6 MUSIC_BY_COLLECTION[0] (egypt). Collection 1 (space) exists but mission-1
-// is egypt. getMusicForCollection is called with 0.
-const EGYPT_TRACKS = ['sound/map_egypt_1.mp3', 'sound/map_egypt_2.mp3']
-let pick = 0
-let musicEntity: Entity | null = null
+// ---------------------------------------------------------------------------
+// The catalogue. `seconds` is the track's own length, used only to know when
+// to move on to the next one, so it does not have to be exact: a couple of
+// seconds short and the next track starts on a tail nobody is listening to.
+//
+// Every track here is from Fesliyan Studios (fesliyanstudios.com), the same
+// library the two Egypt tracks already in the game come from. Upload the mp3s
+// under these names and nothing else has to change.
+type Track = { file: string; seconds: number }
 
-export const getMusicForCollection = (_collectionId: number): string => {
-  const track = EGYPT_TRACKS[pick % EGYPT_TRACKS.length]
-  pick++
-  return track
+export type MapKey = 'default' | 'egypt' | 'space' | 'mountain' | 'cocobay' | 'urban' | 'jungle'
+
+const CATALOG: Record<MapKey, Track[]> = {
+  // The neon course everybody starts on.
+  default: [
+    { file: 'default_silly_feet.mp3', seconds: 184 },
+    { file: 'default_lost_in_dance.mp3', seconds: 171 },
+    { file: 'default_retro_platforming.mp3', seconds: 130 }
+  ],
+  // Desert Trek and Arabic Heat, which the game already used: the full cuts
+  // this time, not the 60 second one that was bundled.
+  egypt: [
+    { file: 'egypt_desert_trek.mp3', seconds: 126 },
+    { file: 'egypt_arabic_heat.mp3', seconds: 127 }
+  ],
+  space: [
+    { file: 'space_beyond_the_stars.mp3', seconds: 213 },
+    { file: 'space_galaxys_endless_expanse.mp3', seconds: 203 },
+    { file: 'space_quantum_leap.mp3', seconds: 191 }
+  ],
+  mountain: [
+    { file: 'mountain_in_the_light.mp3', seconds: 276 },
+    { file: 'mountain_tranquility.mp3', seconds: 259 },
+    { file: 'mountain_deep_meditation.mp3', seconds: 258 }
+  ],
+  cocobay: [
+    { file: 'cocobay_on_paradise_island.mp3', seconds: 247 },
+    { file: 'cocobay_beachside_liqueur.mp3', seconds: 221 },
+    { file: 'cocobay_rasta_dreads.mp3', seconds: 215 }
+  ],
+  urban: [
+    { file: 'urban_milan_nightlife.mp3', seconds: 212 },
+    { file: 'urban_tokyo_lofi.mp3', seconds: 199 },
+    { file: 'urban_done_with_work.mp3', seconds: 197 }
+  ],
+  // Fesliyan has no jungle or tribal section: their Ethnic category is five
+  // tracks and the only tribal one lasts 94 seconds. Left empty on purpose,
+  // which falls back to the default list, until there is something to put in.
+  jungle: []
 }
 
-// SDK6 skipped the music when TitleData.streamURL was set, so the stream's
-// audio is heard while playing. Here it follows the stream really playing
-// (stream-screens.ts), and stops the music if it goes live mid-course.
+// Where the files live. Changing the host is a one-line change here; the file
+// names above stay the same.
+const MUSIC_BASE = 'https://golfcraftgame.com/music/'
+
+const VOLUME = 0.5
+// A breath between tracks, and enough slack that a track whose real length is
+// a second or two over its catalogue entry is not cut off.
+const GAP_MS = 3000
+
+// ---------------------------------------------------------------------------
+// Which map a course belongs to. Every course definition carries a skybox part
+// and its subtype names the map (Skybox1, egypt_skybox, jungle_skybox...), so
+// nothing else has to be stored or guessed.
+const SKYBOX_TO_MAP: { match: string; map: MapKey }[] = [
+  { match: 'egypt', map: 'egypt' },
+  { match: 'jungle', map: 'jungle' },
+  { match: 'mountain', map: 'mountain' },
+  { match: 'cocobay', map: 'cocobay' },
+  { match: 'urban', map: 'urban' },
+  { match: 'space', map: 'space' }
+]
+
+export const mapOfCourse = (courseDefinition: any): MapKey => {
+  const parts = courseDefinition?.parts || []
+  const skybox = parts.find((p: any) => typeof p?.subtype === 'string' && /skybox/i.test(p.subtype))
+  const subtype = String(skybox?.subtype || '').toLowerCase()
+  const hit = SKYBOX_TO_MAP.find((entry) => subtype.indexOf(entry.match) !== -1)
+  return hit ? hit.map : 'default'
+}
+
+// ---------------------------------------------------------------------------
+let musicEntity: Entity | null = null
+let currentMap: MapKey | null = null
+let lastFile = ''
+let nextAt = 0
+let systemAdded = false
 let streamPlaying = false
+
+// SDK6 skipped the music when a stream was set in TitleData, so the stream's
+// own audio is what you hear. Here it follows the stream actually playing
+// (stream-screens.ts) and stops the music if one starts mid-course.
 export const setStreamPlaying = (playing: boolean) => {
   streamPlaying = playing
   if (playing) stopMapMusic()
 }
 
-export const reproduceMapMusic = (track: string) => {
-  if (streamPlaying) return
+const tracksFor = (map: MapKey): Track[] => {
+  const own = CATALOG[map]
+  return own && own.length > 0 ? own : CATALOG.default
+}
+
+const pick = (map: MapKey): Track | null => {
+  const tracks = tracksFor(map)
+  if (tracks.length === 0) return null
+  // Never the same one twice in a row, unless there is only one.
+  const choices = tracks.length > 1 ? tracks.filter((t) => t.file !== lastFile) : tracks
+  return choices[Math.floor(Math.random() * choices.length)]
+}
+
+const play = (track: Track) => {
   if (musicEntity === null) {
     musicEntity = engine.addEntity()
-    Transform.create(musicEntity, { parent: engine.PlayerEntity })
+    // No Transform on purpose: without one the explorer treats the stream as
+    // global, which is what background music wants. A spatial stream would
+    // fade with the distance to an entity nobody can see.
+    Transform.createOrReplace(musicEntity, { parent: engine.PlayerEntity })
   }
-  AudioSource.createOrReplace(musicEntity, {
-    audioClipUrl: track,
+  lastFile = track.file
+  nextAt = Date.now() + track.seconds * 1000 + GAP_MS
+  AudioStream.createOrReplace(musicEntity, {
+    url: MUSIC_BASE + track.file,
     playing: true,
-    loop: true,
-    volume: 0.5
+    volume: VOLUME
   })
+  console.log('[music]', track.file, `(${track.seconds}s)`)
+}
+
+// AudioStream has no "finished" event, so the catalogue's length is what moves
+// the music on. A few seconds either way are inaudible.
+const musicSystem = () => {
+  if (currentMap === null || nextAt === 0 || Date.now() < nextAt) return
+  const track = pick(currentMap)
+  if (track) play(track)
+  else nextAt = 0
+}
+
+// Start (or keep) the music for a course. Called when a hole's course is
+// built, by both golfplay clients, so Ranked has music for the first time.
+export const startMapMusic = (courseDefinition: any) => {
+  const map = mapOfCourse(courseDefinition)
+  startMapMusicFor(map)
+}
+
+export const startMapMusicFor = (map: MapKey) => {
+  if (streamPlaying) return
+  // The next hole of the same map keeps the track that is playing: cutting a
+  // track off at every hole would mean nobody ever hears one.
+  if (currentMap === map && nextAt > Date.now()) return
+  currentMap = map
+  if (!systemAdded) {
+    systemAdded = true
+    engine.addSystem(musicSystem)
+  }
+  const track = pick(map)
+  if (track) play(track)
 }
 
 export const stopMapMusic = () => {
-  if (musicEntity !== null) {
-    const src = AudioSource.getMutableOrNull(musicEntity)
-    if (src) src.playing = false
-  }
+  currentMap = null
+  nextAt = 0
+  if (musicEntity === null) return
+  const stream = AudioStream.getMutableOrNull(musicEntity)
+  if (stream) stream.playing = false
 }
