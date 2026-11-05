@@ -54,6 +54,7 @@ import { mobileShootState } from '../../ui/mobile-shoot-state'
 import { reportPing } from '../../ui/ping-state'
 import { reconnectRoom } from './room-reconnect'
 import { holdGroundUnderPlayer } from '../scene-bounds'
+import { COURSE_REMOVE_DELAY_MS, FADE_BETWEEN_HOLES } from '../../config/hole-end'
 
 const REWARD_NAMES: any = {
   WD: 'wood',
@@ -606,7 +607,11 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
       cancelEnding = true
       // The hole ends: the legs are locked again before the fade to the results.
       holdAvatarForRun()
-      await fadeInOverlay(3)
+      // The fade is what has kept anyone from ever seeing the moment the
+      // player is moved out of the scene (user, 2026-11-05): with the screen
+      // black, you only find out where you ended up once it clears. Off while
+      // that is being chased; FADE_BETWEEN_HOLES puts it back.
+      if (FADE_BETWEEN_HOLES) await fadeInOverlay(3)
     }
 
     function handleFrameEvents() {
@@ -757,7 +762,20 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
       visualChests.forEach((v: any) => v.dispose())
       frameEventHandler.dispose()
       gameHandler.dispose()
-      visualCourse.dispose()
+      // NOT now: the player is standing on it. unity-explorer carries the
+      // player with the collider under their feet every frame
+      // (InterpolateCharacterSystem), so a course removed from under them can
+      // take them to another parcel, past every check movePlayerTo has. The
+      // pad above went up first; these few frames are for the explorer to
+      // make it the platform before the course leaves.
+      const courseToRemove = visualCourse
+      setTimeout(() => {
+        try {
+          courseToRemove.dispose()
+        } catch (err) {
+          console.log('[season] course removal failed', err)
+        }
+      }, COURSE_REMOVE_DELAY_MS)
       control.dispose()
       aimCam?.dispose()
       ball.dispose()

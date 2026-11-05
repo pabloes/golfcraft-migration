@@ -36,6 +36,7 @@ import { mobileShootState } from '../../ui/mobile-shoot-state'
 import { reportPing } from '../../ui/ping-state'
 import { reconnectRoom } from './room-reconnect'
 import { holdGroundUnderPlayer } from '../scene-bounds'
+import { COURSE_REMOVE_DELAY_MS } from '../../config/hole-end'
 
 const REWARD_NAMES: any = {
   WD: 'wood',
@@ -550,7 +551,16 @@ const GolfplayClientFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: string })
       voxterCallback = null
       frameEventHandler.dispose()
       gameHandler.dispose()
-      visualCourse.dispose()
+      // Deferred on purpose: see golfplay-client-season.ts. The player is
+      // standing on the course and the explorer drags them along with it.
+      const courseToRemove = visualCourse
+      setTimeout(() => {
+        try {
+          courseToRemove.dispose()
+        } catch (err) {
+          console.log('[golfplay] course removal failed', err)
+        }
+      }, COURSE_REMOVE_DELAY_MS)
       control.dispose()
       aimCam?.dispose()
       ball.dispose()

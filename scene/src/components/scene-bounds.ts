@@ -52,13 +52,19 @@ const WALL_TOP = 14
 // the player had fallen out of the world and moved them to another parcel.
 const FLOOR_THICKNESS = 2
 const FLOOR_Y = -1.5 - FLOOR_THICKNESS / 2
-// The platform held under the player's feet while the course is gone. Wide
-// enough to cover a step taken as it appears, thick enough not to be passed
-// through, and its top sits a few centimetres below the feet so the player
-// keeps standing on the real ground until that ground disappears.
+// The platform held under the player's feet while the course is gone.
+//
+// Its top goes a couple of centimetres ABOVE the feet, not below, and that is
+// the whole point. unity-explorer's InterpolateCharacterSystem sets the
+// player's position every frame to `platform.TransformPoint(relativePosition)`
+// of the collider they are standing on, with no bounds check and no "is this
+// my scene" check: whatever that collider does, the player does. So a course
+// taken away under the feet can carry the player with it, which is how people
+// end up on another parcel with no teleport of ours having run. Lifting them
+// 2 cm onto a collider of ours makes US the platform before the course goes.
 const PAD_SIZE = 8
 const PAD_THICKNESS = 1
-const PAD_DROP = 0.05
+const PAD_LIFT = 0.02
 
 let parts: Entity[] = []
 let up = false
@@ -104,10 +110,12 @@ const drop = () => {
 }
 
 // Ground under the player's feet, for the moment a course is disposed under
-// them. Called by whoever is about to take the floor away, BEFORE taking it:
-// afterwards the player is already falling and the explorer may have acted.
-// It is removed when the walls come down, which is once the player is back in
-// the lobby and the building's own ground is there again.
+// them. Whoever is about to take the floor away calls this BEFORE taking it,
+// and leaves a few frames (COURSE_REMOVE_DELAY_MS in the golfplay clients)
+// for the explorer to notice the new platform: it is the collider the player
+// is standing on at the moment the course goes that decides where they end up.
+// Removed when the walls come down, once the player is back in the lobby and
+// the building's own ground is there again.
 let pad: Entity | null = null
 
 export const holdGroundUnderPlayer = () => {
@@ -115,7 +123,7 @@ export const holdGroundUnderPlayer = () => {
   if (!t) return
   releaseGroundUnderPlayer()
   pad = box(
-    Vector3.create(t.position.x, t.position.y - PAD_DROP - PAD_THICKNESS / 2, t.position.z),
+    Vector3.create(t.position.x, t.position.y + PAD_LIFT - PAD_THICKNESS / 2, t.position.z),
     Vector3.create(PAD_SIZE, PAD_THICKNESS, PAD_SIZE)
   )
   console.log('[scene-bounds] ground held under the player at', JSON.stringify(t.position))

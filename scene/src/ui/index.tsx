@@ -82,11 +82,13 @@ const ui = () => {
 // deployed. scripts/build-scene-prod.sh stamps the commit into version.ts.
 const VersionTag = () => (
   <Label
-    uiTransform={{ positionType: 'absolute', position: { bottom: 0, left: 0 }, width: '100%' }}
+    // With no height of its own and bottom 0 the text sat half outside the
+    // window: a Label is laid out by its box, so it needs one.
+    uiTransform={{ positionType: 'absolute', position: { bottom: 8, left: 0 }, width: '100%', height: 16 }}
     value={SCENE_VERSION}
-    fontSize={10}
-    color={Color4.create(1, 1, 1, 0.4)}
-    textAlign="bottom-center"
+    fontSize={12}
+    color={Color4.create(1, 1, 1, 0.55)}
+    textAlign="middle-center"
   />
 )
 
