@@ -1,0 +1,5 @@
+{
+  "env": {
+    "DCL_SDK_ISSUE_REPORTS": "off"
+  }
+}
