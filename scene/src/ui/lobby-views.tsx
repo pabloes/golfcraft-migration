@@ -970,7 +970,11 @@ export const OptionsView = () => {
     box(px, 'options-info', 6, 58, 140, 172, { color: P.navyDeep, radius: 14, border: 2, borderColor: P.navyEdge }),
     text(px, fs, 'CONTROLS', 15, 66, 120, 16, 12, P.pale),
     text(px, fs, 'Pick how you aim and shoot on a computer. Phones always use the touch controls. Saved to your account, applies from your next hole.', 15, 86, 122, 130, 11, P.white, 'middle-left', true),
-    ...cards.flat()
+    ...cards.flat(),
+    // Fesliyan Studios ask for this credit from anyone who has not donated,
+    // and the maps' music is theirs (services/map-music.ts). Here because it
+    // is the one screen that is about the game rather than about playing it.
+    text(px, fs, 'Music: Fesliyan Studios (fesliyanstudios.com)', 6, 236, 400, 14, 9, P.pale, 'middle-left')
   ])
 }
 
