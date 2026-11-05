@@ -13,27 +13,47 @@
     "email": "info@ohmyverse.io"
   },
   "main": "bin/index.js",
-  "tags": ["game", "social", "sports"],
+  "tags": [
+    "game",
+    "social",
+    "sports"
+  ],
   "scene": {
     "parcels": [
       "48,-46",
-      "47,-45", "48,-45", "49,-45",
-      "47,-44", "48,-44", "49,-44",
-      "47,-43", "48,-43", "49,-43"
+      "47,-45",
+      "48,-45",
+      "49,-45",
+      "47,-44",
+      "48,-44",
+      "49,-44",
+      "47,-43",
+      "48,-43",
+      "49,-43"
     ],
     "base": "47,-45"
   },
   "requiredPermissions": [
-    "ALLOW_TO_MOVE_PLAYER_INSIDE_SCENE"
+    "ALLOW_TO_MOVE_PLAYER_INSIDE_SCENE",
+    "ALLOW_MEDIA_HOSTNAMES"
   ],
   "spawnPoints": [
     {
       "name": "spawn1",
       "default": true,
       "position": {
-        "x": [39, 42],
-        "y": [0.90, 0.90],
-        "z": [30, 38]
+        "x": [
+          39,
+          42
+        ],
+        "y": [
+          0.9,
+          0.9
+        ],
+        "z": [
+          30,
+          38
+        ]
       },
       "cameraTarget": {
         "x": 25,
@@ -45,5 +65,9 @@
   "featureToggles": {
     "voiceChat": "enabled",
     "portableExperiences": "enabled"
-  }
+  },
+  "allowedMediaHostnames": [
+    "golfcraftgame.com",
+    "srs.zeroxwork.com"
+  ]
 }

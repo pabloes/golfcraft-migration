@@ -66,6 +66,7 @@ const corsOptions = {
 }
 var distPath = path.resolve(__dirname, "..", "client", "dist");
 var staticPath = path.resolve(__dirname, "..", "client", "dist", "static");
+var musicPath = path.resolve(__dirname, "..", "public", "music");
 
 
 // Private Network Access: when the SDK7 scene is served from a PUBLIC https
@@ -422,6 +423,12 @@ console.log("set-affiliate-code",code, playerAddress, PlayFabId, displayName)
         }
     });
     router.use("*/static", express.static(staticPath));
+    //The scene's map music (scene/src/services/map-music.ts). It cannot ship
+    //inside the scene: every player downloads everything a scene deploys, and
+    //seven maps of stereo music is about 17 MB. The scene streams it from here
+    //with an AudioStream component, which is the only one that takes a URL.
+    //Long cache: a track never changes, a new one gets a new name.
+    router.use("*/music", express.static(musicPath, {maxAge: "30d"}));
     router.use(fallback("index.html", {root:distPath}));
 
     const contextPath = process.env.CONTEXT_PATH || "";
