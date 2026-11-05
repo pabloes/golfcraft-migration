@@ -17,7 +17,7 @@ import {
   P, at, img, imgW, imgBox, text, box, fullFrame, button2, squareButton, sideCard, nextPrizeStrip, yellowTag, resIcon, rankBadge, border, energyChip
 } from './ui2'
 import { isMobile } from '../services/platform'
-import { gameOptions, setControlScheme, type ControlScheme } from '../services/game-options'
+import { gameOptions, setControlScheme, saveAudioOptions, toggleMute, VOLUME_STEP, type ControlScheme } from '../services/game-options'
 import { talkToNpc } from '../components/lobby/npc-storymode/npc-storymode'
 import { getGolfclubCollection, selectGolfclub, upgradeGolfclubAttribute } from '../components/lobby/lobby-training'
 import { BoardGolfclub } from '../components/lobby/golfclub-screen/golfclub-screen-ui'
@@ -960,6 +960,27 @@ export const OptionsView = () => {
     ]
   })
 
+  // MUSIC / STREAM: minus, the level, plus. No slider exists in this UI kit
+  // and a row of buttons is easier to hit than a drag anyway.
+  const volumeRow = (label: string, y: number, value: number, set: (v: number) => void) => {
+    const pct = Math.round(value * 100)
+    const step = (delta: number) => set(Math.min(1, Math.max(0, Math.round((value + delta) * 100) / 100)))
+    return [
+      text(px, fs, label, 100, y, 80, 20, 11, P.white, 'middle-left'),
+      button2(
+        px,
+        { id: `vol-${label}-down`, x: 184, y, w: 34, h: 20, color: P.navy, radius: 8, border: 2, borderColor: P.white, disabled: pct <= 0, onClick: () => step(-VOLUME_STEP) },
+        [<Label value="-" fontSize={fs(13)} color={P.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(16) }} />]
+      ),
+      text(px, fs, `${pct}%`, 222, y, 56, 20, 11, C.yellow, 'middle-center'),
+      button2(
+        px,
+        { id: `vol-${label}-up`, x: 282, y, w: 34, h: 20, color: P.navy, radius: 8, border: 2, borderColor: P.white, disabled: pct >= 100, onClick: () => step(VOLUME_STEP) },
+        [<Label value="+" fontSize={fs(13)} color={P.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(16) }} />]
+      )
+    ]
+  }
+
   return fullFrame(L, [
     squareButton(px, 'view-back', 140, 6, 'ic_chev_left_w', 0.8, optionsBack),
     box(px, 'options-title', 194, 9, 200, 38, { color: P.navyDeep, radius: 12, border: 2, borderColor: P.navyEdge, justify: 'center', align: 'center' }, [
@@ -971,10 +992,20 @@ export const OptionsView = () => {
     text(px, fs, 'CONTROLS', 15, 66, 120, 16, 12, P.pale),
     text(px, fs, 'Pick how you aim and shoot on a computer. Phones always use the touch controls. Saved to your account, applies from your next hole.', 15, 86, 122, 130, 11, P.white, 'middle-left', true),
     ...cards.flat(),
+    // Volumes (user, 2026-11-05). Kept on the account and heard at once: both
+    // the music and the lobby stream follow them while they play.
+    text(px, fs, 'VOLUME', 6, 238, 120, 16, 12, P.pale, 'middle-left'),
+    ...volumeRow('MUSIC', 238, gameOptions.musicVolume, (v) => { void saveAudioOptions({ music: v }) }),
+    ...volumeRow('STREAM', 262, gameOptions.streamVolume, (v) => { void saveAudioOptions({ stream: v }) }),
+    button2(
+      px,
+      { id: 'opt-mute', x: 340, y: 238, w: 110, h: 44, color: gameOptions.muted ? P.crimson : P.navy, radius: 10, border: 2, borderColor: P.white, onClick: toggleMute },
+      [<Label value={gameOptions.muted ? 'SOUND OFF' : 'MUTE ALL'} fontSize={fs(11)} color={P.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(18) }} />]
+    ),
     // Fesliyan Studios ask for this credit from anyone who has not donated,
     // and the maps' music is theirs (services/map-music.ts). Here because it
     // is the one screen that is about the game rather than about playing it.
-    text(px, fs, 'Music: Fesliyan Studios (fesliyanstudios.com)', 6, 236, 400, 14, 9, P.pale, 'middle-left')
+    text(px, fs, 'Music: Fesliyan Studios (fesliyanstudios.com)', 6, 292, 400, 14, 9, P.pale, 'middle-left')
   ])
 }
 

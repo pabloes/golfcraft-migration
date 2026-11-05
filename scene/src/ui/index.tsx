@@ -47,6 +47,7 @@ const ui = () => {
       {mobile ? null : <desktopHud.RankPill />}
       {mobile ? null : <desktopHud.LeaveButton />}
       {mobile ? null : <desktopHud.InGameOptionsButton />}
+      {mobile ? null : <desktopHud.MuteButton />}
       <MobileShootControls />
       <hud.MapFooter />
       {mobile ? null : <desktopHud.LeaveConfirm />}

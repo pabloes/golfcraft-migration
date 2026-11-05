@@ -17,6 +17,7 @@ import { seasonClockState, seasonResultsState, seasonCountdownState, seasonHoleS
 import { C, hex, mmss } from './ui-theme'
 import { P, border, img, initialAvatar, rankBadge } from './ui2'
 import { lobbyMenuState, openLobbyViewInGame } from './lobby-menu-state'
+import { gameOptions, toggleMute } from '../services/game-options'
 import { pingLabel } from './ping-label'
 import { mobileShootState } from './mobile-shoot-state'
 // @ts-ignore - common/utils has @ts-nocheck
@@ -93,6 +94,46 @@ export const InGameOptionsButton = () => {
       onMouseDown={() => openLobbyViewInGame('options')}
     >
       <Label value="OPTIONS" fontSize={fs(12)} color={C.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(18) }} />
+    </UiEntity>
+  )
+}
+
+// Silence everything the scene plays, from the HUD, in the lobby and during a
+// hole alike (user, 2026-11-05): the map music and the lobby stream both read
+// the same setting, which is kept on the account. The levels behind it are in
+// OPTIONS; this is the one that has to be reachable without opening anything.
+// Top left, under LEAVE and OPTIONS while a hole is on and alone in the lobby,
+// which is the only column desktop leaves free in both states.
+export const MuteButton = () => {
+  const gs = globalStore.game.getState()
+  if (gs.introScreen || gs.bootError) return null
+  const { canvas, s } = hudScale()
+  const { px, fs } = s
+  const inHole = !!mobileShootState.quit
+  return (
+    <UiEntity
+      uiTransform={{
+        positionType: 'absolute',
+        position: { top: canvas.area.top + px(inHole ? 22 + 72 + 8 + 40 + 8 : 22), left: hudLeft(canvas, px) },
+        width: px(LEAVE_W),
+        height: px(34),
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderRadius: px(12),
+        borderWidth: border(px, 3),
+        borderColor: P.white
+      }}
+      uiBackground={{ color: gameOptions.muted ? P.crimson : P.navy }}
+      onMouseDown={toggleMute}
+    >
+      <Label
+        value={gameOptions.muted ? 'SOUND OFF' : 'SOUND ON'}
+        fontSize={fs(10)}
+        color={C.white}
+        textAlign="middle-center"
+        textWrap="nowrap"
+        uiTransform={{ height: px(16) }}
+      />
     </UiEntity>
   )
 }

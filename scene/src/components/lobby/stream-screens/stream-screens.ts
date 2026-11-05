@@ -28,6 +28,7 @@ import { Quaternion, Vector3 } from '@dcl/sdk/math'
 
 import { globalStore } from '../../../services/globalStore/globalStore'
 import { setStreamPlaying } from '../../../services/map-music'
+import { streamVolume } from '../../../services/game-options'
 
 const RETRY_MS = 30000
 // the lobby screens; the rest stay visible while playing
@@ -53,7 +54,20 @@ let state: VideoState = VideoState.VS_NONE
 export function createStreamScreens(streamURL: string | undefined) {
   if (!streamURL) return
   const player = engine.addEntity()
-  VideoPlayer.create(player, { src: streamURL, playing: true })
+  // A VideoPlayer with no volume of its own plays at 1.0, which made the
+  // lobby stream twice as loud as the map music (user, 2026-11-05). The level
+  // comes from the account and is followed while it plays, so the HUD's mute
+  // and the options are heard at once.
+  VideoPlayer.create(player, { src: streamURL, playing: true, volume: streamVolume() })
+  let appliedVolume = streamVolume()
+  engine.addSystem(() => {
+    const wanted = streamVolume()
+    if (wanted === appliedVolume) return
+    const video = VideoPlayer.getMutableOrNull(player)
+    if (!video) return
+    video.volume = wanted
+    appliedVolume = wanted
+  })
 
   const screens: Entity[] = SCREENS.map((transform) => {
     const screen = engine.addEntity()
@@ -119,7 +133,7 @@ export function createStreamScreens(streamURL: string | undefined) {
       // a live HLS that was down when loaded stays in error: load it again,
       // with a new query so the explorer doesn't treat it as the same source
       const src = /^https?:/.test(streamURL) ? `${streamURL}${streamURL.includes('?') ? '&' : '?'}r=${Date.now()}` : streamURL
-      VideoPlayer.createOrReplace(player, { src, playing: true })
+      VideoPlayer.createOrReplace(player, { src, playing: true, volume: streamVolume() })
     }
   })
 }

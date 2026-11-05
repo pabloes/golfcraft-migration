@@ -21,6 +21,8 @@
 // has to answer CORS and be https.
 import { engine, AudioStream, Transform, Entity } from '@dcl/sdk/ecs'
 
+import { musicVolume } from './game-options'
+
 // ---------------------------------------------------------------------------
 // The catalogue. `seconds` is the track's own length, used only to know when
 // to move on to the next one, so it does not have to be exact: a couple of
@@ -79,7 +81,9 @@ const CATALOG: Record<MapKey, Track[]> = {
 // names above stay the same.
 const MUSIC_BASE = 'https://golfcraftgame.com/music/'
 
-const VOLUME = 0.5
+// The level comes from the account (services/game-options.ts) and is applied
+// while a track plays, not only when it starts, so a change in the options or
+// the HUD's mute is heard at once.
 // A breath between tracks, and enough slack that a track whose real length is
 // a second or two over its catalogue entry is not cut off.
 const GAP_MS = 3000
@@ -130,6 +134,8 @@ export const mapOfCourse = (courseDefinition: any): MapKey => {
 
 // ---------------------------------------------------------------------------
 let musicEntity: Entity | null = null
+// The volume written to the component, to notice a change in the setting.
+let appliedVolume = -1
 let currentMap: MapKey | null = null
 let lastFile = ''
 let nextAt = 0
@@ -187,10 +193,11 @@ const play = (track: Track) => {
   }
   lastFile = track.file
   nextAt = Date.now() + track.seconds * 1000 + GAP_MS
+  appliedVolume = musicVolume()
   AudioStream.createOrReplace(musicEntity, {
     url: MUSIC_BASE + track.file,
     playing: true,
-    volume: VOLUME
+    volume: appliedVolume
   })
   console.log('[music]', track.file, `(${track.seconds}s)`)
 }
@@ -198,6 +205,15 @@ const play = (track: Track) => {
 // AudioStream has no "finished" event, so the catalogue's length is what moves
 // the music on. A few seconds either way are inaudible.
 const musicSystem = () => {
+  // Follow the setting while a track plays.
+  const wanted = musicVolume()
+  if (musicEntity !== null && wanted !== appliedVolume) {
+    const stream = AudioStream.getMutableOrNull(musicEntity)
+    if (stream) {
+      stream.volume = wanted
+      appliedVolume = wanted
+    }
+  }
   if (currentMap === null || nextAt === 0 || Date.now() < nextAt) return
   const track = pick(currentMap)
   if (track) play(track)
