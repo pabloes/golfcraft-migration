@@ -15,7 +15,7 @@ import { sleep } from '../../common/utils'
 import { bootstrap } from './meta/bootstrap'
 import { setupUI } from './ui'
 import { startGameWindow } from './services/game-window'
-import { startSceneBounds } from './components/scene-bounds'
+import { startSceneBounds, keepBounds, releaseBounds } from './components/scene-bounds'
 import { teleportVerified } from './services/safe-teleport'
 import { lobbyMenuState } from './ui/lobby-menu-state'
 import { setSpectatorLobbyHooks, startSpectating } from './components/lobby/spectator-client'
@@ -107,6 +107,11 @@ export async function main() {
           // MISSION — that one is the storymode NPC's spot.
           onFinish: async () => {
             try {
+              // The sequence below clears `playing` and then takes seconds
+              // (the lobby, the data refresh, the delay, the teleport) with
+              // the player still standing where the course was. The walls and
+              // the floor must outlive all of it, not the 5 s grace.
+              keepBounds(60000)
               await fadeInOverlay(1)
               // handleLeavePlay also clears `playing` (and courseId). Without it
               // the bottom-right course footer stays up in the lobby, and
@@ -135,6 +140,9 @@ export async function main() {
                 Vector3.create(spawnCam.x, spawnCam.y, spawnCam.z)
               )
               if (!landed) console.log('[main] the player could not be moved back to the lobby')
+              // Back on the lobby's own ground: the walls and the floor under
+              // the player can go.
+              releaseBounds()
             } finally {
               // The run held the avatar still from its first tee
               // (orbit-camera.ts); only free it once it is back in the lobby,

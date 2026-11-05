@@ -11,10 +11,20 @@
 //
 // The floor is for the other half of the report, landing in Genesis Plaza. A
 // hole ends with the avatar standing on the course and the course is disposed
-// under it. In Genesis City the terrain catches the fall; in a World there is
-// no terrain and the lobby's own ground meshes are excluded, so a player falls
-// out of the World and the explorer returns them to Genesis City. A collider
-// below the scene catches them instead.
+// under it. Nothing catches the fall: a deployed scene draws its own ground,
+// the lobby's is destroyed while a hole is on, and the course has just gone.
+// The explorer then recovers the falling player somewhere it considers solid,
+// which is another parcel, and from outside the scene nothing can bring them
+// back (movePlayerTo is refused there). That is what players describe as
+// "being teleported away when the hole ends": no teleport of ours runs in that
+// path at all.
+//
+// Two defences, because the explorer reacts to a fall faster than a floor six
+// metres down can catch it (user, 2026-11-05):
+//   - a platform created right under the player's feet BEFORE the course is
+//     disposed, so there is no fall to react to;
+//   - the catch floor, now just below the lowest course part (y -1.25 across
+//     the 233 local definitions) rather than at -6, as the backstop.
 //
 // Only while a hole is on: in the lobby the player may walk wherever the scene
 // allows, and the building reaches the block's edge.
@@ -37,9 +47,18 @@ const THICKNESS = 0.5
 // ground the player can stand on.
 const WALL_BOTTOM = -4
 const WALL_TOP = 14
-// Below every course part (the lowest sit near y 0) and below the terrain.
-const FLOOR_Y = -6
+// Just below the lowest course part (y -1.25 in level27), so the fall it
+// catches is about a metre and a half. At -6 the explorer had already decided
+// the player had fallen out of the world and moved them to another parcel.
 const FLOOR_THICKNESS = 2
+const FLOOR_Y = -1.5 - FLOOR_THICKNESS / 2
+// The platform held under the player's feet while the course is gone. Wide
+// enough to cover a step taken as it appears, thick enough not to be passed
+// through, and its top sits a few centimetres below the feet so the player
+// keeps standing on the real ground until that ground disappears.
+const PAD_SIZE = 8
+const PAD_THICKNESS = 1
+const PAD_DROP = 0.05
 
 let parts: Entity[] = []
 let up = false
@@ -80,7 +99,32 @@ const drop = () => {
   up = false
   parts.forEach((entity) => engine.removeEntity(entity))
   parts = []
+  releaseGroundUnderPlayer()
   console.log('[scene-bounds] wall down')
+}
+
+// Ground under the player's feet, for the moment a course is disposed under
+// them. Called by whoever is about to take the floor away, BEFORE taking it:
+// afterwards the player is already falling and the explorer may have acted.
+// It is removed when the walls come down, which is once the player is back in
+// the lobby and the building's own ground is there again.
+let pad: Entity | null = null
+
+export const holdGroundUnderPlayer = () => {
+  const t = Transform.getOrNull(engine.PlayerEntity)
+  if (!t) return
+  releaseGroundUnderPlayer()
+  pad = box(
+    Vector3.create(t.position.x, t.position.y - PAD_DROP - PAD_THICKNESS / 2, t.position.z),
+    Vector3.create(PAD_SIZE, PAD_THICKNESS, PAD_SIZE)
+  )
+  console.log('[scene-bounds] ground held under the player at', JSON.stringify(t.position))
+}
+
+export const releaseGroundUnderPlayer = () => {
+  if (!pad) return
+  engine.removeEntity(pad)
+  pad = null
 }
 
 // The hole clears `playing` before the lobby is back and before a falling
@@ -96,6 +140,19 @@ const boundsSystem = () => {
   if (wanted === up) return
   if (wanted) raise()
   else drop()
+}
+
+// Keep them up past the moment `playing` is cleared. The end of a run clears
+// it first and only then rebuilds the lobby, refreshes the player's data (up
+// to 8 s) and teleports: the 5 s grace expired in the middle of that, with the
+// player still standing on a course that no longer exists.
+export const keepBounds = (ms: number) => {
+  playingUntil = Math.max(playingUntil, Date.now() + ms)
+}
+
+// The player is back in the lobby, on the building's own ground.
+export const releaseBounds = () => {
+  playingUntil = 0
 }
 
 export const startSceneBounds = () => {

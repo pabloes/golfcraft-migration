@@ -35,6 +35,7 @@ import { isCameraAimMode } from '../../services/game-options'
 import { mobileShootState } from '../../ui/mobile-shoot-state'
 import { reportPing } from '../../ui/ping-state'
 import { reconnectRoom } from './room-reconnect'
+import { holdGroundUnderPlayer } from '../scene-bounds'
 
 const REWARD_NAMES: any = {
   WD: 'wood',
@@ -535,6 +536,9 @@ const GolfplayClientFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: string })
     }
 
     function dispose() {
+      // Before the course goes, so the player does not fall through where it
+      // was (scene-bounds.ts).
+      holdGroundUnderPlayer()
       pingDisposed = true
       mobileShootState.quit = null
       mobileShootState.quitConfirm = false

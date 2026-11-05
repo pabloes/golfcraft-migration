@@ -53,6 +53,7 @@ import { isCameraAimMode } from '../../services/game-options'
 import { mobileShootState } from '../../ui/mobile-shoot-state'
 import { reportPing } from '../../ui/ping-state'
 import { reconnectRoom } from './room-reconnect'
+import { holdGroundUnderPlayer } from '../scene-bounds'
 
 const REWARD_NAMES: any = {
   WD: 'wood',
@@ -741,6 +742,11 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
       }
     }
     function dispose() {
+      // The course is the only ground the player has while a hole is on, and
+      // the next one is not there yet. Put a floor under their feet before it
+      // goes, or they fall and the explorer moves them out of the scene, which
+      // is what players report as being teleported away (CLAUDE.md §6 #47).
+      holdGroundUnderPlayer()
       disposed = true
       mobileShootState.quit = null
       mobileShootState.quitConfirm = false
