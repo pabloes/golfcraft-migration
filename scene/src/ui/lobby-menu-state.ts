@@ -286,3 +286,12 @@ export const refreshLobbyLeaderboard = () => {
     })
     .catch((err) => console.log('[lobby] leaderboard unavailable', err))
 }
+
+// Open a view while a hole is on (the in-hole HUD's OPTIONS button, user
+// 2026-11-05). Unlike openLobbyMenu it does not touch reopenAfterGame: the
+// dialog was not what started this match, so nothing should be reopened when
+// it ends.
+export const openLobbyViewInGame = (view: LobbyMenuView) => {
+  lobbyMenuState.visible = true
+  showLobbyView(view)
+}

@@ -933,6 +933,10 @@ const OPTION_CARDS: { scheme: ControlScheme; title: string; tag: string; lines: 
 ]
 
 export const OptionsView = () => {
+  // Opened from the in-hole HUD there is no lobby to go back to, so the
+  // arrow closes, like the X.
+  const gs = globalStore.game.getState()
+  const optionsBack = gs.playing || gs.starting ? closeLobbyMenu : back
   const L = fullLayout()
   const { px, fs } = scaler(L.scale)
   const current = gameOptions.controls
@@ -957,7 +961,7 @@ export const OptionsView = () => {
   })
 
   return fullFrame(L, [
-    squareButton(px, 'view-back', 140, 6, 'ic_chev_left_w', 0.8, back),
+    squareButton(px, 'view-back', 140, 6, 'ic_chev_left_w', 0.8, optionsBack),
     box(px, 'options-title', 194, 9, 200, 38, { color: P.navyDeep, radius: 12, border: 2, borderColor: P.navyEdge, justify: 'center', align: 'center' }, [
       <Label value="GAME OPTIONS" fontSize={fs(16)} color={C.yellow} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: '100%' }} />
     ]),

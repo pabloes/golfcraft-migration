@@ -79,7 +79,12 @@ const compact = (n: number) => {
 
 export const LobbyMenu = () => {
   const gs = globalStore.game.getState()
-  if (!lobbyMenuState.visible || gs.bootError || gs.playing || gs.starting || gs.introScreen) return null
+  // The options are reachable during a hole too (user, 2026-11-05): a player
+  // who cannot get on with the controls should not have to finish the run
+  // first. Every other view still waits for the lobby.
+  const inGameOptions = lobbyMenuState.view === 'options' && (gs.playing || gs.starting)
+  if (!lobbyMenuState.visible || gs.bootError || gs.introScreen) return null
+  if ((gs.playing || gs.starting) && !inGameOptions) return null
   if (lobbyMenuState.view === 'season') return <SeasonView />
   if (lobbyMenuState.view === 'tutorial') return <TutorialView />
   if (lobbyMenuState.view === 'workshop') return <WorkshopView />

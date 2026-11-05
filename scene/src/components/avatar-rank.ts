@@ -20,6 +20,7 @@ import {
   Billboard,
   MeshRenderer,
   Material,
+  MaterialTransparencyMode,
   TextShape,
   VisibilityComponent
 } from '@dcl/sdk/ecs'
@@ -86,12 +87,21 @@ function createBadge(address: string, tier: number): { root: Entity; badge: Enti
     scale: Vector3.create(BADGE_HEIGHT * badgeAspect(tier), BADGE_HEIGHT, 1)
   })
   MeshRenderer.setPlane(badge)
-  // Unlit, with the art's own alpha cut out: a PBR material would take the
-  // scene's light and an emissive one would blow the sprite out (§6 #11 of
-  // the golf club board's traps).
-  Material.setBasicMaterial(badge, {
-    texture: Material.Texture.Common({ src: `images/season-badges/${tier}.png` }),
-    alphaTest: 0.5
+  // The emblems are irregular shapes on a transparent background, and a basic
+  // material's alphaTest did not cut it out: every badge floated in a dark
+  // square over the avatar's name (user, 2026-11-05). What the explorer does
+  // honour is an explicit alpha mask plus a transparency mode, the same thing
+  // the golf club board needed (CLAUDE.md §11). Emissive is left off on
+  // purpose there and here: bevy's is strong enough to wash the art out.
+  const badgeTexture = () => Material.Texture.Common({ src: `images/season-badges/${tier}.png` })
+  Material.setPbrMaterial(badge, {
+    texture: badgeTexture(),
+    alphaTexture: badgeTexture(),
+    transparencyMode: MaterialTransparencyMode.MTM_ALPHA_TEST,
+    alphaTest: 0.5,
+    metallic: 0,
+    roughness: 1,
+    specularIntensity: 0
   })
 
   const label = engine.addEntity()

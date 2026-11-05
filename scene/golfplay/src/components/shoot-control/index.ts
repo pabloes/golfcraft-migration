@@ -11,6 +11,7 @@ import { createState } from '../../../../state'
 // @ts-ignore - common/utils has @ts-nocheck
 import { getRandom } from '../../../../../common/utils'
 import { SHOOT_IMPULSE } from '../../../../../common/physics-config'
+import { isDialogPress } from '../../../../src/ui/lobby-menu-state'
 
 type Vec3 = Vector3.MutableVector3
 type Quat = Quaternion.MutableQuaternion
@@ -191,6 +192,12 @@ const createShootControl = (
     // comes from SDK6's unshipped shoot-control/index-camera-version.ts, which
     // had to drag the player to the ball with movePlayerTo every frame.
     if (getAimYaw && s.visible) state.rotation = getAimYaw()
+
+    // The options dialog can now be opened during a hole (user, 2026-11-05),
+    // and E, F and the click are both its buttons and the shot. While it is up
+    // the shot ignores them, and for a moment after it closes, so the click
+    // that closes it is not also a shot.
+    if (isDialogPress()) return
 
     // E/F key polling: SDK6 used Input.subscribe; SDK7 uses inputSystem polled
     // each frame via this system.

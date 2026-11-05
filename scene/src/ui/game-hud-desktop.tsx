@@ -16,6 +16,7 @@ import { powerBarState, controlHintState } from './shoot-hud-state'
 import { seasonClockState, seasonResultsState, seasonCountdownState, seasonHoleState, SeasonResultRow } from './season-hud-state'
 import { C, hex, mmss } from './ui-theme'
 import { P, border, img, initialAvatar, rankBadge } from './ui2'
+import { lobbyMenuState, openLobbyViewInGame } from './lobby-menu-state'
 import { pingLabel } from './ping-label'
 import { mobileShootState } from './mobile-shoot-state'
 // @ts-ignore - common/utils has @ts-nocheck
@@ -64,6 +65,37 @@ const hudLeft = (canvas: Canvas, px: Px) => {
 // for the whole hole), behind the same confirm. The stat boxes start after it.
 const LEAVE_W = 96
 const leaveOffset = (px: Px) => (mobileShootState.quit ? px(LEAVE_W + 10) : 0)
+
+// OPTIONS, under LEAVE, during a hole (user, 2026-11-05): a player who cannot
+// get on with the control scheme should be able to change it there and then
+// instead of finishing the run first. It opens the same view as the lobby's
+// OPTIONS, and the change applies from the next hole, as it does anywhere
+// else. Desktop only, like the scheme itself: this whole file is.
+export const InGameOptionsButton = () => {
+  const st = mobileShootState
+  if (!st.quit || lobbyMenuState.visible) return null
+  const { canvas, s } = hudScale()
+  const { px, fs } = s
+  return (
+    <UiEntity
+      uiTransform={{
+        positionType: 'absolute',
+        position: { top: canvas.area.top + px(22 + 72 + 8), left: hudLeft(canvas, px) },
+        width: px(LEAVE_W),
+        height: px(40),
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderRadius: px(14),
+        borderWidth: border(px, 3),
+        borderColor: P.white
+      }}
+      uiBackground={{ color: P.navy }}
+      onMouseDown={() => openLobbyViewInGame('options')}
+    >
+      <Label value="OPTIONS" fontSize={fs(12)} color={C.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(18) }} />
+    </UiEntity>
+  )
+}
 
 export const LeaveButton = () => {
   const st = mobileShootState
