@@ -36,7 +36,7 @@ import { TIER_COLORS } from '../../../common/constants'
 // @ts-ignore - common/* has @ts-nocheck
 import { seasonTierDefinitions } from '../../../common/season-tier-definitions'
 
-type Shown = { address: string; root: Entity; badge: Entity; label: Entity; tier: number; at: number; reattached: boolean }
+type Shown = { address: string; root: Entity; badge: Entity; label: Entity; tier: number; at: number; pokes: number }
 
 const shown: Record<string, Shown> = {}
 let localAddress = ''
@@ -124,7 +124,7 @@ function removeBadge(address: string) {
 
 function handleNewPlayer(address: string, tier: number) {
   if (!address || shown[address] || !isDrawable(tier)) return
-  shown[address] = { address, tier, at: Date.now(), reattached: false, ...createBadge(address, tier) }
+  shown[address] = { address, tier, at: Date.now(), pokes: 0, ...createBadge(address, tier) }
 }
 
 
@@ -176,7 +176,15 @@ function ownTierSystem() {
 // re-creates each badge once a few seconds in, which fixes an attach that
 // bound too early.
 const RECONCILE_MS = 1500
-const REATTACH_AFTER_MS = 6000
+// An AvatarAttach created before the explorer has loaded that avatar binds to
+// nothing and never recovers on its own, and this SDK (7.23.3) exposes no way
+// to ask whether an avatar is there yet: no PlayerIdentityData, no AvatarBase,
+// no enter-scene event. So the attach is written again a few times over the
+// first minute, which is long enough for a remote avatar and its wearables to
+// arrive on a busy scene. The badge and its label are left alone: rewriting
+// only the attach gives the explorer another chance to bind WITHOUT the badge
+// blinking for everyone whose attach was fine all along.
+const REPOKE_AFTER_MS = [5000, 15000, 40000]
 let reconciledAt = 0
 let realmFilter = ''
 
@@ -204,13 +212,13 @@ function reconcileSystem() {
     } else if (found.tier !== tier) {
       removeBadge(address)
       handleNewPlayer(address, tier)
-    } else if (!found.reattached && Date.now() - found.at > REATTACH_AFTER_MS) {
-      // one free retry, for an attach that may have bound before the avatar
-      // was there; after this the entry is left alone
-      removeBadge(address)
-      handleNewPlayer(address, tier)
-      const made = shown[address]
-      if (made) made.reattached = true
+    } else if (found.pokes < REPOKE_AFTER_MS.length && Date.now() - found.at > REPOKE_AFTER_MS[found.pokes]) {
+      AvatarAttach.createOrReplace(found.root, {
+        avatarId: address === localAddress ? undefined : address,
+        anchorPointId: AvatarAnchorPointType.AAPT_NAME_TAG
+      })
+      found.pokes++
+      found.at = Date.now()
     }
   }
 }
