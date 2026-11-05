@@ -139,9 +139,22 @@ let streamPlaying = false
 // SDK6 skipped the music when a stream was set in TitleData, so the stream's
 // own audio is what you hear. Here it follows the stream actually playing
 // (stream-screens.ts) and stops the music if one starts mid-course.
+//
+// And gives it back when the stream stops, which it did not do at first: the
+// music only ever started when a hole's course was built, so a stream running
+// at that moment left the hole silent to its end even after somebody paused
+// the screen (user, 2026-11-05). The map the player is on is remembered even
+// while the stream has the audio, so there is something to go back to.
 export const setStreamPlaying = (playing: boolean) => {
+  if (playing === streamPlaying) return
   streamPlaying = playing
-  if (playing) stopMapMusic()
+  if (playing) {
+    silence()
+    return
+  }
+  if (!currentMap) return
+  const track = pick(currentMap)
+  if (track) play(track)
 }
 
 // A map with no music of its own borrows from the nearest one that has some,
@@ -199,23 +212,31 @@ export const startMapMusic = (courseDefinition: any) => {
 }
 
 export const startMapMusicFor = (map: MapKey) => {
-  if (streamPlaying) return
   // The next hole of the same map keeps the track that is playing: cutting a
   // track off at every hole would mean nobody ever hears one.
-  if (currentMap === map && nextAt > Date.now()) return
+  const alreadyPlaying = currentMap === map && nextAt > Date.now()
+  // Recorded even when the stream has the audio, so setStreamPlaying(false)
+  // knows what to go back to.
   currentMap = map
   if (!systemAdded) {
     systemAdded = true
     engine.addSystem(musicSystem)
   }
+  if (streamPlaying || alreadyPlaying) return
   const track = pick(map)
   if (track) play(track)
 }
 
-export const stopMapMusic = () => {
-  currentMap = null
+// Stop the sound, keep the map: the hole is still on.
+const silence = () => {
   nextAt = 0
   if (musicEntity === null) return
   const stream = AudioStream.getMutableOrNull(musicEntity)
   if (stream) stream.playing = false
+}
+
+// The run is over: there is no map to go back to any more.
+export const stopMapMusic = () => {
+  currentMap = null
+  silence()
 }
