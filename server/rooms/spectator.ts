@@ -39,7 +39,11 @@ export const isSpectator = (client: Client) => !!(client as any)?.auth?.spectato
 export function disconnectIfOnlySpectators(room: {clients: any[], disconnect: () => any}): boolean {
     const players = room.clients.filter(client => !isSpectator(client));
     if (players.length) return false;
-    console.log("only spectators left, closing the room");
+    //an empty room disposes on its own; only say something when there really
+    //are spectators being closed out, or the log claims spectators that were
+    //never there (2026-11-05)
+    if (!room.clients.length) return false;
+    console.log(`only spectators left (${room.clients.length}), closing the room`);
     Promise.resolve(room.disconnect()).catch(() => {});
     return true;
 }

@@ -412,7 +412,11 @@ console.log("set-affiliate-code",code, playerAddress, PlayFabId, displayName)
         if(!args) return res.status(403).send({error:"forbidden"});
         try{
             const result = await prisma[req.params.table].findFirst(args);
-            return res.send(result);
+            //findFirst answers null when nothing matches, and res.send(null)
+            //writes an EMPTY body, which the caller then fails to parse: the
+            //game server logged "Unexpected end of JSON input" on every hole
+            //simply because no chest event was running (2026-11-05).
+            return res.json(result === undefined ? null : result);
         } catch(error){
             return res.status(500).send({error});
         }
