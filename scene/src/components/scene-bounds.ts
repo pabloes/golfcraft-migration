@@ -192,6 +192,50 @@ export const clearPlayFloor = () => {
   playFloor = null
 }
 
+// Measured, not guessed (user, 2026-11-05: "ponlo un poquito más abajo").
+// A course's walkable height cannot be read from its definition: the parts sit
+// at y 0 and their surface is inside the mesh, the `spawn` part is at y 10
+// because the player is meant to DROP onto the course, and the ball's spawn is
+// wherever the designer left it, often above the ground. So let the player
+// land on the course, watch until their feet stop moving, and put the sheet
+// exactly there. A hole with no landing (holes 2 to 4 of a run, where nobody
+// is teleported any more) settles at once on the sheet already up, which keeps
+// its height.
+const SETTLE_SAMPLE_MS = 100
+const SETTLE_TOLERANCE = 0.01
+const SETTLE_TIMEOUT_MS = 5000
+// Above the surface by a hair: enough that the sphere cast picks this and not
+// the course, little enough that nobody is standing visibly in the air.
+const SETTLE_LIFT = 0.01
+// A settled height outside this is not a course: the player fell through to
+// the catch floor, or is somewhere unexpected. Use the estimate instead.
+const SETTLE_MIN_Y = -1
+const SETTLE_MAX_Y = 25
+
+export const fitPlayFloorToPlayer = (estimatedSurfaceY: number) => {
+  const startedAt = Date.now()
+  let lastY: number | null = null
+  let lastSampleAt = 0
+  const fit = () => {
+    const now = Date.now()
+    if (now - lastSampleAt < SETTLE_SAMPLE_MS) return
+    lastSampleAt = now
+    const t = Transform.getOrNull(engine.PlayerEntity)
+    const y = t ? t.position.y : null
+    const settled = y !== null && lastY !== null && Math.abs(y - lastY) < SETTLE_TOLERANCE
+    const timedOut = now - startedAt > SETTLE_TIMEOUT_MS
+    if (!settled && !timedOut) {
+      lastY = y
+      return
+    }
+    engine.removeSystem(fit)
+    const usable = settled && y !== null && y > SETTLE_MIN_Y && y < SETTLE_MAX_Y
+    setPlayFloor(usable ? (y as number) - PLAY_FLOOR_LIFT + SETTLE_LIFT : estimatedSurfaceY)
+    console.log('[scene-bounds] play floor fitted to', usable ? 'the player at ' + (y as number).toFixed(2) : 'the course estimate')
+  }
+  engine.addSystem(fit)
+}
+
 // The hole clears `playing` before the lobby is back and before a falling
 // avatar has landed, so the wall outlives the flag by a few seconds.
 const GRACE_MS = 5000

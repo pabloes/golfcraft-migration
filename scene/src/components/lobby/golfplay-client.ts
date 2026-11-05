@@ -36,7 +36,7 @@ import { mobileShootState } from '../../ui/mobile-shoot-state'
 import { reportPing } from '../../ui/ping-state'
 import { reconnectRoom } from './room-reconnect'
 import { holdGroundUnderPlayer } from '../scene-bounds'
-import { setPlayFloor } from '../scene-bounds'
+import { fitPlayFloorToPlayer } from '../scene-bounds'
 import { BALL_RADIUS, COURSE_REMOVE_DELAY_MS } from '../../config/hole-end'
 
 const REWARD_NAMES: any = {
@@ -141,7 +141,7 @@ const GolfplayClientFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: string })
     // wherever it goes, so a course taken away at the end of a hole can take
     // them to another parcel. The sheet goes just above the course's surface,
     // which is where the ball sits minus its radius.
-    setPlayFloor(ballSpawnDefinition.position[1] - BALL_RADIUS)
+    fitPlayFloorToPlayer(ballSpawnDefinition.position[1] - BALL_RADIUS)
     const physicBall = createPhysicBall(world, {
       position: ballSpawnDefinition.position,
       onlyKinematic: false
