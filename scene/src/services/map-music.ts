@@ -67,8 +67,11 @@ const CATALOG: Record<MapKey, Track[]> = {
     { file: 'urban_done_with_work.mp3', seconds: 197 }
   ],
   // Fesliyan has no jungle or tribal section: their Ethnic category is five
-  // tracks and the only tribal one lasts 94 seconds. Left empty on purpose,
-  // which falls back to the default list, until there is something to put in.
+  // tracks and the only tribal one lasts 94 seconds. Empty on purpose until
+  // there is something worth putting here, which means Suno rather than their
+  // catalogue. It is NOT a rare case to leave to chance: 49 of the 372 Ranked
+  // courses are jungle, so it falls back to Cocobay's tropical tracks, which
+  // are at least the right continent, rather than to the retro arcade default.
   jungle: []
 }
 
@@ -82,9 +85,27 @@ const VOLUME = 0.5
 const GAP_MS = 3000
 
 // ---------------------------------------------------------------------------
-// Which map a course belongs to. Every course definition carries a skybox part
-// and its subtype names the map (Skybox1, egypt_skybox, jungle_skybox...), so
-// nothing else has to be stored or guessed.
+// Which map a course belongs to: its collectionId, the same key SDK6's
+// MUSIC_BY_COLLECTION used, carried to the client inside the course definition
+// (common/course-definitions/course-definition-repository.ts).
+//
+// NOT the skybox part, which was the first guess here and was wrong: of the
+// 238 local course definitions 224 use the `skybox1` model whatever collection
+// they belong to, so everything would have ended up on the default list. The
+// collections, counted in the database: 0 EGYPT 60 courses, 1 SPACE 195,
+// 2 URBAN 181, 3 JUNGLE 69, 4 MOUNTAIN 77, 5 COCOBAY 62, and 193 with none.
+// Of the 372 Ranked courses, URBAN and SPACE are the two biggest.
+const COLLECTION_TO_MAP: Record<string, MapKey> = {
+  '0': 'egypt',
+  '1': 'space',
+  '2': 'urban',
+  '3': 'jungle',
+  '4': 'mountain',
+  '5': 'cocobay'
+}
+
+// The skybox model, for a course with no collection (tournaments, training and
+// user-made maps: no Ranked course is in that group).
 const SKYBOX_TO_MAP: { match: string; map: MapKey }[] = [
   { match: 'egypt', map: 'egypt' },
   { match: 'jungle', map: 'jungle' },
@@ -95,6 +116,11 @@ const SKYBOX_TO_MAP: { match: string; map: MapKey }[] = [
 ]
 
 export const mapOfCourse = (courseDefinition: any): MapKey => {
+  const collection = courseDefinition?.collectionId
+  if (collection !== undefined && collection !== null) {
+    const byCollection = COLLECTION_TO_MAP[String(collection)]
+    if (byCollection) return byCollection
+  }
   const parts = courseDefinition?.parts || []
   const skybox = parts.find((p: any) => typeof p?.subtype === 'string' && /skybox/i.test(p.subtype))
   const subtype = String(skybox?.subtype || '').toLowerCase()
@@ -118,9 +144,16 @@ export const setStreamPlaying = (playing: boolean) => {
   if (playing) stopMapMusic()
 }
 
+// A map with no music of its own borrows from the nearest one that has some,
+// rather than always falling to the retro default.
+const FALLBACK: Partial<Record<MapKey, MapKey>> = { jungle: 'cocobay' }
+
 const tracksFor = (map: MapKey): Track[] => {
   const own = CATALOG[map]
-  return own && own.length > 0 ? own : CATALOG.default
+  if (own && own.length > 0) return own
+  const borrowed = FALLBACK[map]
+  const lent = borrowed ? CATALOG[borrowed] : undefined
+  return lent && lent.length > 0 ? lent : CATALOG.default
 }
 
 const pick = (map: MapKey): Track | null => {
