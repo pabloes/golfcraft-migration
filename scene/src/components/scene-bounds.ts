@@ -28,10 +28,20 @@
 //
 // Only while a hole is on: in the lobby the player may walk wherever the scene
 // allows, and the building reaches the block's edge.
-import { ColliderLayer, Entity, MeshCollider, Transform, engine } from '@dcl/sdk/ecs'
-import { Quaternion, Vector3 } from '@dcl/sdk/math'
+import {
+  ColliderLayer,
+  Entity,
+  Material,
+  MaterialTransparencyMode,
+  MeshCollider,
+  MeshRenderer,
+  Transform,
+  engine
+} from '@dcl/sdk/ecs'
+import { Color4, Quaternion, Vector3 } from '@dcl/sdk/math'
 
 import { globalStore } from '../services/globalStore/globalStore'
+import { SHOW_PLAY_FLOOR } from '../config/hole-end'
 
 // The 3x3 parcel block, in scene-local metres. (The scene's tenth parcel,
 // 48,-46, is a strip at negative z with nothing in it: the wall keeps players
@@ -106,6 +116,7 @@ const drop = () => {
   parts.forEach((entity) => engine.removeEntity(entity))
   parts = []
   releaseGroundUnderPlayer()
+  clearPlayFloor()
   console.log('[scene-bounds] wall down')
 }
 
@@ -133,6 +144,52 @@ export const releaseGroundUnderPlayer = () => {
   if (!pad) return
   engine.removeEntity(pad)
   pad = null
+}
+
+// The floor the player stands on while a hole is on (user, 2026-11-05): a
+// sheet across the whole block, a couple of centimetres ABOVE the course's own
+// surface, so the collider under their feet is always ours and never a piece
+// of the course. That is the point: the explorer pins the player to whatever
+// they stand on and carries them with it, so a course that is taken away can
+// take the player to another parcel. If they never stand on the course, it
+// cannot. It also means they can never fall: there is no hole in it.
+//
+// The height comes from the course itself (the ball's spawn y minus its
+// radius), because courses sit at different heights. A hole with raised
+// platforms still has them above this sheet, which is what the pad above is
+// for: the dispose moment, wherever the player happens to be standing.
+const PLAY_FLOOR_THICKNESS = 1
+const PLAY_FLOOR_LIFT = 0.02
+let playFloor: Entity | null = null
+
+export const setPlayFloor = (surfaceY: number) => {
+  clearPlayFloor()
+  const entity = engine.addEntity()
+  Transform.create(entity, {
+    position: Vector3.create(BLOCK / 2, surfaceY + PLAY_FLOOR_LIFT - PLAY_FLOOR_THICKNESS / 2, BLOCK / 2),
+    scale: Vector3.create(BLOCK, PLAY_FLOOR_THICKNESS, BLOCK),
+    rotation: Quaternion.Identity()
+  })
+  MeshCollider.setBox(entity, ColliderLayer.CL_PHYSICS)
+  if (SHOW_PLAY_FLOOR) {
+    // Faintly visible on purpose while this is being watched: a floor nobody
+    // can see is a floor nobody can tell is missing.
+    MeshRenderer.setBox(entity)
+    Material.setPbrMaterial(entity, {
+      albedoColor: Color4.create(0.35, 0.85, 1, 0.1),
+      transparencyMode: MaterialTransparencyMode.MTM_ALPHA_BLEND,
+      metallic: 0,
+      roughness: 1
+    })
+  }
+  playFloor = entity
+  console.log('[scene-bounds] play floor at y', (surfaceY + PLAY_FLOOR_LIFT).toFixed(2))
+}
+
+export const clearPlayFloor = () => {
+  if (!playFloor) return
+  engine.removeEntity(playFloor)
+  playFloor = null
 }
 
 // The hole clears `playing` before the lobby is back and before a falling

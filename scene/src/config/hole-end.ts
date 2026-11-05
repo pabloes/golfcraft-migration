@@ -25,3 +25,12 @@ export const COURSE_REMOVE_DELAY_MS = 400
 // nobody has ever seen the moment the player is moved. Put it back to true
 // once the cause is settled.
 export const FADE_BETWEEN_HOLES = false
+
+// The play floor (scene-bounds.ts) faintly visible while this is being
+// watched. Set to false once it is confirmed, and it goes back to being an
+// invisible collider.
+export const SHOW_PLAY_FLOOR = true
+
+// The ball's collision radius (golfplay/physics/ball.ts: new CANNON.Sphere(0.1)).
+// The course's surface is the ball's spawn height minus this.
+export const BALL_RADIUS = 0.1
