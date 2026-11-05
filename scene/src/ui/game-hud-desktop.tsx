@@ -17,7 +17,7 @@ import { seasonClockState, seasonResultsState, seasonCountdownState, seasonHoleS
 import { C, hex, mmss } from './ui-theme'
 import { P, border, img, initialAvatar, rankBadge } from './ui2'
 import { lobbyMenuState, openLobbyViewInGame } from './lobby-menu-state'
-import { gameOptions, toggleMute } from '../services/game-options'
+import { gameOptions, toggleMute, saveAudioOptions, VOLUME_STEP } from '../services/game-options'
 import { pingLabel } from './ping-label'
 import { mobileShootState } from './mobile-shoot-state'
 // @ts-ignore - common/utils has @ts-nocheck
@@ -98,42 +98,147 @@ export const InGameOptionsButton = () => {
   )
 }
 
-// Silence everything the scene plays, from the HUD, in the lobby and during a
-// hole alike (user, 2026-11-05): the map music and the lobby stream both read
-// the same setting, which is kept on the account. The levels behind it are in
-// OPTIONS; this is the one that has to be reachable without opening anything.
-// Top left, under LEAVE and OPTIONS while a hole is on and alone in the lobby,
-// which is the only column desktop leaves free in both states.
-export const MuteButton = () => {
+// ---------------------------------------------------------------- AUDIO
+// A music note, drawn with boxes rather than taken from the icon sheet, which
+// has no audio icon: a head, a stem and a flag. No font glyph either, since
+// nothing guarantees the explorer's face carries one.
+const noteIcon = (px: Px, muted: boolean) => {
+  const ink = muted ? P.pale : C.white
+  return (
+    <UiEntity uiTransform={{ width: px(20), height: px(22), positionType: 'relative' }}>
+      <UiEntity
+        uiTransform={{ positionType: 'absolute', position: { top: px(12), left: px(0) }, width: px(12), height: px(10), borderRadius: px(5) }}
+        uiBackground={{ color: ink }}
+      />
+      <UiEntity
+        uiTransform={{ positionType: 'absolute', position: { top: px(0), left: px(10) }, width: px(3), height: px(17) }}
+        uiBackground={{ color: ink }}
+      />
+      <UiEntity
+        uiTransform={{ positionType: 'absolute', position: { top: px(0), left: px(12) }, width: px(7), height: px(4) }}
+        uiBackground={{ color: ink }}
+      />
+    </UiEntity>
+  )
+}
+
+// Open only while the player wants it: one click on the note, one more to put
+// it away. Module state, because the UI re-renders every frame anyway.
+let audioPanelOpen = false
+
+const volButton = (px: Px, fs: Px, id: string, label: string, disabled: boolean, onClick: () => void) => (
+  <UiEntity
+    uiTransform={{
+      width: px(30),
+      height: px(26),
+      justifyContent: 'center',
+      alignItems: 'center',
+      margin: { right: px(4) },
+      borderRadius: px(8),
+      borderWidth: border(px, 2),
+      borderColor: P.white
+    }}
+    uiBackground={{ color: disabled ? P.navyDeep : P.navy }}
+    onMouseDown={disabled ? undefined : onClick}
+  >
+    <Label value={label} fontSize={fs(13)} color={disabled ? P.pale : C.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(18) }} />
+  </UiEntity>
+)
+
+// The note, the level under it, and the controls that drop out of it. Used as
+// one more chip of the in-hole stats row, so it can never land on top of
+// anything, and on its own in the lobby.
+const audioChip = (px: Px, fs: Px) => {
+  const pct = Math.round(gameOptions.musicVolume * 100)
+  const muted = gameOptions.muted
+  const step = (delta: number) => {
+    const next = Math.min(1, Math.max(0, Math.round((gameOptions.musicVolume + delta) * 100) / 100))
+    void saveAudioOptions({ music: next, muted: false })
+  }
+  return (
+    <UiEntity uiTransform={{ width: px(76), height: px(72), positionType: 'relative', margin: { right: px(10) } }}>
+      <UiEntity
+        uiTransform={{
+          width: px(76),
+          height: px(72),
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+          borderRadius: px(18),
+          borderWidth: border(px, 4),
+          borderColor: P.white
+        }}
+        uiBackground={{ color: muted ? P.crimson : P.navy }}
+        onMouseDown={() => {
+          audioPanelOpen = !audioPanelOpen
+        }}
+      >
+        {noteIcon(px, muted)}
+        <Label
+          value={muted ? 'OFF' : `${pct}%`}
+          fontSize={fs(13)}
+          color={muted ? P.pale : C.white}
+          textAlign="middle-center"
+          textWrap="nowrap"
+          uiTransform={{ height: px(18), margin: { top: px(2) } }}
+        />
+      </UiEntity>
+      {audioPanelOpen ? (
+        <UiEntity
+          uiTransform={{
+            positionType: 'absolute',
+            position: { top: px(78), left: px(0) },
+            width: px(172),
+            height: px(38),
+            flexDirection: 'row',
+            justifyContent: 'flex-start',
+            alignItems: 'center',
+            padding: { left: px(6), right: px(6) },
+            borderRadius: px(12),
+            borderWidth: border(px, 3),
+            borderColor: P.white
+          }}
+          uiBackground={{ color: P.navyDeep }}
+        >
+          {volButton(px, fs, 'audio-down', '-', muted || pct <= 0, () => step(-VOLUME_STEP))}
+          {volButton(px, fs, 'audio-up', '+', muted || pct >= 100, () => step(VOLUME_STEP))}
+          <UiEntity
+            uiTransform={{
+              width: px(92),
+              height: px(26),
+              justifyContent: 'center',
+              alignItems: 'center',
+              borderRadius: px(8),
+              borderWidth: border(px, 2),
+              borderColor: P.white
+            }}
+            uiBackground={{ color: muted ? P.crimson : P.navy }}
+            onMouseDown={toggleMute}
+          >
+            <Label value={muted ? 'UNMUTE' : 'MUTE'} fontSize={fs(11)} color={C.white} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(16) }} />
+          </UiEntity>
+        </UiEntity>
+      ) : null}
+    </UiEntity>
+  )
+}
+
+// In the lobby there is no stats row to sit in, so it stands at the top left,
+// which desktop leaves free there.
+export const LobbyAudioButton = () => {
   const gs = globalStore.game.getState()
-  if (gs.introScreen || gs.bootError) return null
+  if (gs.introScreen || gs.bootError || gs.playing || gs.starting) return null
   const { canvas, s } = hudScale()
   const { px, fs } = s
-  const inHole = !!mobileShootState.quit
   return (
     <UiEntity
       uiTransform={{
         positionType: 'absolute',
-        position: { top: canvas.area.top + px(inHole ? 22 + 72 + 8 + 40 + 8 : 22), left: hudLeft(canvas, px) },
-        width: px(LEAVE_W),
-        height: px(34),
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderRadius: px(12),
-        borderWidth: border(px, 3),
-        borderColor: P.white
+        position: { top: canvas.area.top + px(22), left: hudLeft(canvas, px) },
+        flexDirection: 'row'
       }}
-      uiBackground={{ color: gameOptions.muted ? P.crimson : P.navy }}
-      onMouseDown={toggleMute}
     >
-      <Label
-        value={gameOptions.muted ? 'SOUND OFF' : 'SOUND ON'}
-        fontSize={fs(10)}
-        color={C.white}
-        textAlign="middle-center"
-        textWrap="nowrap"
-        uiTransform={{ height: px(16) }}
-      />
+      {audioChip(px, fs)}
     </UiEntity>
   )
 }
@@ -238,6 +343,7 @@ export const HoleStats = () => {
       {statBox(px, fs, px(104), 'HOLE', `${seasonHoleState.current} / ${seasonHoleState.total}`, P.purple)}
       {statBox(px, fs, px(104), 'TIME', mmss(seasonClockState.ms), P.navy)}
       {statBox(px, fs, px(104), 'SHOTS', String(me ? me.shots : 0), P.navy)}
+      {audioChip(px, fs)}
     </UiEntity>
   )
 }
