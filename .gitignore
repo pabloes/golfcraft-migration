@@ -55,3 +55,9 @@ design/gdd.html
 
 # Local copy of the Discord webhook URLs and other deploy secrets: never commit.
 deploy/*.env
+
+# The skills installer keeps its own copy of each package here and copies
+# the skills into .claude/skills, which is what Claude Code reads. Only the
+# copies and skills-lock.json are tracked; this store is restored with
+# `npx skills experimental_install`.
+.agents/

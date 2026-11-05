@@ -1,5 +1,9 @@
 # Funding and scope
 
+For general design, use only the estimation and scope guidance below, against the owner's
+actual capacity. The funding amounts and application requirements here apply only to a chosen
+Creator Success application; a request for an effort estimate does not select that direction.
+
 Read when funding, affordability or an effort estimate comes up; also consult the application
 facts when completing the header at the end. Do not initiate a financial review, require hours
 or budget figures in the GDD, or make agreement on scope a condition of helping submit it.
@@ -10,11 +14,9 @@ Creator Success supports early development, testing and validation of the studio
 and IP**, which it can continue developing and monetizing. It is not a commission or a
 client-services fee. Treat funding as a design and production constraint, not a commercial quote.
 
-Fixed milestone funding: **V0: $1,000 · V1: $3,100 · V2: $2,800**.
-These amounts and the ownership/scoping principle come from Bay Backner's *Funding and Scoping
-Principle*, supplied by the program owner in September 2026. Primary public program reference:
-[Creator Success onboarding](https://docs.decentraland.org/creator/studio-onboarding).
-Checked September 15, 2026: onboarding confirms V0/V1 amounts; V2 here comes from Bay’s principle.
+Fixed milestone funding: **V0: $1,000 · V1: $3,100 · V2: $2,800**, per the public
+[Creator Success onboarding](https://docs.decentraland.org/creator/studio-onboarding)
+(checked October 30, 2026). It names V3 without an amount; do not quote one.
 Do not infer payment timing, eligibility, later funding or guaranteed progression from this table.
 Product versions, document stages, experiment scopes and funding milestones have separate rules.
 Do not turn a skill's workflow constraints into funding requirements.
@@ -38,6 +40,8 @@ does not establish numerical retention thresholds for funding; do not turn desig
 funding guarantees. Confirm later-stage scope, timing and conditions rather than inventing them.
 
 
+## Estimate and shape scope
+
 Work like an indie producer. **Estimate the remaining work, not the feature list.** Before
 calling scope large, small, cheap or expensive, separate new work from what already exists and
 the time the studio chooses to invest. A feature count or budget alone is not an estimate;
@@ -52,7 +56,7 @@ feedback is not automatically excess polish. Check dependencies after cuts. Do n
 unpaid hours or imply that the studio should subsidize excessive work. If no acceptable version
 fits, leave the mismatch explicit. Owning the IP and possible future revenue do not settle it.
 
-Answer direct budget questions. Do not recommend asking for more funding merely because the first
+Answer direct budget questions. Within Creator Success, do not recommend asking for more funding merely because the first
 concept is too large, or hide unrealistic effort to make participation look attractive. Tie
 a scope reduction to the identified work and the studio's chosen limit, not the funding amount
 alone. A reasonable scope needs no ceremonial cuts beyond the actual trade-offs.
