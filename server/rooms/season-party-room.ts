@@ -77,9 +77,17 @@ class PartyPlayer extends Schema {
     @type("number")
     tierSub = 0;
 
-    //earns season points (plays at their own level)
+    //earns season points (plays at their own level or below it)
     @type("boolean")
     eligible = true;
+
+    //CAN LOSE season points, which only the players at the room's own level
+    //can (user, 2026-11-05). Someone below it is playing courses harder than
+    //their rank against stronger recorded players, and charging them for
+    //coming last would make joining a friend's higher room a bad deal; someone
+    //above it already neither earns nor loses. Not synced: the client has no
+    //use for it, and the schema is the party's protocol.
+    canLosePoints = true;
 
     @type("boolean")
     left = false;
@@ -306,12 +314,14 @@ export class SeasonPartyRoom extends Room<SeasonPartyRoomState> {
         this.state.playerTierSub = roomTierSub;
         this.roomCat = Math.max(0, getCatFromTier(roomTier));
         this.state.players.forEach(player => {
-            player.eligible = isAtOrBelowRoomLevel(getTierFromSub(player.tierSub), roomTier);
+            const playerTier = getTierFromSub(player.tierSub);
+            player.eligible = isAtOrBelowRoomLevel(playerTier, roomTier);
+            player.canLosePoints = isSameDifficulty(playerTier, roomTier);
         });
         console.log("season-party-room prepare", {
             roomTierSub,
             roomCat: this.roomCat,
-            players: this.state.players.map(p => `${p.displayName}:${p.tierSub}${p.eligible ? "" : " (no season points)"}`)
+            players: this.state.players.map(p => `${p.displayName}:${p.tierSub}${p.eligible ? (p.canLosePoints ? "" : " (cannot lose points)") : " (no season points)"}`)
         });
 
         this.SEASON_REWARD_FACTOR = await promisify(PlayFabServer.GetTitleData)({Keys: ["SeasonRewardFactor"]})
@@ -742,7 +752,14 @@ export class SeasonPartyRoom extends Room<SeasonPartyRoomState> {
     private async completeRun(player: PartyPlayer) {
         const {PlayFabId} = player;
         const accumulatedValue = 2 - fieldRank(player.fieldScores, [0, 1, 2, 3]);
-        const tierSubDelta = player.eligible ? accumulatedValue : 0;
+        //Only a player at the room's own level can end a run down (user,
+        //2026-11-05): below it the courses and the recorded players are above
+        //their rank, so the loss is not theirs to carry.
+        const tierSubDelta = !player.eligible
+            ? 0
+            : accumulatedValue < 0 && !player.canLosePoints
+                ? 0
+                : accumulatedValue;
         const base = JSON.parse(JSON.stringify(player.rewards));
         const [fWearables, fGolfclubs] = await promisify(PlayFabServer.GetUserReadOnlyData)({
             PlayFabId,
@@ -858,8 +875,10 @@ export class SeasonPartyRoom extends Room<SeasonPartyRoomState> {
             this.scheduleStart();
         }
 
-        //Season-Room abandon penalty, for players who were earning season points
-        if (!player.eligible || this.state.currentGame < 2) return;
+        //Season-Room abandon penalty, and only for a player who could have
+        //lost points by finishing: the same rule as the end of a run, or
+        //leaving a room above your rank would cost what finishing it cannot.
+        if (!player.eligible || !player.canLosePoints || this.state.currentGame < 2) return;
         const rounds = [0, 1, 2, 3].filter(r => player.fieldScores[r]?.length);
         const accumulatedValue = 2 - fieldRank(player.fieldScores, rounds);
         const finishedRun = this.state.currentGame >= 3 && (this.state.finished || player.holed);
