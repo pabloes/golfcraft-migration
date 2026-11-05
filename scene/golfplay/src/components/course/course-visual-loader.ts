@@ -1,4 +1,4 @@
-import { engine, Entity, Transform } from '@dcl/sdk/ecs'
+import { ColliderLayer, engine, Entity, GltfContainer, Transform } from '@dcl/sdk/ecs'
 import { Vector3, Quaternion } from '@dcl/sdk/math'
 import { createVisualPart, PartOptions as VisualPartOptions } from './visual-part'
 import { createVisualHole } from './visual-hole'
@@ -79,6 +79,35 @@ const createVisualCourse = (parent: Entity, { courseDefinition }: CourseOptions)
   }
 
   return {
+    // Turn every collider of the course off, in place, without removing
+    // anything (user's idea, 2026-11-05). This is what actually breaks the
+    // hold the explorer has on the player: it pins them to the collider under
+    // their feet and keeps moving them with it, and a course taken away while
+    // that hold is live can carry them out of the scene entirely.
+    //
+    // Setting the masks to CL_NONE on a loaded GltfContainer does NOT reload
+    // or re-pool the asset: LoadGltfContainerSystem compares the two masks and
+    // calls DisableColliders, nothing moves. The player then has nothing under
+    // their feet, the explorer drops the hold after two ungrounded frames, and
+    // they land on the sheet we keep under the course. Only then is it safe to
+    // remove the parts.
+    //
+    // It also makes the sheet's exact height stop mattering, which is what the
+    // rest of the workaround depended on: a tee on a raised part sits above
+    // the sheet, and this reaches it anyway.
+    releaseColliders: () => {
+      let released = 0
+      const off = (entity: Entity | undefined) => {
+        if (entity === undefined) return
+        const gltf = GltfContainer.getMutableOrNull(entity)
+        if (!gltf) return
+        gltf.visibleMeshesCollisionMask = ColliderLayer.CL_NONE
+        gltf.invisibleMeshesCollisionMask = ColliderLayer.CL_NONE
+        released++
+      }
+      Object.values(solidParts).forEach((p: any) => p && p.getEntity && off(p.getEntity()))
+      console.log('[course] colliders off on', released, 'parts')
+    },
     dispose: () => {
       // SDK7 doesn't cascade engine.removeEntity to children. Walk every
       // owned part/magnet/hole and dispose explicitly so the course leaves

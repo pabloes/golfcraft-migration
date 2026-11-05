@@ -561,6 +561,13 @@ const GolfplayClientFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: string })
       gameHandler.dispose()
       // Deferred on purpose: see golfplay-client-season.ts. The player is
       // standing on the course and the explorer drags them along with it.
+      // Colliders off first, so the explorer lets go of the player before
+      // anything is removed; the parts leave a few frames later.
+      try {
+        visualCourse.releaseColliders()
+      } catch (err) {
+        console.log('[course] releasing colliders failed', err)
+      }
       const courseToRemove = visualCourse
       setTimeout(() => {
         try {

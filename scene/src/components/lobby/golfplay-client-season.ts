@@ -777,6 +777,13 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
       // take them to another parcel, past every check movePlayerTo has. The
       // pad above went up first; these few frames are for the explorer to
       // make it the platform before the course leaves.
+      // Colliders off first, so the explorer lets go of the player before
+      // anything is removed; the parts leave a few frames later.
+      try {
+        visualCourse.releaseColliders()
+      } catch (err) {
+        console.log('[course] releasing colliders failed', err)
+      }
       const courseToRemove = visualCourse
       setTimeout(() => {
         try {
