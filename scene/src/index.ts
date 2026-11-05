@@ -16,6 +16,7 @@ import { bootstrap } from './meta/bootstrap'
 import { setupUI } from './ui'
 import { startGameWindow } from './services/game-window'
 import { startSceneBounds, keepBounds, releaseBounds } from './components/scene-bounds'
+import { startPositionWatch } from './services/position-watch'
 import { teleportVerified } from './services/safe-teleport'
 import { lobbyMenuState } from './ui/lobby-menu-state'
 import { setSpectatorLobbyHooks, startSpectating } from './components/lobby/spectator-client'
@@ -52,6 +53,10 @@ export async function main() {
   // on, so nobody can walk or fall out of the scene. Without it, "no teleport
   // at the end of a hole" only holds for the modes that lock the avatar.
   startSceneBounds()
+  // And a record of where the avatar actually goes, because the thing that
+  // moves it out of the scene is not any teleport of ours and the scene
+  // unloads with it (services/position-watch.ts).
+  startPositionWatch()
 
   try {
     const { colyseus, PlayFabId, user, realm } = await bootstrap()

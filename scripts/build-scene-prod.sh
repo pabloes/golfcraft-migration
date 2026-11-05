@@ -15,12 +15,24 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CONSTANTS="$ROOT/common/constants.ts"
+VERSION_TS="$ROOT/scene/src/version.ts"
+VERSION_BACKUP="$ROOT/scene/src/version.ts.build-backup"
 
 restore() {
   sed -i '' 's/export const USE_REMOTE_SERVER = true;/export const USE_REMOTE_SERVER = false;/' "$CONSTANTS"
   echo "USE_REMOTE_SERVER restored to false"
+  [ -f "$VERSION_BACKUP" ] && mv "$VERSION_BACKUP" "$VERSION_TS" && echo "version.ts restored"
+  return 0
 }
 trap restore EXIT
+
+# The version shown in the game: the commit that is being built and the day.
+# Stamped here and put back afterwards, so the working tree stays clean and a
+# deployed bundle always carries the real number.
+cp "$VERSION_TS" "$VERSION_BACKUP"
+SCENE_VERSION="$(cd "$ROOT" && git rev-parse --short HEAD) $(date -u '+%d %b %H:%M UTC')"
+sed -i '' "s|export const SCENE_VERSION = 'dev'|export const SCENE_VERSION = '$SCENE_VERSION'|" "$VERSION_TS"
+echo "version: $SCENE_VERSION"
 
 grep -q 'export const USE_REMOTE_SERVER = false;' "$CONSTANTS" || {
   echo "constants.ts is not in the expected local state — check it by hand"; exit 1;

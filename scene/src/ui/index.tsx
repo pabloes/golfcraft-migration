@@ -4,6 +4,7 @@ import { engine, inputSystem, InputAction, PointerEventType } from '@dcl/sdk/ecs
 import { Color4 } from '@dcl/sdk/math'
 
 import { globalStore } from '../services/globalStore/globalStore'
+import { SCENE_VERSION } from '../version'
 import { lobbyHudState } from './lobby-hud-state'
 import { overlayState } from '../components/ui/overlay'
 import { centerPanelState, BANNER_SPRITES, showBanner } from './centerpanel-state'
@@ -70,9 +71,24 @@ const ui = () => {
       <hud.EndingBanner />
       <SpectateHud />
       <ServerNotification />
+      <VersionTag />
     </UiEntity>
   )
 }
+
+// Which build is live, in small print along the bottom edge (user, 2026-11-05).
+// Last of all, so it is readable over the menus and over the black fade: the
+// point of it is to tell at a glance whether what is running is what was just
+// deployed. scripts/build-scene-prod.sh stamps the commit into version.ts.
+const VersionTag = () => (
+  <Label
+    uiTransform={{ positionType: 'absolute', position: { bottom: 0, left: 0 }, width: '100%' }}
+    value={SCENE_VERSION}
+    fontSize={10}
+    color={Color4.create(1, 1, 1, 0.4)}
+    textAlign="bottom-center"
+  />
+)
 
 // showMessage() (components/lobby/server-notification.ts): top centre of the
 // full-screen grid, clear of the explorer's avatar and chat (top-left), and
