@@ -11,6 +11,7 @@
 import ReactEcs, { Label, UiEntity } from '@dcl/sdk/react-ecs'
 import { Color4 } from '@dcl/sdk/math'
 
+import { musicStatus } from '../services/map-music'
 import { globalStore } from '../services/globalStore/globalStore'
 import { topbarState, formatTopBarTime } from './topbar-state'
 import { powerBarState } from './shoot-hud-state'
@@ -194,6 +195,25 @@ export const PowerColumn = () => {
 
 // Map name and author, top bar right of the stat boxes, only while playing
 // (SDK6 game-ui.ts).
+// What the music is doing, in the footer next to the map's name. Here because
+// nothing is heard on phones and the console is out of reach there: this says
+// whether the scene started a track, which is the difference between a bug of
+// ours and one in the explorer's player (user, 2026-11-06).
+const musicLabel = (px: Px, fs: Px) => {
+  const started = musicStatus.starts > 0
+  const name = musicStatus.track.replace(/\.mp3$/, '')
+  return (
+    <Label
+      value={started ? `\u266A ${name}` : '\u266A none'}
+      fontSize={fs(10)}
+      color={started ? P.pale : C.yellow}
+      textAlign="middle-left"
+      uiTransform={{ height: px(26), margin: { left: px(8) } }}
+      textWrap="nowrap"
+    />
+  )
+}
+
 export const MapFooter = () => {
   const gs = globalStore.game.getState()
   const name = gs.courseName || gs.courseId
@@ -209,6 +229,7 @@ export const MapFooter = () => {
       {gs.courseAuthor ? (
         <Label value={`by ${gs.courseAuthor}`} fontSize={fs(11)} color={P.pale} textAlign="middle-left" uiTransform={{ height: px(26), margin: { left: px(6) } }} textWrap="nowrap" />
       ) : null}
+      {musicLabel(px, fs)}
       {pingLabel(px, fs, 10, { margin: { left: px(8) } })}
     </UiEntity>
   )

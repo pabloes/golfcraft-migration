@@ -133,6 +133,11 @@ export const mapOfCourse = (courseDefinition: any): MapKey => {
 }
 
 // ---------------------------------------------------------------------------
+// What the music is doing, readable from the UI. The phone has no console
+// within reach, and the question that matters when nothing is heard is
+// whether the scene ever started a track at all (user, 2026-11-06).
+export const musicStatus = { track: '', startedAt: 0, starts: 0 }
+
 let musicEntity: Entity | null = null
 // The volume written to the component, to notice a change in the setting.
 let appliedVolume = -1
@@ -198,6 +203,9 @@ const play = (track: Track) => {
   lastFile = track.file
   nextAt = Date.now() + track.seconds * 1000 + GAP_MS
   appliedVolume = musicVolume()
+  musicStatus.track = track.file
+  musicStatus.startedAt = Date.now()
+  musicStatus.starts++
   AudioStream.createOrReplace(musicEntity, {
     url: MUSIC_BASE + track.file,
     playing: true,
