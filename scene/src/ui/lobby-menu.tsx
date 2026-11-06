@@ -22,6 +22,7 @@ import { lobbyMenuState, closeOrBack, showLobbyView, nextSeasonPrize, seasonPlay
 import { TutorialView, WorkshopView, PrizesView, DailyMissionsView, SeasonView, MoreGamesView, OptionsView, WatchView } from './lobby-views'
 import { C, hex, fmt, materialIcon } from './ui-theme'
 import { fullLayout, scaler, type Px } from './ui-scale'
+import { SCENE_VERSION } from '../version'
 import { P, at, img, imgW, imgBox, text, box, fullFrame, button2, imageButton, squareButton, sideCard, nextPrizeStrip, resIcon, rankBadge, border, energyChip } from './ui2'
 import { isGiveawayActive } from '../services/giveaway'
 import { giveawayPosterBox } from './giveaway'
@@ -358,7 +359,14 @@ export const LobbyMenu = () => {
   // Bottom centre, under the bottom row: clear of the explorer's corners.
   const ping = pingLabel(px, fs, 10, { ...at(px, 152, 355, 120, 16) })
 
-  return fullFrame(L, [...top, ...left, ...season, ...watching, ...soon, ...moreGames, ...cards, hint, ping])
+  // The build, where a phone can actually read it (user, 2026-11-06): the
+  // tag along the window's bottom edge is drawn in canvas pixels, so on a
+  // phone it comes out tiny and lands next to the explorer's own footer
+  // text. Here it scales with the panel. The band below y 350 is empty and
+  // between x 152 and 498, which keeps it out of the two bottom corners the
+  // explorer owns.
+  const version = text(px, fs, SCENE_VERSION, 160, 352, 338, 18, 12, P.pale, 'middle-center')
+  return fullFrame(L, [...top, ...left, ...season, ...watching, ...soon, ...moreGames, ...cards, hint, ping, version])
 }
 
 // Resource chip of the top bar: the game's icon and the amount.

@@ -73,7 +73,7 @@ const ui = () => {
       <hud.EndingBanner />
       <SpectateHud />
       <ServerNotification />
-      <VersionTag />
+      {mobile ? null : <VersionTag />}
     </UiEntity>
   )
 }
