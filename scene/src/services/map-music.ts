@@ -19,7 +19,7 @@
 // web/client/dist/static, and `*/music` from web/public/music (added for
 // this), so dropping the files there is enough. Any other host works; it only
 // has to answer CORS and be https.
-import { engine, AudioStream, Transform, Entity } from '@dcl/sdk/ecs'
+import { engine, AudioStream, Entity } from '@dcl/sdk/ecs'
 
 import { musicVolume } from './game-options'
 
@@ -186,10 +186,14 @@ const pick = (map: MapKey): Track | null => {
 const play = (track: Track) => {
   if (musicEntity === null) {
     musicEntity = engine.addEntity()
-    // No Transform on purpose: without one the explorer treats the stream as
-    // global, which is what background music wants. A spatial stream would
-    // fade with the distance to an entity nobody can see.
-    Transform.createOrReplace(musicEntity, { parent: engine.PlayerEntity })
+    // No Transform at all, and no parent. Both explorers treat a stream
+    // without one as global, which is what background music wants: unity
+    // decides spatial with `Has<TransformComponent> && spatial`, and we never
+    // ask for spatial. It used to hang off engine.PlayerEntity, inherited
+    // from the AudioSource this replaced, where following the player was the
+    // point; for a global stream that only gave Godot a node parented to a
+    // reserved entity to make sense of, which is the likeliest reason the
+    // music was silent on phones (user, 2026-11-05).
   }
   lastFile = track.file
   nextAt = Date.now() + track.seconds * 1000 + GAP_MS
