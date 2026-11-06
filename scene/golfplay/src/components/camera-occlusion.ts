@@ -1,7 +1,9 @@
-// Hides the course parts that stand between the aim camera and the ball
-// while the player is lining up a shot, and shows them again as soon as they
-// no longer block the view or the shot is taken (the shoot control's
-// `visible`, mirrored in mobileShootState on every platform). `camera` is the
+// Hides the course parts that stand between the aim camera and the ball, and
+// shows them again as soon as they no longer block the view. Active while the
+// player is lining up a shot (the shoot control's `visible`, mirrored in
+// mobileShootState on every platform) AND while the ball is rolling and the
+// camera is following it (user, 2026-11-06), which is the other half of the
+// time a wall stands between the player and what they are watching. `camera` is the
 // orbit camera's entity, or on phones a probe that anchor-camera.ts keeps at
 // the explorer camera's position.
 //
@@ -18,6 +20,11 @@ import { mobileShootState } from '../../../src/ui/mobile-shoot-state'
 
 const CHECK_EVERY = 0.15
 const MISSES_TO_SHOW = 2
+// The ball counts as rolling once it has moved this far between two frames,
+// and stays "rolling" for a moment after it stops, so a ball that crawls or
+// pauses against a wall doesn't make the parts flicker back and forth.
+const MOVE_EPS = 0.01
+const MOVING_TAIL_MS = 500
 // stop just short of the ball, so the ball's own surroundings never count
 const BALL_MARGIN = 0.1
 // a ray whose result never arrives (an explorer without raycasts) is dropped
@@ -35,6 +42,9 @@ export const createCameraOcclusion = (camera: Entity, ballEntity: Entity, getDis
   const hidden = new Map<Entity, number>()
   let sinceCheck = 0
   let sentAt = 0
+  // Where the ball was last frame, and until when it counts as rolling.
+  let lastBall: Vec3Like | null = null
+  let movingUntil = 0
 
   const setOccluded = (part: Entity, value: boolean) => occludableParts.get(part)?.(value)
 
@@ -71,7 +81,19 @@ export const createCameraOcclusion = (camera: Entity, ballEntity: Entity, getDis
   }
 
   function system(dt: number) {
-    if (!mobileShootState.visible) {
+    // Not only while lining up a shot: also while the camera is following the
+    // ball (user, 2026-11-06), which is exactly when a wall between the two
+    // hides the thing the player is watching. Rolling is read from the ball
+    // itself rather than wired in from the clients, so it works the same for
+    // both aim cameras and needs nothing passed down.
+    const ball = getBallPosition()
+    if (lastBall) {
+      const moved = Math.abs(ball.x - lastBall.x) + Math.abs(ball.y - lastBall.y) + Math.abs(ball.z - lastBall.z)
+      if (moved > MOVE_EPS) movingUntil = Date.now() + MOVING_TAIL_MS
+    }
+    lastBall = { x: ball.x, y: ball.y, z: ball.z }
+
+    if (!mobileShootState.visible && Date.now() > movingUntil) {
       if (hidden.size) showAll()
       sinceCheck = CHECK_EVERY
       return
