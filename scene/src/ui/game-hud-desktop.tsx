@@ -149,6 +149,8 @@ const volButton = (px: Px, fs: Px, id: string, label: string, disabled: boolean,
 // one more chip of the in-hole stats row, so it can never land on top of
 // anything, and on its own in the lobby.
 const audioChip = (px: Px, fs: Px) => {
+  // Hidden while aiming: don't come back with the panel still hanging open.
+  if (mobileShootState.visible && audioPanelOpen) audioPanelOpen = false
   const pct = Math.round(gameOptions.musicVolume * 100)
   const muted = gameOptions.muted
   const step = (delta: number) => {
@@ -343,7 +345,12 @@ export const HoleStats = () => {
       {statBox(px, fs, px(104), 'HOLE', `${seasonHoleState.current} / ${seasonHoleState.total}`, P.purple)}
       {statBox(px, fs, px(104), 'TIME', mmss(seasonClockState.ms), P.navy)}
       {statBox(px, fs, px(104), 'SHOTS', String(me ? me.shots : 0), P.navy)}
-      {audioChip(px, fs)}
+      {/* Only when the shot is NOT armed (user, 2026-11-06). A click is both
+          this chip and the shot: the shoot control polls IA_POINTER with no
+          notion of what the pointer was over, so touching the volume while
+          aiming would send the ball. It comes back the moment the shot is
+          taken, which is when there is time to fiddle with it anyway. */}
+      {mobileShootState.visible ? null : audioChip(px, fs)}
     </UiEntity>
   )
 }
