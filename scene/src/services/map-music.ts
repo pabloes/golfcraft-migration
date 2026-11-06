@@ -19,9 +19,23 @@
 // web/client/dist/static, and `*/music` from web/public/music (added for
 // this), so dropping the files there is enough. Any other host works; it only
 // has to answer CORS and be https.
-import { engine, AudioStream, Entity } from '@dcl/sdk/ecs'
+//
+// ⚠ PHONES DO NOT PLAY AudioStream AT ALL (read in godot-explorer, 2026-11-06).
+// Its handler ends in `av_sinks` (lib/src/scene_runner/components/
+// audio_stream.rs), and `av_sinks` in lib/src/av/backend/mod.rs calls
+// `noop::av_sinks` on EVERY platform: a channel nobody reads plus a
+// `tracing::warn!("Video playback not available: {url}")`. Video got native
+// backends (ExoPlayer on Android, AVPlayer on iOS, chosen by
+// `BackendType::from_source`) and AudioStream was left on the no-op. So on a
+// phone the only component that takes a URL and really plays it is
+// VideoPlayer: with no material pointing at the entity nothing is drawn, the
+// native player decodes the mp3, its volume is master x scene x ours, and it
+// even has the `loop` AudioStream lacks. Desktop keeps AudioStream, which is
+// the right component there and is heard.
+import { engine, AudioStream, VideoPlayer, Entity } from '@dcl/sdk/ecs'
 
 import { musicVolume } from './game-options'
+import { isMobile } from './platform'
 
 // ---------------------------------------------------------------------------
 // The catalogue. `seconds` is the track's own length, used only to know when
@@ -135,8 +149,10 @@ export const mapOfCourse = (courseDefinition: any): MapKey => {
 // ---------------------------------------------------------------------------
 // What the music is doing, readable from the UI. The phone has no console
 // within reach, and the question that matters when nothing is heard is
-// whether the scene ever started a track at all (user, 2026-11-06).
-export const musicStatus = { track: '', startedAt: 0, starts: 0 }
+// whether the scene ever started a track at all (user, 2026-11-06). `via` is
+// which component is carrying it and `why` is the reason there is none, so the
+// readout tells our bug from the explorer's without a log.
+export const musicStatus = { track: '', startedAt: 0, starts: 0, via: '', why: '' }
 
 let musicEntity: Entity | null = null
 // The volume written to the component, to notice a change in the setting.
@@ -145,28 +161,21 @@ let currentMap: MapKey | null = null
 let lastFile = ''
 let nextAt = 0
 let systemAdded = false
-let streamPlaying = false
 
-// SDK6 skipped the music when a stream was set in TitleData, so the stream's
-// own audio is what you hear. Here it follows the stream actually playing
-// (stream-screens.ts) and stops the music if one starts mid-course.
+// Who owns the audio, the other way round from before (user, 2026-11-06).
 //
-// And gives it back when the stream stops, which it did not do at first: the
-// music only ever started when a hole's course was built, so a stream running
-// at that moment left the hole silent to its end even after somebody paused
-// the screen (user, 2026-11-05). The map the player is on is remembered even
-// while the stream has the audio, so there is something to go back to.
-export const setStreamPlaying = (playing: boolean) => {
-  if (playing === streamPlaying) return
-  streamPlaying = playing
-  if (playing) {
-    silence()
-    return
-  }
-  if (!currentMap) return
-  const track = pick(currentMap)
-  if (track) play(track)
-}
+// SDK6 skipped the music whenever TitleData held a streamURL, and until now
+// the music stayed quiet while the explorer reported the stream as playing.
+// That made the music depend on a VideoState the explorers do not agree on:
+// on a phone nothing was ever heard and the HUD read "none", which says the
+// scene never started a track at all, not that the track could not be heard.
+//
+// Now a hole's music owns the audio and stream-screens.ts turns the stream
+// down to 0 while it does; in the lobby there is no map music, so the stream
+// keeps it. Nothing about the music depends on the video player any more.
+// Each client decides this for itself, and both levels are still the
+// player's (services/game-options.ts).
+export const musicOwnsAudio = () => currentMap !== null
 
 // A map with no music of its own borrows from the nearest one that has some,
 // rather than always falling to the retro default.
@@ -188,6 +197,31 @@ const pick = (map: MapKey): Track | null => {
   return choices[Math.floor(Math.random() * choices.length)]
 }
 
+// The component in use carries the music: VideoPlayer on phones, AudioStream
+// everywhere else (see the note at the top). Both are read back rather than
+// remembered, so a change of volume or a pause reaches whichever is there.
+const setMusicVolume = (value: number) => {
+  if (musicEntity === null) return
+  const video = VideoPlayer.getMutableOrNull(musicEntity)
+  if (video) {
+    video.volume = value
+    return
+  }
+  const stream = AudioStream.getMutableOrNull(musicEntity)
+  if (stream) stream.volume = value
+}
+
+const setMusicPlaying = (value: boolean) => {
+  if (musicEntity === null) return
+  const video = VideoPlayer.getMutableOrNull(musicEntity)
+  if (video) {
+    video.playing = value
+    return
+  }
+  const stream = AudioStream.getMutableOrNull(musicEntity)
+  if (stream) stream.playing = value
+}
+
 const play = (track: Track) => {
   if (musicEntity === null) {
     musicEntity = engine.addEntity()
@@ -206,12 +240,18 @@ const play = (track: Track) => {
   musicStatus.track = track.file
   musicStatus.startedAt = Date.now()
   musicStatus.starts++
-  AudioStream.createOrReplace(musicEntity, {
-    url: MUSIC_BASE + track.file,
-    playing: true,
-    volume: appliedVolume
-  })
-  console.log('[music]', track.file, `(${track.seconds}s)`)
+  musicStatus.why = ''
+  const url = MUSIC_BASE + track.file
+  if (isMobile()) {
+    musicStatus.via = 'video'
+    // spatial: false is the default, said out loud because this is music and
+    // the entity has no Transform to be spatial about.
+    VideoPlayer.createOrReplace(musicEntity, { src: url, playing: true, volume: appliedVolume, loop: false, spatial: false })
+  } else {
+    musicStatus.via = 'audio'
+    AudioStream.createOrReplace(musicEntity, { url, playing: true, volume: appliedVolume })
+  }
+  console.log('[music]', musicStatus.via, track.file, `(${track.seconds}s)`)
 }
 
 // AudioStream has no "finished" event, so the catalogue's length is what moves
@@ -220,11 +260,8 @@ const musicSystem = () => {
   // Follow the setting while a track plays.
   const wanted = musicVolume()
   if (musicEntity !== null && wanted !== appliedVolume) {
-    const stream = AudioStream.getMutableOrNull(musicEntity)
-    if (stream) {
-      stream.volume = wanted
-      appliedVolume = wanted
-    }
+    setMusicVolume(wanted)
+    appliedVolume = wanted
   }
   if (currentMap === null || nextAt === 0 || Date.now() < nextAt) return
   const track = pick(currentMap)
@@ -250,17 +287,26 @@ export const startMapMusicFor = (map: MapKey) => {
     systemAdded = true
     engine.addSystem(musicSystem)
   }
-  if (streamPlaying || alreadyPlaying) return
+  if (alreadyPlaying) return
   const track = pick(map)
-  if (track) play(track)
+  if (!track) {
+    musicStatus.why = 'no track: ' + map
+    return
+  }
+  // A throw here used to be caught by the caller and logged, which on a phone
+  // means lost: the readout says it instead.
+  try {
+    play(track)
+  } catch (err) {
+    musicStatus.why = String(err)
+    throw err
+  }
 }
 
 // Stop the sound, keep the map: the hole is still on.
 const silence = () => {
   nextAt = 0
-  if (musicEntity === null) return
-  const stream = AudioStream.getMutableOrNull(musicEntity)
-  if (stream) stream.playing = false
+  setMusicPlaying(false)
 }
 
 // The run is over: there is no map to go back to any more.

@@ -204,7 +204,7 @@ const musicLabel = (px: Px, fs: Px) => {
   const name = musicStatus.track.replace(/\.mp3$/, '')
   return (
     <Label
-      value={started ? `\u266A ${name}` : '\u266A none'}
+      value={started ? `\u266A ${name} [${musicStatus.via}]` : `\u266A ${musicStatus.why || 'none'}`}
       fontSize={fs(10)}
       color={started ? P.pale : C.yellow}
       textAlign="middle-left"

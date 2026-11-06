@@ -27,7 +27,7 @@ import {
 import { Quaternion, Vector3 } from '@dcl/sdk/math'
 
 import { globalStore } from '../../../services/globalStore/globalStore'
-import { setStreamPlaying } from '../../../services/map-music'
+import { musicOwnsAudio } from '../../../services/map-music'
 import { streamVolume } from '../../../services/game-options'
 
 const RETRY_MS = 30000
@@ -61,7 +61,12 @@ export function createStreamScreens(streamURL: string | undefined) {
   VideoPlayer.create(player, { src: streamURL, playing: true, volume: streamVolume() })
   let appliedVolume = streamVolume()
   engine.addSystem(() => {
-    const wanted = streamVolume()
+    // While a hole is on, its music owns the audio and the stream goes quiet
+    // (the screen 40 m up keeps showing it). In the lobby there is no map
+    // music, so the stream is heard at the player's level. This replaces the
+    // old rule, where a stream the explorer said was playing silenced the
+    // music — a VideoState the explorers do not agree on (user, 2026-11-06).
+    const wanted = musicOwnsAudio() ? 0 : streamVolume()
     if (wanted === appliedVolume) return
     const video = VideoPlayer.getMutableOrNull(player)
     if (!video) return
@@ -99,7 +104,6 @@ export function createStreamScreens(streamURL: string | undefined) {
     const playing = event.state === VideoState.VS_PLAYING
     if (playing !== (state === VideoState.VS_PLAYING)) {
       console.log('[stream]', playing ? 'playing' : 'stopped', streamURL)
-      setStreamPlaying(playing)
     }
     if (event.state === VideoState.VS_ERROR && state !== VideoState.VS_ERROR) console.log('[stream] not available', streamURL)
     state = event.state
