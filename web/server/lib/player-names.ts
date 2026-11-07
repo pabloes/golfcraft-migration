@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import fetch from "cross-fetch";
 import {redactedMessage} from "../../../common/redact";
 
@@ -9,8 +10,7 @@ import {redactedMessage} from "../../../common/redact";
 // ⚠ `maskWallet` is NOT an identity. It keeps 5 hex characters, so distinct
 // wallets collide: in September 2023 alone, 0x95044…566d and 0x9509a…7d6d both
 // render "0x950...6d". Never group, merge or deduplicate rows by the mask — key
-// them on the lowercased address, or on a hash of it like /api/relaunch-data's
-// `id`, and use the mask only for display.
+// them on `playerId` below, and use the mask only for display.
 //
 // The lambdas answer `GET /lambdas/profiles?id=` with 405 now: only the batched
 // POST works (stats §16). A lookup that fails leaves the name empty and is
@@ -28,6 +28,19 @@ export const isWallet = (address: string) => /^0x[0-9a-f]{40}$/.test(address);
 //"0x27ffcc...eb57" -> "0x27f...57". Full wallets never leave the server.
 export function maskWallet(address: string){
     return address.length > 9 ? `${address.slice(0, 5)}...${address.slice(-2)}` : "...";
+}
+
+//The public identity of a player: the first PLAYER_ID_HEX hex of
+//sha256(lowercased address). It is what the mask is not — unique — and it is
+//stable across requests, ranges and both pages, while not being reversible
+//into the wallet, so it can be served next to the cut form. Anything that
+//groups, merges or compares players keys on this; /api/relaunch-data also
+//sorts its draw by it, so the two pages must agree on it and it must never
+//change for a given wallet. Lowercasing is the §16 rule: the same wallet in
+//two cases is one player.
+const PLAYER_ID_HEX = 12;
+export function playerId(address: string){
+    return crypto.createHash("sha256").update(String(address).toLowerCase()).digest("hex").slice(0, PLAYER_ID_HEX);
 }
 
 export async function lookupNames(addresses: string[], logLabel = "profiles"): Promise<{[address: string]: string}> {

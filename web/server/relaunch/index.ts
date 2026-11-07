@@ -1,8 +1,7 @@
 import path from "path";
-import crypto from "crypto";
 import {PrismaClient} from "@prisma/client";
 import {redactedMessage} from "../../../common/redact";
-import {isWallet, lookupNames, maskWallet} from "../lib/player-names";
+import {isWallet, lookupNames, maskWallet, playerId} from "../lib/player-names";
 
 // golfcraftgame.com/relaunch-data: the relaunch event's ticket list and the
 // raffle draw (owner, 2026-11-07). One raffle ticket is one completed game, so
@@ -113,10 +112,10 @@ async function computeEntrants(prisma: PrismaClient, from: Date, to: Date){
 
     const entrants = list
         .map(({address, games}) => ({
-            //sha256 of the lowercased address, cut to 12 hex: a stable unique
-            //key for the deterministic order and the draw, publishable because
-            //it cannot be turned back into the wallet
-            id: crypto.createHash("sha256").update(address).digest("hex").slice(0, 12),
+            //a stable unique key for the deterministic order and the draw,
+            //publishable because it cannot be turned back into the wallet
+            //(player-names.ts:playerId; /api/stats/visitors serves the same one)
+            id: playerId(address),
             name: names[address] || "",
             wallet: maskWallet(address),
             isWallet: isWallet(address),

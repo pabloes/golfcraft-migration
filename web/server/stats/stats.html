@@ -756,7 +756,8 @@
       (d.holesTrackedSince ? ", counted since " + formatDay(d.holesTrackedSince) + "." : " (none counted yet).") +
       " RP are the ranked points won or lost in finished Season runs" +
       (d.rankedPointsTrackedSince ? ", known since " + formatDay(d.rankedPointsTrackedSince) + "." : " (none known yet).") +
-      " Who visited shows each wallet shortened, with its public Decentraland name and its games completed (holes started) in the range; guests are only counted.";
+      " Who visited shows each wallet shortened, with its public Decentraland name and its games completed (holes started) in the range; guests are only counted." +
+      " Two different wallets can share one shortened form, so hover a wallet for the id that identifies that player.";
     $("updated").textContent = "Updated " + new Date(d.updatedAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
     $("status-dot").className = "live-dot";
     if (d.dailyMaxDays && d.dailyMaxDays !== CHART_MAX_DAYS) {
@@ -975,7 +976,10 @@
       var tr = html("tr", {}, body);
       var name = html("td", { "class": "name" + (v.name ? "" : " muted") }, tr, v.name || "No name");
       if (v.name) name.title = v.name;
-      html("td", { "class": "wallet" }, tr, v.wallet);
+      var wallet = html("td", { "class": "wallet" }, tr, v.wallet);
+      // The shortened wallet is not unique: two players can share one, so the
+      // hover carries the id that does identify this row (the API's `id`).
+      wallet.title = v.id ? "Player " + v.id + " · two different wallets can share this shortened form" : "";
       var device = deviceName(v);
       var deviceCell = html("td", { "class": "device" + (device ? "" : " muted") }, tr, device || "–");
       deviceCell.title = v.explorerAgent || (device ? "" : "Not reported by this visit");

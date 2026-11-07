@@ -4,7 +4,7 @@ import {Prisma, PrismaClient} from "@prisma/client";
 import {SERVER_HTTP_URL} from "../../../common/constants";
 import {runChecks} from "../../../chain-playfab/security/securityChecks";
 import {authenticateSessionTicket} from "../auth/session-ticket";
-import {lookupNames, maskWallet} from "../lib/player-names";
+import {lookupNames, maskWallet, playerId} from "../lib/player-names";
 import {redactedMessage} from "../../../common/redact";
 
 // Public dashboard at golfcraftgame.com/stats: /stats serves the page,
@@ -12,8 +12,10 @@ import {redactedMessage} from "../../../common/redact";
 // DAYS days), /api/stats/daily the same series for the chart's custom period
 // (which can reach further back, up to DAILY_MAX_DAYS) and /api/stats/visitors
 // the list of who visited in a range. That list is the only thing about players
-// that leaves this file: their public Decentraland name and the wallet cut to
-// "0x27f...57". Full wallets and guests' identities never do.
+// that leaves this file: their public Decentraland name, the wallet cut to
+// "0x27f...57" and the `id` that identifies them (`playerId`, shared with
+// /api/relaunch-data — the cut wallet is for display and two wallets can share
+// one). Full wallets and guests' identities never do.
 //
 // Visitors, one row per address and UTC day, with the time of the last visit
 // that day (lastSeen, NULL in rows written before it existed) and the explorer
@@ -487,7 +489,10 @@ async function computeVisitors(prisma: PrismaClient, from: Date, to: Date){
         to: to.toISOString(),
         guests: Number(guests[0]?.n || 0),
         capped,
-        visitors: list.map(({address, ...visit}) => ({name: names[address] || "", wallet: maskWallet(address), ...visit}))
+        //`id` is the player's key: the mask is a display form and two wallets
+        //can share one, so a caller that groups rows, follows a player across
+        //ranges or lines this list up with /api/relaunch-data uses the id
+        visitors: list.map(({address, ...visit}) => ({id: playerId(address), name: names[address] || "", wallet: maskWallet(address), ...visit}))
     };
 }
 
