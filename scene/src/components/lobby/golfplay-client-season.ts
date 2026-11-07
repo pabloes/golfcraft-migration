@@ -384,6 +384,23 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
       room.onMessage(MESSAGE.START, cancellableCallback(onMessageStart))
       room.onMessage(MESSAGE.COUNTDOWN, cancellableCallback(onMessageHoleCountdown))
       room.onMessage(MESSAGE.END_COUNTDOWN, cancellableCallback(onMessageHoleEndCountdown))
+      room.onMessage(MESSAGE.HOLE_SKIPPABLE, cancellableCallback(onMessageHoleSkippable))
+    }
+
+    // The first ball of the hole has dropped, so the hole may be skipped from
+    // now on (server/rooms/hole-end.ts). A recorded opponent holing no longer
+    // ends the hole, so this button is what a stuck player, or one who has
+    // holed and does not want to watch the replays finish, presses instead.
+    // The server decides what it means: in a party it only marks the sender
+    // done unless they have been waiting a minute.
+    function onMessageHoleSkippable() {
+      mobileShootState.skip = () => {
+        try {
+          room.send(MESSAGE.SKIP_HOLE)
+        } catch (err) {
+          console.log('[golfplay] skip failed', err)
+        }
+      }
     }
 
     // The hole is over for this player (holed, or the round/room ended): give
@@ -626,6 +643,8 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
 
     async function onMessageHoleEndCountdown() {
       cancelEnding = true
+      // The hole is over: there is nothing left to skip.
+      mobileShootState.skip = null
       // The hole ends: the legs are locked again before the fade to the results.
       holdAvatarForRun()
       // The fade is what has kept anyone from ever seeing the moment the
@@ -776,6 +795,7 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
       disposed = true
       mobileShootState.quit = null
       mobileShootState.quitConfirm = false
+      mobileShootState.skip = null
       pingDisposed = true
       clearInterval(pingInterval)
       clearGhostTimers()

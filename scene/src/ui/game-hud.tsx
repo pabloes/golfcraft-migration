@@ -89,6 +89,29 @@ export const EndingBanner = () => {
   )
 }
 
+// SKIP HOLE, centred under the Ending banner, from the moment the first ball
+// drops (user, 2026-11-07). A recorded opponent holing no longer cuts the hole
+// short, so this is the way out: still playing, it gives up the hole; already
+// holed, it moves on without watching the replays finish. No confirm dialog,
+// the press acts, so it is deliberately away from SHOOT and the explorer's own
+// buttons. In a party it only marks the sender done unless they have been
+// waiting a minute, which the server decides.
+export const SkipHoleButton = () => {
+  const st = mobileShootState
+  if (!st.skip) return null
+  const L = fullLayout()
+  const { px, fs } = scaler(L.scale)
+  return (
+    <UiEntity
+      uiTransform={{ ...placeAt(L, px, 262, 102, 120, 40), borderRadius: px(12), borderWidth: border(px, 2), borderColor: P.white, justifyContent: 'center', alignItems: 'center' }}
+      uiBackground={{ color: P.navy }}
+      onMouseDown={() => st.skip && st.skip()}
+    >
+      <Label value="SKIP HOLE" fontSize={fs(13)} color={C.yellow} textAlign="middle-center" textWrap="nowrap" uiTransform={{ width: '100%', height: px(20) }} />
+    </UiEntity>
+  )
+}
+
 // Live ranking: who has holed (fewest shots first), then the rest by shots.
 const rankRows = (rows: SeasonResultRow[]) =>
   [...rows].sort((a, b) => {

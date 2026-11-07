@@ -33,6 +33,7 @@ import {CURRENCY} from "../../common/currency-codes";
 import {callDiscordHook} from "../../common/discord";
 import {pushChests} from "./chests-generator";
 import {gameClosedMessage, getGameAccessFor} from "../game-window-gate";
+import {HOLE_SAFETY_MS, SAFETY_WARNING_MS} from "./hole-end";
 import { discordHook } from '../../common/discord-hooks'
 const API_URL = process.env.PROD ? `https://golfcraftgame.com` : `http://localhost:2569`;
 const playfabServerApiKey = process.env.PLAYFAB_API_KEY;
@@ -171,6 +172,12 @@ const OPEN_CHEST_STATISTIC = "chests_open";
 export class SeasonRoom extends Room<SeasonRoomState> {
     private interval: ReturnType<typeof setInterval>;
     private intervalGhosts: ReturnType<typeof setInterval>;
+    //End of the hole (rooms/hole-end.ts). `holeEndRequested` is the player
+    //pressing SKIP HOLE: it resolves the countdown's race whatever the rows
+    //say, because a player who gave up has no time in theirs. `skipOffered`
+    //keeps the HOLE_SKIPPABLE broadcast to one per hole.
+    private holeEndRequested = false;
+    private skipOffered = false;
     private golfPlay;
     private gameDefinition;
     private courseDefinition;
@@ -345,6 +352,13 @@ export class SeasonRoom extends Room<SeasonRoomState> {
             this.lastPingMs = Date.now() - this.lastPingTimeMs;//TODO apply?
         });
 
+        //SKIP HOLE (scene/src/ui): no confirm dialog, the press acts (user,
+        //2026-11-07). A spectator watching must never end somebody's hole.
+        this.onMessage(MESSAGE.SKIP_HOLE, (client) => {
+            if(isSpectator(client)) return;
+            this.handleSkipHole(client, {user, PlayFabId});
+        });
+
         this.onMessage(MESSAGE.FIX_BUGS, () => {
             this.state.started = true;
             this.state.finishedPlayer = false;
@@ -493,8 +507,63 @@ export class SeasonRoom extends Room<SeasonRoomState> {
         this.golfPlay.updateAnimations(dt);
     }
 
-    async clockCheck({client, PlayFabId}) {
-        //TODO there is no limit time, because recorded gameplays will make it finish before
+    //Runs every 300 ms while a hole is on. Until 2026-11-07 this was empty
+    //("there is no limit time, because recorded gameplays will make it finish
+    //before") because a replay holing always ended the hole. It no longer
+    //does, so the cap and the SKIP offer live here.
+    async clockCheck({client, user, PlayFabId}: any) {
+        if(!this.state.started || this.state.finished) return;
+        if(!this.state.startTime || this.state.startTime === Number.MAX_SAFE_INTEGER) return;
+
+        //SKIP HOLE shows from the moment the first ball drops, whoever it
+        //belongs to (user: "0s desde que metieron primer hoyo").
+        if(!this.skipOffered
+            && (!this.state.ghosts.length
+                || this.state.results.some(r => Number(r.time[this.state.currentGame]) > 0))){
+            this.skipOffered = true;
+            this.broadcast(MESSAGE.HOLE_SKIPPABLE);
+        }
+
+        const msLeft = this.state.startTime + HOLE_SAFETY_MS - Date.now();
+        if(msLeft <= SAFETY_WARNING_MS && !this.state.countdownTime){
+            console.log("hole safety cap", this.PlayFabId, msLeft);
+            this.startHoleCountdown(client, {user, PlayFabId}, Math.max(1000, msLeft));
+        }
+    }
+
+    //A replay that has not reached its HOLE frame yet still has a known result:
+    //it is a recording of a run that finished. Closing it with that real time
+    //and shots is what keeps SKIP from being a free win — cutting it to 0
+    //would mean holing first, skipping at once and taking the maximum on every
+    //hole, on the ladder that hands out the tier wearables.
+    private settlePendingGhosts(){
+        const round = this.state.currentGame;
+        this.state.ghosts.forEach((ghost, ghostIndex) => {
+            if(ghost.finished) return;
+            const data = this.ghostsData[round]?.[ghostIndex];
+            if(!data) return;
+            this.state.results[ghostIndex+1].time[round] = data.time;
+            this.state.results[ghostIndex+1].shots[round] = data.shots;
+            ghost.finished = true;
+        });
+    }
+
+    //SKIP HOLE. Solo has nobody else to wait for, so it ends the hole at once:
+    //if the player had not holed, their row keeps no time and scores 0 for the
+    //hole, exactly as being cut off by the clock does today.
+    private async handleSkipHole(client, {user, PlayFabId}){
+        if(!this.state.started || this.state.finished || this.holeEndRequested) return;
+        console.log("SKIP_HOLE", this.PlayFabId, "finishedPlayer", this.state.finishedPlayer);
+        if(!this.state.finishedPlayer){
+            this.state.finishedPlayer = true;
+            this.recordPositionFrames = false;
+            this.golfPlay?.dispose();
+        }
+        this.settlePendingGhosts();
+        this.holeEndRequested = true;
+        //With a countdown already running the race above resolves on the flag;
+        //without one this is what ends the hole.
+        await this.startHoleCountdown(client, {user, PlayFabId}, 0);
     }
 
     ghostIdleStarTimes = [0,0,0];
@@ -542,32 +611,38 @@ export class SeasonRoom extends Room<SeasonRoomState> {
                     //TODO we can send socket to client to show golfclub of other player and run animation
                 }else if(type === RECORDED_FRAME.HOLE){
                     console.log("GHOST HOLE")
-                    //TODO we should notify a 20s countdown to the user
                     this.state.results[ghostIndex+1].time[this.state.currentGame] = this.ghostsData[this.state.currentGame][ghostIndex].time;
                     this.state.results[ghostIndex+1].shots[this.state.currentGame] = this.ghostsData[this.state.currentGame][ghostIndex].shots;
-                    if(!this.state.countdownTime){
-                        this.startHoleCountdown(client, {user, PlayFabId});//TODO instead we could use a callback with those params and decouple countdown from reproduceFrame
-                    }else{//TODO if all balls made hole
-
-                    }
-
+                    //No countdown here any more (user, 2026-11-07). This is a
+                    //replay finishing: it holed days ago and nothing waits on
+                    //it, so cutting the player's hole short served nobody and
+                    //cost them the hole (a row with no time scores 0). The
+                    //player keeps playing until they hole or press SKIP, with
+                    //HOLE_SAFETY_MS as the only cap. See rooms/hole-end.ts.
                     ghost.finished = true;
                 }
                 ghost.frameCount++;
             });
         }
     }
-    async startHoleCountdown(client, {user, PlayFabId}){
+    //The window the replays still rolling get to finish on screen, once the
+    //player is done. `ms` overrides it for the HOLE_SAFETY_MS warning and for
+    //SKIP (0, end now).
+    async startHoleCountdown(client, {user, PlayFabId}, ms?: number){
+        if(this.state.countdownTime) return;//already ending
         this.state.countdownTime = Date.now();
 
-        const countdownMs = countdownByTierCat[getCatFromTier(getTierFromSub(this.playerTierSub))]||30000;
+        const countdownMs = ms !== undefined
+            ? ms
+            : (countdownByTierCat[getCatFromTier(getTierFromSub(this.playerTierSub))]||30000);
         console.log("startHoleCountdown", Date.now(), countdownMs);
-        this.broadcast(MESSAGE.COUNTDOWN, countdownMs);
+        if(countdownMs > 0) this.broadcast(MESSAGE.COUNTDOWN, countdownMs);
         console.log("WaitFor", Date.now());
         let startWait = Date.now();
         await Promise.race([
             sleep(countdownMs),
-            waitFor(()=>this.state.results.every(playersResults => Number(playersResults.time[this.state.currentGame]) > 0))
+            waitFor(()=>this.holeEndRequested
+                || this.state.results.every(playersResults => Number(playersResults.time[this.state.currentGame]) > 0))
         ]);
 
         console.log("BROADCAST END_COUNTDOWN", Date.now()-startWait);
@@ -802,7 +877,7 @@ console.log("accumulatedValue", JSON.stringify(sortedAccumulatedResult,null, "  
         if(this.state.currentGame === 0){
 
         }
-        this.interval = setInterval(() => this.clockCheck({client, PlayFabId}), 300);
+        this.interval = setInterval(() => this.clockCheck({client, user, PlayFabId}), 300);
         this.setSimulationInterval((deltaTime) => this.update(deltaTime / 1000), 15);
 
         this.frameEventHandler.dispose();
@@ -826,6 +901,8 @@ console.log("accumulatedValue", JSON.stringify(sortedAccumulatedResult,null, "  
                 this.golfPlay?.dispose();
                 this.state.results[0].time[this.state.currentGame] = Date.now() - this.state.startTime;
 
+                //NOW the rank countdown makes sense: the player is done and the
+                //replays still rolling get their window to finish on screen.
                 if(!this.state.countdownTime){
                     console.log("player hole");
                     this.startHoleCountdown(client, {user, PlayFabId});
@@ -874,6 +951,8 @@ console.log("accumulatedValue", JSON.stringify(sortedAccumulatedResult,null, "  
         this.state.finishedPlayer = false;
         this.state.finished = false;
         this.state.started = false;
+        this.holeEndRequested = false;
+        this.skipOffered = false;
 
         if(this.state.currentGame !== 4){
             this.recordedFrames.splice(0, this.recordedFrames.length);

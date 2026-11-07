@@ -39,6 +39,13 @@ export const mobileShootState: {
   // which ends the hole for this player the same way a server kick does.
   quit: (() => void) | null
   quitConfirm: boolean
+  // SKIP HOLE (user, 2026-11-07). Set by the Season clients when the server
+  // says the hole can be skipped, which is from the moment the first ball
+  // drops, whoever it belonged to. A recorded opponent holing no longer cuts
+  // the hole short, so this is the way out for a player who is stuck or who
+  // has holed and does not want to watch the replays finish. No confirm: the
+  // press acts.
+  skip: (() => void) | null
 } = {
   visible: false,
   power: 0,
@@ -53,5 +60,6 @@ export const mobileShootState: {
   aimArrows: false,
   shoot: null,
   quit: null,
-  quitConfirm: false
+  quitConfirm: false,
+  skip: null
 }
