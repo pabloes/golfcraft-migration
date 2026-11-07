@@ -54,9 +54,9 @@ import { mobileShootState } from '../../ui/mobile-shoot-state'
 import { reportPing } from '../../ui/ping-state'
 import { reconnectRoom } from './room-reconnect'
 import { holdGroundUnderPlayer } from '../scene-bounds'
-import { fitPlayFloorToPlayer } from '../scene-bounds'
+import { raisePlayFloor } from '../scene-bounds'
 import { startMapMusic } from '../../services/map-music'
-import { BALL_RADIUS, COURSE_REMOVE_DELAY_MS, FADE_BETWEEN_HOLES } from '../../config/hole-end'
+import { COURSE_REMOVE_DELAY_MS, FADE_BETWEEN_HOLES } from '../../config/hole-end'
 
 const REWARD_NAMES: any = {
   WD: 'wood',
@@ -157,9 +157,9 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
     // The player must stand on a floor of OURS, never on the course: the
     // explorer pins them to the collider under their feet and carries them
     // wherever it goes, so a course taken away at the end of a hole can take
-    // them to another parcel. The sheet goes just above the course's surface,
-    // which is where the ball sits minus its radius.
-    fitPlayFloorToPlayer(ballSpawnDefinition.position[1] - BALL_RADIUS)
+    // them to another parcel. The sheet is at PLAY_FLOOR_Y, where the courses'
+    // own floors are.
+    raisePlayFloor()
 
     // Music for this map, streamed from outside the scene
     // (services/map-music.ts). The map is read from the course's skybox part.
