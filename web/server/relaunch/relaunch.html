@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GolfCraft Relaunch Raffle</title>
+<meta name="description" content="Raffle tickets earned during the GolfCraft relaunch event, and the draw.">
+<link rel="icon" type="image/png" sizes="32x32" href="/static/images/favicon/favicon-32x32.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lilita+One&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #121646;
+    --card: #1b2160;
+    --card-edge: rgba(255, 255, 255, 0.08);
+    --chip: rgba(255, 255, 255, 0.06);
+    --chip-on: #3b47a8;
+    --text-1: #ffffff;
+    --text-2: #b9c2ff;
+    --text-3: #8f98dc;
+    --grid: rgba(255, 255, 255, 0.08);
+    --series: #1ca590;
+    --live: #6cd83a;
+    --accent: #e84198;
+    --gold: #f2a93b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text-1);
+    font: 400 15px/1.45 Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main, header.top, footer { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+  a { color: var(--text-2); }
+
+  header.top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 20px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 14px; text-decoration: none; color: var(--text-1); }
+  .brand img { height: 56px; width: auto; display: block; }
+  .brand h1 { font: 400 32px/1 "Lilita One", Inter, sans-serif; margin: 0; letter-spacing: 0.5px; }
+  .status { display: flex; align-items: center; gap: 10px; color: var(--text-3); font-size: 13px; }
+  .pill { padding: 4px 10px; border-radius: 999px; background: var(--chip); border: 1px solid var(--card-edge); }
+  .pill.open { color: var(--live); border-color: rgba(108, 216, 58, 0.4); }
+  .pill.closed { color: var(--gold); border-color: rgba(242, 169, 59, 0.4); }
+
+  main { padding-top: 22px; padding-bottom: 48px; }
+  .card {
+    background: var(--card); border: 1px solid var(--card-edge); border-radius: 16px;
+    padding: 18px 18px 20px; margin: 0 0 18px;
+  }
+  .card h2 { font-size: 17px; font-weight: 600; margin: 0 0 4px; }
+  .sub { color: var(--text-3); font-size: 13px; margin: 0 0 14px; }
+  .sub.tight { margin-bottom: 0; }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin: 0 0 18px; }
+  .tile { background: var(--card); border: 1px solid var(--card-edge); border-radius: 16px; padding: 16px 18px; }
+  .tile .k { color: var(--text-3); font-size: 13px; }
+  .tile .v { font: 400 34px/1.1 "Lilita One", Inter, sans-serif; margin-top: 6px; }
+  .tile .n { color: var(--text-3); font-size: 12px; margin-top: 6px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+  th { color: var(--text-3); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.4px; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.rank { color: var(--text-3); width: 1%; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--text-2); }
+  .tag { font-size: 11px; padding: 1px 6px; border-radius: 999px; background: var(--chip); color: var(--text-3); margin-left: 6px; }
+  .noname { color: var(--text-3); font-style: italic; }
+  .scroll { max-height: 620px; overflow: auto; margin: 0 -4px; padding: 0 4px; }
+
+  .form { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin: 0 0 14px; }
+  .form label { display: flex; flex-direction: column; gap: 6px; color: var(--text-2); font-size: 13px; }
+  .form input {
+    font: 500 14px/1 Inter, system-ui, sans-serif; color: var(--text-1); background: var(--chip);
+    border: 1px solid var(--card-edge); border-radius: 10px; padding: 10px 12px;
+  }
+  .form input#seed { width: min(560px, 100%); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .form input#winners { width: 110px; }
+  .form input:focus-visible, button:focus-visible { outline: 2px solid var(--text-2); outline-offset: 2px; }
+  button {
+    font: 600 14px/1 Inter, system-ui, sans-serif; color: var(--text-1); background: var(--chip-on);
+    border: 1px solid transparent; border-radius: 10px; padding: 11px 18px; cursor: pointer;
+  }
+  button.ghost { background: var(--chip); color: var(--text-2); border-color: var(--card-edge); font-weight: 500; }
+  button[disabled] { opacity: 0.5; cursor: default; }
+  .msg { font-size: 13px; color: var(--gold); margin: 0 0 12px; }
+  .msg[hidden] { display: none; }
+
+  .winner { display: flex; align-items: baseline; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--grid); flex-wrap: wrap; }
+  .winner .pos { font: 400 22px/1 "Lilita One", Inter, sans-serif; color: var(--gold); width: 42px; }
+  .winner .who { font-weight: 600; }
+  .winner .how { color: var(--text-3); font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; width: 100%; }
+
+  details { border-top: 1px solid var(--grid); margin-top: 14px; padding-top: 10px; }
+  summary { cursor: pointer; color: var(--text-2); font-size: 13px; }
+  details p, details li { color: var(--text-3); font-size: 13px; }
+  details ol { padding-left: 20px; }
+
+  footer { color: var(--text-3); font-size: 13px; padding-bottom: 36px; }
+  footer a { margin-right: 14px; }
+  @media (max-width: 620px) {
+    .brand h1 { font-size: 24px; }
+    .brand img { height: 40px; }
+  }
+</style>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/">
+    <img src="/static/images/logo.png" alt="">
+    <h1>Relaunch raffle</h1>
+  </a>
+  <div class="status">
+    <span class="pill" id="window-pill">loading…</span>
+  </div>
+</header>
+
+<main>
+  <p class="sub" id="window-line">&nbsp;</p>
+
+  <div class="tiles" id="tiles"></div>
+
+  <section class="card">
+    <h2>Raffle draw</h2>
+    <p class="sub">
+      Paste the hash of the block you announced and draw. The draw is decided
+      entirely by that hash and the ticket list below, it runs in this page, and
+      anyone can repeat it. Nobody can win twice: a winner's tickets all leave
+      the pool.
+    </p>
+    <div class="form">
+      <label for="seed">Seed (block hash)
+        <input id="seed" type="text" spellcheck="false" autocomplete="off" placeholder="0x…">
+      </label>
+      <label for="winners">Winners
+        <input id="winners" type="number" min="1" max="500" value="10">
+      </label>
+      <button type="button" id="draw-btn">Draw</button>
+      <button type="button" class="ghost" id="copy-btn">Copy link to this draw</button>
+    </div>
+    <p class="msg" id="draw-msg" hidden></p>
+    <div id="winners-out"></div>
+    <details id="how">
+      <summary>How the draw works, so you can check it yourself</summary>
+      <ol>
+        <li>The entrants are the list below, in that exact order: most tickets
+          first, and ties broken by the <span class="mono">id</span> column, which is the first 12
+          hex characters of <span class="mono">sha256(wallet)</span>. The order never depends on the
+          database.</li>
+        <li>The seed is your text with spaces trimmed, a leading <span class="mono">0x</span> removed
+          and everything lowercased.</li>
+        <li>For winner number <span class="mono">i</span> (starting at 0) the page hashes
+          <span class="mono">&lt;seed&gt;:&lt;i&gt;</span> with SHA-256, reads the first 16 bytes as one big
+          number and takes it modulo the tickets still in the pool. That is the
+          winning ticket; whoever holds it wins.</li>
+        <li>The winner and all of their tickets are removed, then the next
+          number is drawn the same way.</li>
+      </ol>
+      <p>
+        Each winner below shows the exact text that was hashed, the 16 bytes
+        that came out and the ticket it landed on, so the whole draw can be
+        redone with any SHA-256 tool. On a Mac:
+        <span class="mono">printf '%s' '&lt;seed&gt;:0' | shasum -a 256</span>
+      </p>
+    </details>
+  </section>
+
+  <section class="card">
+    <h2>Tickets</h2>
+    <p class="sub" id="tickets-sub">One ticket per completed game.</p>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th class="num">#</th><th>Player</th><th>Wallet</th><th>id</th><th class="num">Tickets</th></tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <div class="form" style="margin: 14px 0 0;">
+      <button type="button" class="ghost" id="more-btn">Show all</button>
+      <button type="button" class="ghost" id="csv-btn">Download CSV</button>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <a href="/stats">Stats</a>
+  <a href="/market-report">Market report</a>
+  <a href="/">golfcraftgame.com</a>
+</footer>
+
+<script>
+(function () {
+  var TOP = 50;
+  var state = { data: null, showAll: false, winners: [] };
+
+  function $(id) { return document.getElementById(id); }
+  function fmt(n) { return Number(n || 0).toLocaleString("en-US"); }
+  function utc(iso) { return String(iso || "").slice(0, 16).replace("T", " ") + " UTC"; }
+  function text(el, value) { el.textContent = value; }
+
+  function hashParams() {
+    var out = {};
+    String(location.hash || "").replace(/^#/, "").split("&").forEach(function (pair) {
+      var i = pair.indexOf("=");
+      if (i > 0) out[decodeURIComponent(pair.slice(0, i))] = decodeURIComponent(pair.slice(i + 1));
+    });
+    return out;
+  }
+
+  function normaliseSeed(value) {
+    return String(value || "").trim().replace(/^0x/i, "").toLowerCase();
+  }
+
+  function left(ms) {
+    var m = Math.floor(ms / 60000), h = Math.floor(m / 60), d = Math.floor(h / 24);
+    if (d > 0) return d + "d " + (h % 24) + "h";
+    if (h > 0) return h + "h " + (m % 60) + "m";
+    return Math.max(1, m) + "m";
+  }
+
+  function render() {
+    var d = state.data;
+    if (!d) return;
+    var pill = $("window-pill");
+    pill.className = "pill " + (d.closed ? "closed" : "open");
+    text(pill, d.closed ? "Event closed, list final" : "Event open, " + left(d.msLeft) + " left");
+    text($("window-line"),
+      "Completed games from " + utc(d.from) + " to " + utc(d.to) + "." +
+      (d.closed ? " The window is over, so this list will not change again."
+                : " The window is still open, so a draw made now is a rehearsal, not the result."));
+
+    var modes = (d.modes || []).map(function (m) { return m.mode + " " + fmt(m.games); }).join(", ");
+    var tiles = [
+      { k: "Tickets in play", v: fmt(d.totalGames), n: "one per completed game" },
+      { k: "Players with a ticket", v: fmt(d.players), n: d.nonWallet ? d.nonWallet + " without a wallet" : "all of them have a wallet" },
+      { k: "Most tickets", v: fmt(d.entrants.length ? d.entrants[0].games : 0), n: d.entrants.length ? (d.entrants[0].name || d.entrants[0].wallet) : "" },
+      { k: "Game modes", v: (d.modes || []).length ? String((d.modes || [])[0].mode) : "none", n: modes || "no games in the window" }
+    ];
+    $("tiles").innerHTML = tiles.map(function (t) {
+      return '<div class="tile"><div class="k"></div><div class="v"></div><div class="n"></div></div>';
+    }).join("");
+    Array.prototype.forEach.call($("tiles").children, function (el, i) {
+      text(el.querySelector(".k"), tiles[i].k);
+      text(el.querySelector(".v"), tiles[i].v);
+      text(el.querySelector(".n"), tiles[i].n);
+    });
+
+    var list = state.showAll ? d.entrants : d.entrants.slice(0, TOP);
+    var body = $("rows");
+    body.innerHTML = "";
+    list.forEach(function (e, i) {
+      var tr = document.createElement("tr");
+      var rank = document.createElement("td"); rank.className = "num rank"; text(rank, String(i + 1));
+      var who = document.createElement("td");
+      if (e.name) { text(who, e.name); } else { who.className = "noname"; text(who, "no name"); }
+      if (!e.isWallet) { var tag = document.createElement("span"); tag.className = "tag"; text(tag, "no wallet"); who.appendChild(tag); }
+      var wal = document.createElement("td"); wal.className = "mono"; text(wal, e.wallet);
+      var id = document.createElement("td"); id.className = "mono"; text(id, e.id);
+      var g = document.createElement("td"); g.className = "num"; text(g, fmt(e.games));
+      [rank, who, wal, id, g].forEach(function (td) { tr.appendChild(td); });
+      body.appendChild(tr);
+    });
+    text($("tickets-sub"),
+      "One ticket per completed game. " + fmt(d.players) + " players, " + fmt(d.totalGames) + " tickets" +
+      (state.showAll || d.entrants.length <= TOP ? "." : ", showing the top " + TOP + ".") +
+      (d.capped ? " WARNING: the list hit the server's row limit and is incomplete." : ""));
+    text($("more-btn"), state.showAll ? "Show top " + TOP : "Show all");
+    $("more-btn").hidden = d.entrants.length <= TOP;
+  }
+
+  function sha256Hex(message) {
+    if (!(window.crypto && window.crypto.subtle)) {
+      return Promise.reject(new Error("This browser cannot hash here. Open the page over https."));
+    }
+    return window.crypto.subtle.digest("SHA-256", new TextEncoder().encode(message)).then(function (buf) {
+      return Array.prototype.map.call(new Uint8Array(buf), function (b) {
+        return ("0" + b.toString(16)).slice(-2);
+      }).join("");
+    });
+  }
+
+  // Deterministic, weighted by tickets, without replacement: a winner's whole
+  // holding leaves the pool, so nobody can be drawn twice.
+  function drawWinners(entrants, seed, wanted) {
+    var pool = entrants.map(function (e) { return e; });
+    var total = pool.reduce(function (n, e) { return n + e.games; }, 0);
+    var out = [];
+    function step() {
+      if (out.length >= wanted || total <= 0) return Promise.resolve(out);
+      var i = out.length;
+      var message = seed + ":" + i;
+      return sha256Hex(message).then(function (hex) {
+        var head = hex.slice(0, 32);
+        var pick = Number(BigInt("0x" + head) % BigInt(total));
+        var acc = 0, idx = -1;
+        for (var j = 0; j < pool.length; j++) {
+          acc += pool[j].games;
+          if (pick < acc) { idx = j; break; }
+        }
+        var won = pool.splice(idx, 1)[0];
+        out.push({ entrant: won, round: i, message: message, head: head, pick: pick, inPlay: total });
+        total -= won.games;
+        return step();
+      });
+    }
+    return step();
+  }
+
+  function renderWinners() {
+    var out = $("winners-out");
+    out.innerHTML = "";
+    state.winners.forEach(function (w) {
+      var row = document.createElement("div"); row.className = "winner";
+      var pos = document.createElement("div"); pos.className = "pos"; text(pos, "#" + (w.round + 1));
+      var who = document.createElement("div"); who.className = "who";
+      text(who, (w.entrant.name || "no name") + "  ·  " + w.entrant.wallet);
+      var tix = document.createElement("div"); tix.style.color = "var(--text-3)";
+      text(tix, fmt(w.entrant.games) + (w.entrant.games === 1 ? " ticket" : " tickets"));
+      var how = document.createElement("div"); how.className = "how";
+      text(how, 'sha256("' + w.message + '") = ' + w.head + '  ->  ticket ' + fmt(w.pick) +
+        " of " + fmt(w.inPlay) + "  ->  id " + w.entrant.id);
+      [pos, who, tix, how].forEach(function (el) { row.appendChild(el); });
+      out.appendChild(row);
+    });
+  }
+
+  function message(value) {
+    var el = $("draw-msg");
+    if (!value) { el.hidden = true; return; }
+    el.hidden = false; text(el, value);
+  }
+
+  function run() {
+    var d = state.data;
+    if (!d) return;
+    var seed = normaliseSeed($("seed").value);
+    var wanted = Math.max(1, Math.min(500, Number($("winners").value) || 1));
+    state.winners = [];
+    renderWinners();
+    if (!seed) { message("Paste the block hash first."); return; }
+    if (d.capped) { message("The entrant list is incomplete (it hit the server's row limit), so the draw would not be fair. Tell the owner."); return; }
+    if (!d.entrants.length) { message("Nobody has a ticket in this window yet."); return; }
+    if (wanted > d.entrants.length) {
+      wanted = d.entrants.length;
+      $("winners").value = String(wanted);
+      message("Only " + wanted + " players have a ticket, so that is how many can win.");
+    } else {
+      message(d.closed ? "" : "The event window is still open: this is a rehearsal, the list can still change.");
+    }
+    $("draw-btn").disabled = true;
+    drawWinners(d.entrants, seed, wanted).then(function (winners) {
+      state.winners = winners;
+      renderWinners();
+      $("draw-btn").disabled = false;
+      location.replace(drawLink(seed, wanted));
+    }).catch(function (error) {
+      $("draw-btn").disabled = false;
+      message(String(error && error.message || error));
+    });
+  }
+
+  //a link that reproduces this exact draw: the seed, how many winners, and
+  //the window the entrants come from
+  function drawLink(seed, wanted) {
+    var d = state.data;
+    return "#seed=" + encodeURIComponent(seed) + "&winners=" + wanted +
+      (d ? "&from=" + encodeURIComponent(d.from) + "&to=" + encodeURIComponent(d.to) : "");
+  }
+
+  function csv() {
+    var d = state.data;
+    if (!d) return;
+    var lines = ["rank,name,wallet,id,tickets"];
+    d.entrants.forEach(function (e, i) {
+      lines.push([i + 1, '"' + String(e.name || "").replace(/"/g, '""') + '"', e.wallet, e.id, e.games].join(","));
+    });
+    var blob = new Blob([lines.join("\n")], { type: "text/csv" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "golfcraft-relaunch-tickets.csv";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function load() {
+    var q = hashParams();
+    //the window travels in the link as well: the draw is only reproducible if
+    //the entrant list is, and the list is whatever the window says. Without it
+    //the page uses the event window the server has.
+    var query = [];
+    if (q.from) query.push("from=" + encodeURIComponent(q.from));
+    if (q.to) query.push("to=" + encodeURIComponent(q.to));
+    return fetch("/api/relaunch-data" + (query.length ? "?" + query.join("&") : "")).then(function (r) {
+      if (!r.ok) throw new Error("relaunch data " + r.status);
+      return r.json();
+    }).then(function (data) {
+      state.data = data;
+      render();
+      if (q.seed) {
+        $("seed").value = q.seed;
+        if (q.winners) $("winners").value = q.winners;
+        run();
+      }
+    }).catch(function (error) {
+      text($("window-pill"), "data unavailable");
+      text($("window-line"), String(error && error.message || error));
+    });
+  }
+
+  $("draw-btn").addEventListener("click", run);
+  $("seed").addEventListener("keydown", function (e) { if (e.key === "Enter") run(); });
+  $("more-btn").addEventListener("click", function () { state.showAll = !state.showAll; render(); });
+  $("csv-btn").addEventListener("click", csv);
+  $("copy-btn").addEventListener("click", function () {
+    var seed = normaliseSeed($("seed").value);
+    var url = location.origin + location.pathname + drawLink(seed, Number($("winners").value) || 10);
+    (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(function () {
+      message("Link copied. It reproduces this exact draw.");
+    }, function () { message(url); });
+  });
+
+  load();
+  // While the window is open the list grows; once closed it never changes.
+  setInterval(function () { if (state.data && !state.data.closed) load(); }, 60000);
+})();
+</script>
+</body>
+</html>

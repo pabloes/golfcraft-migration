@@ -17,6 +17,7 @@ import {statsApi} from "./stats";
 import {marketApi} from "./market";
 import {nftApi} from "./nft";
 import {leaderboardApi} from "./leaderboard";
+import {relaunchApi} from "./relaunch";
 import {adminDashboardApi} from "./admin-dashboard";
 import {authApi} from "./auth";
 import {raffle} from "./raffle/raffle";
@@ -132,6 +133,7 @@ router.use(express.json());
     nftApi(router, prisma);
     //the lobby's rolling 24 hour ranking board
     leaderboardApi(router, prisma);
+    relaunchApi(router, prisma);
     //the owner's events + broadcast page; refuses unless ADMIN_DASHBOARD_TOKEN is set
     adminDashboardApi(router, prisma);
     authApi(router, prisma);
