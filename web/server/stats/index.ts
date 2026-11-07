@@ -7,8 +7,10 @@ import {authenticateSessionTicket} from "../auth/session-ticket";
 import {redactedMessage} from "../../../common/redact";
 
 // Public dashboard at golfcraftgame.com/stats: /stats serves the page,
-// /api/stats its numbers (aggregates only) and /api/stats/visitors the list of
-// who visited in a range. That list is the only thing about single players
+// /api/stats its numbers (aggregates only, with the daily series of the last
+// DAYS days), /api/stats/daily the same series for the chart's custom period
+// (which can reach further back, up to DAILY_MAX_DAYS) and /api/stats/visitors
+// the list of who visited in a range. That list is the only thing about players
 // that leaves this file: their public Decentraland name and the wallet cut to
 // "0x27f...57". Full wallets and guests' identities never do.
 //
@@ -40,6 +42,17 @@ const PAGE = path.resolve(__dirname, "stats.html");
 const PLAYFAB_ACCOUNTS_KEY = "statsPlayFabAccounts";
 const VISITORS_MAX_DAYS = 31;
 const VISITORS_MAX_ROWS = 300;
+//the longest range the chart's custom period may ask for (/api/stats/daily);
+//2000 days reach past the first game of 2022, so it covers the whole history
+const DAILY_MAX_DAYS = 2000;
+//ranges kept in the daily cache at once; a new one evicts the oldest
+const DAILY_CACHE_MAX = 40;
+//Fresh daily computations are paid for by the days they span, since a long
+//range groups the 220K rows of player_game by day (~2 s) while a month is a
+//few ms, and the cache only spares a range that was asked for before. 6000
+//days a minute is 3 whole histories or 200 months; past that it is 503, so a
+//loop over distinct ranges cannot sit on the database.
+const DAILY_FRESH_DAYS_PER_MINUTE = 6000;
 const PROFILES_URL = "https://peer-lb.decentraland.org/lambdas/profiles";
 const PROFILES_TIMEOUT_MS = 5000;
 const PROFILE_CACHE_MS = 60 * 60 * 1000;
@@ -67,6 +80,10 @@ const LATER_COLUMNS: [string, string][] = [
 let cached: {at: number, data: Promise<any>} = null;
 //per range (rounded to the minute), for CACHE_MS
 const visitorsCache: {[range: string]: {at: number, data: Promise<any>}} = {};
+//the chart's custom ranges, per pair of UTC days, for CACHE_MS
+const dailyCache: {[range: string]: {at: number, data: Promise<any>}} = {};
+//fresh daily computations in the current minute
+let dailyFresh = {minute: 0, used: 0};
 //wallet -> public Decentraland name ("" when it has none), for PROFILE_CACHE_MS
 const profileNames: {[address: string]: {at: number, name: string}} = {};
 //{count, updatedAt}; also kept in the config table so a restart shows it at once
@@ -134,6 +151,39 @@ export function statsApi(router, prisma: PrismaClient){
         }catch(error){
             console.log("/api/stats/visitors error", error?.message || error);
             return res.status(500).send({error: "visitors unavailable"});
+        }
+    });
+
+    //?from=YYYY-MM-DD&to=YYYY-MM-DD (UTC days, both included): the daily
+    //series of the chart's custom period, which can reach further back than
+    //the last DAYS days /api/stats carries. Same discipline as /api/stats: one
+    //computation per range and minute, and nothing runs when nobody asks.
+    router.get("/api/stats/daily", async (req, res) => {
+        const range = parseDayRange(req.query.from, req.query.to);
+        if(!range) return res.status(400).send({error: "invalid range"});
+        try{
+            const from = utcDay(range.from), to = utcDay(range.to);
+            const key = `${from}-${to}`;
+            Object.keys(dailyCache).forEach(k => Date.now() - dailyCache[k].at > CACHE_MS && delete dailyCache[k]);
+            if(!dailyCache[key]){
+                const minute = Math.floor(Date.now() / 60000);
+                if(dailyFresh.minute !== minute) dailyFresh = {minute, used: 0};
+                dailyFresh.used += Math.round((range.to.getTime() - range.from.getTime()) / DAY) + 1;
+                if(dailyFresh.used > DAILY_FRESH_DAYS_PER_MINUTE) return res.status(503).send({error: "busy"});
+                //an unbounded number of ranges would be an unbounded number of
+                //computations: the oldest goes when the cache is full
+                const keys = Object.keys(dailyCache);
+                if(keys.length >= DAILY_CACHE_MAX) delete dailyCache[keys.sort((a, b) => dailyCache[a].at - dailyCache[b].at)[0]];
+                const data = computeDaily(prisma, range.from, range.to)
+                    .then(days => ({from, to, clamped: range.clamped, daily: sortedDays(days)}));
+                dailyCache[key] = {at: Date.now(), data};
+                data.catch(() => { if(dailyCache[key]?.data === data) delete dailyCache[key]; });
+            }
+            res.set("Cache-Control", "public, max-age=60");
+            return res.send(await dailyCache[key].data);
+        }catch(error){
+            console.log("/api/stats/daily error", error?.message || error);
+            return res.status(500).send({error: "daily series unavailable"});
         }
     });
 
@@ -314,6 +364,66 @@ function parseRange(fromParam, toParam): {from: Date, to: Date} {
     return {from: new Date(minute(Math.max(from, end - VISITORS_MAX_DAYS * DAY))), to: new Date(end)};
 }
 
+//"YYYY-MM-DD" of an instant, in UTC
+function utcDay(date: Date){
+    return date.toISOString().slice(0, 10);
+}
+
+//A pair of UTC days from the page's date inputs ("YYYY-MM-DD"; an ISO instant
+//is cut to its day): `to` no later than today, `from` no earlier than
+//DAILY_MAX_DAYS before it (an older one is moved up and `clamped` says so, so
+//the page can tell the reader its period was shortened). Both days included.
+function parseDayRange(fromParam, toParam): {from: Date, to: Date, clamped: boolean} {
+    const day = (value): number => {
+        if(typeof value !== "string" || value.length > 40) return NaN;
+        const text = value.slice(0, 10);
+        if(!/^\d{4}-\d{2}-\d{2}$/.test(text)) return NaN;
+        return Date.parse(`${text}T00:00:00Z`);
+    };
+    const today = Date.parse(`${utcDay(new Date())}T00:00:00Z`);
+    const to = toParam === undefined || toParam === "" ? today : day(toParam);
+    if(isNaN(to)) return null;
+    const end = Math.min(to, today);
+    const from = fromParam === undefined || fromParam === "" ? end - 29 * DAY : day(fromParam);
+    if(isNaN(from) || from > end) return null;
+    const start = Math.max(from, end - (DAILY_MAX_DAYS - 1) * DAY);
+    return {from: new Date(start), to: new Date(end), clamped: start !== from};
+}
+
+type DailyRow = {day: string, wallets: number, guests: number, games: number};
+
+//The chart's series: the wallets and guests that visited and the games
+//completed on each UTC day from `from` to `to` (both included; `to`'s own day
+//counts up to this moment). Only days with something are in the map.
+//player_game is an old table with another collation than daily_visit, and
+//UNION refuses to mix them ("Illegal mix of collations"): compare as bytes.
+async function computeDaily(prisma: PrismaClient, from: Date, to: Date): Promise<{[day: string]: DailyRow}> {
+    const until = new Date(Date.parse(`${utcDay(to)}T00:00:00Z`) + DAY);
+    const [wallets, guests, games]: any[] = await Promise.all([
+        prisma.$queryRaw`SELECT DATE_FORMAT(v.day, '%Y-%m-%d') AS day, COUNT(DISTINCT v.address) AS visitors FROM (
+                SELECT DATE(startTime) AS day, CAST(LOWER(address) AS BINARY) AS address FROM player_game
+                    WHERE startTime >= ${from} AND startTime < ${until} AND address IS NOT NULL
+                UNION ALL
+                SELECT day, CAST(address AS BINARY) FROM daily_visit
+                    WHERE day >= DATE(${from}) AND day <= DATE(${to})
+            ) v GROUP BY v.day ORDER BY v.day`,
+        prisma.$queryRaw`SELECT DATE_FORMAT(day, '%Y-%m-%d') AS day, COUNT(*) AS visitors FROM daily_guest_visit
+                WHERE day >= DATE(${from}) AND day <= DATE(${to}) GROUP BY day ORDER BY day`,
+        prisma.$queryRaw`SELECT DATE_FORMAT(startTime, '%Y-%m-%d') AS day, COUNT(*) AS games FROM player_game
+                WHERE startTime >= ${from} AND startTime < ${until} GROUP BY day ORDER BY day`
+    ]);
+    const days: {[day: string]: DailyRow} = {};
+    const at = (day: string) => days[day] = days[day] || {day, wallets: 0, guests: 0, games: 0};
+    wallets.forEach(({day, visitors}) => at(day).wallets = Number(visitors));
+    guests.forEach(({day, visitors}) => at(day).guests = Number(visitors));
+    games.forEach(({day, games}) => at(day).games = Number(games));
+    return days;
+}
+
+function sortedDays(days: {[day: string]: DailyRow}): DailyRow[] {
+    return Object.values(days).sort((a, b) => (a.day < b.day ? -1 : 1));
+}
+
 async function computeVisitors(prisma: PrismaClient, from: Date, to: Date){
     //a row from before lastSeen existed only says which day: it counts for
     //every range that touches that day, and is shown as the date
@@ -405,43 +515,34 @@ async function computeStats(prisma: PrismaClient){
     const since30 = new Date(Date.now() - 30 * DAY);
     //player_game is an old table with another collation than daily_visit, and
     //UNION refuses to mix them ("Illegal mix of collations"): compare as bytes
-    const [wallets, guests, unique, games, tracking, mapsCreated, seasonMaps, online, dailyGames, explorers, holes]: any[] = await Promise.all([
-        prisma.$queryRaw`SELECT DATE_FORMAT(v.day, '%Y-%m-%d') AS day, COUNT(DISTINCT v.address) AS visitors FROM (
-                SELECT DATE(startTime) AS day, CAST(LOWER(address) AS BINARY) AS address FROM player_game
-                    WHERE startTime >= ${since} AND address IS NOT NULL
-                UNION ALL
-                SELECT day, CAST(address AS BINARY) FROM daily_visit WHERE day >= ${since}
-            ) v GROUP BY v.day ORDER BY v.day`,
-        prisma.$queryRaw`SELECT DATE_FORMAT(day, '%Y-%m-%d') AS day, COUNT(*) AS visitors FROM daily_guest_visit
-                WHERE day >= ${since} GROUP BY day ORDER BY day`,
+    const [daily, unique, games, tracking, mapsCreated, seasonMaps, online, explorers, holes]: any[] = await Promise.all([
+        computeDaily(prisma, since, new Date()),
         prisma.$queryRaw`SELECT COUNT(*) AS n FROM (
                 SELECT CAST(LOWER(address) AS BINARY) AS address FROM player_game WHERE address IS NOT NULL
                 UNION
                 SELECT CAST(address AS BINARY) FROM daily_visit
             ) u`,
-        //with the ranked points of the window and the first run that carried them
+        //with the ranked points of the window, the first run that carried them
+        //and the first game on record
         prisma.$queryRaw`SELECT COUNT(*) AS total, SUM(startTime >= ${since30}) AS last30,
                 SUM(IF(startTime >= ${since30}, COALESCE(rankedPoints, 0), 0)) AS rpLast30,
-                DATE_FORMAT(MIN(CASE WHEN rankedPoints IS NOT NULL THEN startTime END), '%Y-%m-%d') AS rpSince FROM player_game`,
+                DATE_FORMAT(MIN(CASE WHEN rankedPoints IS NOT NULL THEN startTime END), '%Y-%m-%d') AS rpSince,
+                DATE_FORMAT(MIN(startTime), '%Y-%m-%d') AS firstDay FROM player_game`,
         prisma.$queryRaw`SELECT
                 (SELECT DATE_FORMAT(MIN(day), '%Y-%m-%d') FROM daily_visit) AS wallets,
                 (SELECT DATE_FORMAT(MIN(day), '%Y-%m-%d') FROM daily_guest_visit) AS guests`,
         prisma.courses.count(),
         prisma.courses.count({where: {isSeason: 1}}),
         fetchOnline(),
-        prisma.$queryRaw`SELECT DATE_FORMAT(startTime, '%Y-%m-%d') AS day, COUNT(*) AS games FROM player_game
-                WHERE startTime >= ${since} GROUP BY day ORDER BY day`,
         computeExplorers(prisma, since30),
         prisma.$queryRaw`SELECT COUNT(*) AS total, SUM(startedAt >= ${since30}) AS last30,
                 DATE_FORMAT(MIN(startedAt), '%Y-%m-%d') AS since FROM hole_start`
             .catch(error => (console.log("/api/stats holes error", error?.message), []))
     ]);
-    const days: {[day: string]: {day: string, wallets: number, guests: number, games: number}} = {};
-    const at = (day) => days[day] = days[day] || {day, wallets: 0, guests: 0, games: 0};
-    wallets.forEach(({day, visitors}) => at(day).wallets = Number(visitors));
-    guests.forEach(({day, visitors}) => at(day).guests = Number(visitors));
-    dailyGames.forEach(({day, games}) => at(day).games = Number(games));
-    const today = at(new Date().toISOString().slice(0, 10));
+    //today is always in the series, even with nothing in it yet
+    const days: {[day: string]: DailyRow} = daily;
+    const todayKey = utcDay(new Date());
+    const today = days[todayKey] = days[todayKey] || {day: todayKey, wallets: 0, guests: 0, games: 0};
     return {
         updatedAt: new Date().toISOString(),
         online,
@@ -462,6 +563,11 @@ async function computeStats(prisma: PrismaClient){
         mapsCreated,
         seasonMaps,
         visitorsTrackedSince: {wallets: tracking[0]?.wallets || null, guests: tracking[0]?.guests || null},
+        //the first finished game on record: a chart period that starts before
+        //it has no games of its own to show
+        gamesTrackedSince: games[0]?.firstDay || null,
+        //the longest period the chart may ask /api/stats/daily for
+        dailyMaxDays: DAILY_MAX_DAYS,
         //unique visitors per explorer in the last 30 days, biggest first, with
         //the games completed and holes started by its players, and the first
         //day with an explorer: the scene only reports it since the 2026-11-02
@@ -473,7 +579,7 @@ async function computeStats(prisma: PrismaClient){
             games: Math.max(0, Number(games[0]?.last30 || 0) - explorers.buckets.reduce((sum, b) => sum + b.games, 0)),
             holes: explorers.holesUnknown
         },
-        daily: Object.values(days).sort((a, b) => (a.day < b.day ? -1 : 1))
+        daily: sortedDays(days)
     };
 }
 

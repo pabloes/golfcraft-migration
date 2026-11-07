@@ -114,6 +114,11 @@
   .chart-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
   .chart-title { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   .chart-head h2 { font-size: 17px; font-weight: 600; margin: 0; }
+  /* The total of the series on show, over the period on show. */
+  .chart-meta { text-align: right; }
+  .chart-total { color: var(--text-2); font-size: 14px; font-weight: 500; }
+  .chart-total strong { color: var(--text-1); font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  #chart-note[hidden] { display: none; }
   .switch { display: inline-flex; gap: 2px; padding: 3px; background: var(--chip); border: 1px solid var(--card-edge); border-radius: 999px; }
   .switch button {
     font: 500 13px/1 Inter, system-ui, sans-serif; color: var(--text-2); background: transparent;
@@ -250,18 +255,27 @@
     <button type="button" data-days="30" aria-pressed="false">Last 30 days</button>
     <button type="button" data-days="90" aria-pressed="true">Last 90 days</button>
     <button type="button" data-days="365" aria-pressed="false">Last year</button>
+    <button type="button" data-days="custom" aria-pressed="false">Custom</button>
+  </div>
+  <div class="custom-range" id="chart-range" hidden>
+    <label>From <input type="date" id="chart-from"></label>
+    <label>to <input type="date" id="chart-to"></label>
+    <span class="sub" id="chart-range-hint">UTC days, both included</span>
   </div>
 
   <section class="card" aria-labelledby="chart-title">
     <div class="chart-head">
       <div class="chart-title">
-        <h2 id="chart-title">Daily visitors</h2>
+        <h2 id="chart-title">Daily games completed</h2>
         <div class="switch" role="group" aria-label="Chart shows">
-          <button type="button" data-metric="visitors" aria-pressed="true">Visitors</button>
-          <button type="button" data-metric="games" aria-pressed="false">Games completed</button>
+          <button type="button" data-metric="games" aria-pressed="true">Games completed</button>
+          <button type="button" data-metric="visitors" aria-pressed="false">Visitors</button>
         </div>
       </div>
-      <div class="sub" id="chart-sub">&nbsp;</div>
+      <div class="chart-meta">
+        <div class="chart-total" id="chart-total">&nbsp;</div>
+        <div class="sub" id="chart-sub">&nbsp;</div>
+      </div>
     </div>
     <div class="legend" id="legend"></div>
     <div class="chart" id="chart">
@@ -270,6 +284,7 @@
         <div class="tt-date" id="tt-date"></div>
       </div>
     </div>
+    <p class="note" id="chart-note" hidden></p>
     <details>
       <summary>View as table</summary>
       <div class="table-wrap">
@@ -327,15 +342,24 @@
   var DAY_MS = 86400000;
   var REFRESH_MS = 60000;
   var SVG_NS = "http://www.w3.org/2000/svg";
-  var state = { data: null, days: 90, hover: null, metric: "visitors" };
+  // mode "days" charts the last state.days days of the payload /api/stats
+  // already carries; mode "custom" charts the from/to days of the chart's own
+  // date inputs, whose series comes from /api/stats/daily (it can reach
+  // further back than that payload).
+  var state = {
+    data: null, days: 90, mode: "days", hover: null, metric: "games",
+    custom: { daily: null, from: "", to: "", clamped: false, loading: false, error: "" }, customSeq: 0
+  };
+  // How far back the custom period may go; /api/stats says the real limit.
+  var CHART_MAX_DAYS = 2000;
   // What the chart can show. Lines are listed in legend order; the first one
-  // is drawn last, on top.
+  // is drawn last, on top. `noun` names what the period's total counts.
   var METRICS = {
-    visitors: { title: "Daily visitors", lines: [
+    visitors: { title: "Daily visitors", noun: "visits", lines: [
       { key: "wallets", color: "var(--series)", name: "With wallet", unit: "with wallet" },
       { key: "guests", color: "var(--series-2)", name: "Guests", unit: "guests" }
     ] },
-    games: { title: "Daily games completed", lines: [
+    games: { title: "Daily games completed", noun: "games completed", lines: [
       { key: "games", color: "var(--series-3)", name: "Games completed", unit: "games" }
     ] }
   };
@@ -356,14 +380,30 @@
   }
   function utcDay(ms) { return new Date(ms).toISOString().slice(0, 10); }
 
+  // The first and last day the chart covers, from the chosen period.
+  function period() {
+    if (state.mode === "custom") return { from: state.custom.from, to: state.custom.to };
+    var to = utcDay(Date.now());
+    return { from: utcDay(Date.parse(to + "T00:00:00Z") - (state.days - 1) * DAY_MS), to: to };
+  }
+  // "in the last 30 days" / "from Oct 1 to Nov 7, 2026", for the total's caption.
+  function periodPhrase() {
+    if (state.mode !== "custom") return "in " + (state.days === 365 ? "the last year" : "the last " + state.days + " days");
+    var p = period();
+    var sameYear = p.from.slice(0, 4) === p.to.slice(0, 4);
+    return "from " + formatDay(p.from, sameYear ? { month: "short", day: "numeric" } : null) + " to " + formatDay(p.to);
+  }
+
   // The API only returns days with visitors or games; the chart wants every day.
-  function series(days) {
+  function series() {
     var byDay = {};
-    (state.data.daily || []).forEach(function (d) { byDay[d.day] = d; });
-    var end = Date.parse(utcDay(Date.now()) + "T00:00:00Z");
+    var source = state.mode === "custom" ? (state.custom.daily || []) : (state.data.daily || []);
+    source.forEach(function (d) { byDay[d.day] = d; });
+    var p = period();
+    var last = Date.parse(p.to + "T00:00:00Z");
     var out = [];
-    for (var i = days - 1; i >= 0; i--) {
-      var day = utcDay(end - i * DAY_MS);
+    for (var ms = Date.parse(p.from + "T00:00:00Z"); ms <= last; ms += DAY_MS) {
+      var day = utcDay(ms);
       var d = byDay[day] || {};
       out.push({ day: day, wallets: d.wallets || 0, guests: d.guests || 0, games: d.games || 0 });
     }
@@ -427,14 +467,18 @@
     var n = points.length;
     var ticks = [];
     if (n > 120) {
-      var every = width < 560 ? 2 : 1;
+      // one tick a month, thinned out so a period of several years still reads
+      var months = Math.max(1, Math.round(n / 30));
+      var every = Math.max(width < 560 ? 2 : 1, Math.ceil(months / (width < 560 ? 5 : 12)));
       var count = 0;
       points.forEach(function (p, i) {
         if (p.day.slice(8) !== "01" || i < 4) return;
         if (count++ % every) return;
         var d = dayDate(p.day);
         var label = d.toLocaleDateString("en-US", { timeZone: "UTC", month: "short" });
-        if (d.getUTCMonth() === 0) label += " " + d.getUTCFullYear();
+        // with months skipped, January may never be a tick: every label says its year
+        if (every > 1) label += " '" + String(d.getUTCFullYear()).slice(2);
+        else if (d.getUTCMonth() === 0) label += " " + d.getUTCFullYear();
         ticks.push({ i: i, label: label });
       });
     } else {
@@ -446,6 +490,48 @@
     return ticks;
   }
 
+  // The headline of the chart card: what the series on show adds up to over
+  // the period on show.
+  function drawTotal(metric, total) {
+    var node = $("chart-total");
+    clear(node);
+    html("strong", {}, node, fullCount(total));
+    node.appendChild(document.createTextNode(" " + metric.noun + " " + periodPhrase()));
+    node.title = state.metric === "visitors"
+      ? "Daily visitors added up: somebody who comes back on another day counts again"
+      : "Finished Season runs, tournaments, competitions and training games in this period";
+  }
+
+  // A period can start before the series it shows began, and a custom one can
+  // reach further back than the chart covers: say so rather than show a
+  // confident total.
+  function drawChartNote(points) {
+    var node = $("chart-note");
+    var d = state.data || {};
+    var parts = [];
+    if (points && state.metric === "visitors") {
+      var first = points[0].day;
+      var tracked = d.visitorsTrackedSince || {};
+      var missing = [];
+      if (!tracked.wallets || tracked.wallets > first) {
+        missing.push(tracked.wallets
+          ? "visits with a wallet only from " + formatDay(tracked.wallets) + ", and before that only wallets that finished a game"
+          : "visits with a wallet are not tracked yet, so only wallets that finished a game are counted");
+      }
+      if (!tracked.guests || tracked.guests > first) {
+        missing.push(tracked.guests ? "guests only from " + formatDay(tracked.guests) : "guests are not counted yet");
+      }
+      if (missing.length) parts.push("This period starts before visit tracking did, so its total is incomplete: " + missing.join("; ") + ".");
+    } else if (points && d.gamesTrackedSince && d.gamesTrackedSince > points[0].day) {
+      parts.push("No finished game is on record before " + formatDay(d.gamesTrackedSince) + ", so the earlier days of this period are blank.");
+    }
+    if (state.mode === "custom" && state.custom.clamped) {
+      parts.push("The period was shortened to the " + fullCount(CHART_MAX_DAYS) + " days the chart can cover.");
+    }
+    node.textContent = parts.join(" ");
+    node.hidden = !parts.length;
+  }
+
   function drawChart() {
     var host = $("chart");
     var old = host.querySelector("svg");
@@ -454,17 +540,28 @@
 
     var metric = METRICS[state.metric];
     var cells = drawMetricChrome(metric);
-    var points = series(state.days);
+    // A custom period waits for its own series before there is anything to draw.
+    if (state.mode === "custom" && !state.custom.daily) {
+      $("chart-total").textContent = state.custom.error ||
+        (state.custom.loading ? "Loading…" : "Pick a from and a to day.");
+      $("chart-sub").textContent = " ";
+      clear($("table-body"));
+      drawChartNote(null);
+      return;
+    }
+    var points = series();
     var width = Math.max(280, host.clientWidth);
     var height = width < 560 ? 220 : 280;
     var m = { top: 18, right: 14, bottom: 28, left: 40 };
     var w = width - m.left - m.right;
     var h = height - m.top - m.bottom;
-    // Every line on one axis; the subtitle's average and peak are for all of them together.
-    var max = 0, peak = null, peakTotal = 0, total = 0;
+    // Every line on one axis; the period's total, average and peak are for all
+    // of them together, with one total per line for the breakdown.
+    var max = 0, peak = null, peakTotal = 0, total = 0, lineTotals = {};
+    metric.lines.forEach(function (s) { lineTotals[s.key] = 0; });
     points.forEach(function (p) {
       var dayTotal = 0;
-      metric.lines.forEach(function (s) { dayTotal += p[s.key]; max = Math.max(max, p[s.key]); });
+      metric.lines.forEach(function (s) { dayTotal += p[s.key]; lineTotals[s.key] += p[s.key]; max = Math.max(max, p[s.key]); });
       total += dayTotal;
       if (dayTotal > peakTotal) { peakTotal = dayTotal; peak = p; }
     });
@@ -473,7 +570,7 @@
     var y = function (v) { return m.top + h - (v / yMax) * h; };
 
     var svg = el("svg", { viewBox: "0 0 " + width + " " + height, tabindex: "0", role: "img",
-      "aria-label": metric.title + ", last " + state.days + " days. Use the arrow keys to read each day." });
+      "aria-label": metric.title + " " + periodPhrase() + ". Use the arrow keys to read each day." });
     host.insertBefore(svg, host.firstChild);
 
     for (var t = 0; t <= 4; t++) {
@@ -548,9 +645,15 @@
     if (state.hover != null && state.hover < points.length) show(state.hover);
     else hide();
 
+    drawTotal(metric, total);
     var avg = total / points.length;
-    $("chart-sub").textContent = "Average " + (avg < 10 ? avg.toFixed(1) : formatCount(Math.round(avg))) + " a day" +
+    var breakdown = metric.lines.length > 1
+      ? metric.lines.map(function (s) { return fullCount(lineTotals[s.key]) + " " + s.unit; }).join(" · ") + " · "
+      : "";
+    $("chart-sub").textContent = breakdown +
+      "average " + (avg < 10 ? avg.toFixed(1) : formatCount(Math.round(avg))) + " a day" +
       (peak ? " · peak " + fullCount(peakTotal) + " on " + formatDay(peak.day, { month: "short", day: "numeric" }) : "");
+    drawChartNote(points);
 
     var body = $("table-body");
     while (body.firstChild) body.removeChild(body.firstChild);
@@ -656,6 +759,10 @@
       " Who visited shows each wallet shortened, with its public Decentraland name and its games completed (holes started) in the range; guests are only counted.";
     $("updated").textContent = "Updated " + new Date(d.updatedAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
     $("status-dot").className = "live-dot";
+    if (d.dailyMaxDays && d.dailyMaxDays !== CHART_MAX_DAYS) {
+      CHART_MAX_DAYS = d.dailyMaxDays;
+      applyChartRangeLimits();
+    }
     renderExplorers(d);
     drawChart();
   }
@@ -672,16 +779,85 @@
       .then(function () { document.body.classList.remove("refreshing"); });
   }
 
+  // The chart's own custom period: its days come from /api/stats/daily, which
+  // reaches further back than the payload the page already holds.
+  function loadChartRange(keepHover) {
+    var from = $("chart-from").value, to = $("chart-to").value;
+    if (!from || !to) {
+      state.custom.daily = null;
+      state.custom.error = "Pick a from and a to day.";
+      drawChart();
+      return;
+    }
+    if (from > to) {
+      var swap = from; from = to; to = swap;
+    }
+    // a typed day outside the chart's reach is pulled back inside it
+    var today = utcDay(Date.now());
+    var min = utcDay(Date.now() - (CHART_MAX_DAYS - 1) * DAY_MS);
+    from = from > today ? today : (from < min ? min : from);
+    to = to > today ? today : (to < min ? min : to);
+    $("chart-from").value = from;
+    $("chart-to").value = to;
+    if (from !== state.custom.from || to !== state.custom.to) state.custom.daily = null;
+    state.custom.loading = true;
+    state.custom.error = "";
+    if (!keepHover) state.hover = null;
+    drawChart();
+    var seq = ++state.customSeq;
+    fetch("/api/stats/daily?from=" + encodeURIComponent(from) + "&to=" + encodeURIComponent(to), { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (data) {
+        if (seq !== state.customSeq) return;
+        state.custom = { daily: data.daily || [], from: data.from, to: data.to,
+          clamped: !!data.clamped, loading: false, error: "" };
+        // the server moves a start that is too far back up to its limit
+        if (data.from !== from) $("chart-from").value = data.from;
+        if (data.to !== to) $("chart-to").value = data.to;
+        drawChart();
+      })
+      .catch(function () {
+        if (seq !== state.customSeq) return;
+        state.custom.loading = false;
+        state.custom.daily = null;
+        state.custom.error = "That period is unavailable right now.";
+        drawChart();
+      });
+  }
+
   Array.prototype.forEach.call(document.querySelectorAll(".filters button"), function (button) {
     button.addEventListener("click", function () {
-      state.days = Number(button.getAttribute("data-days"));
+      var value = button.getAttribute("data-days");
+      state.mode = value === "custom" ? "custom" : "days";
+      if (state.mode === "days") state.days = Number(value);
       state.hover = null;
       Array.prototype.forEach.call(document.querySelectorAll(".filters button"), function (b) {
         b.setAttribute("aria-pressed", b === button ? "true" : "false");
       });
-      drawChart();
+      $("chart-range").hidden = state.mode !== "custom";
+      if (state.mode === "custom") loadChartRange();
+      else drawChart();
     });
   });
+
+  // The date inputs start on the last 30 days and never go past today or
+  // further back than the chart covers.
+  function applyChartRangeLimits() {
+    var today = utcDay(Date.now());
+    var min = utcDay(Date.now() - (CHART_MAX_DAYS - 1) * DAY_MS);
+    ["chart-from", "chart-to"].forEach(function (id) {
+      $(id).max = today;
+      $(id).min = min;
+    });
+    $("chart-range-hint").textContent = "UTC days, both included, back to " + formatDay(min);
+  }
+  (function () {
+    $("chart-to").value = utcDay(Date.now());
+    $("chart-from").value = utcDay(Date.now() - 29 * DAY_MS);
+    applyChartRangeLimits();
+    $("chart-from").addEventListener("change", function () { loadChartRange(); });
+    $("chart-to").addEventListener("change", function () { loadChartRange(); });
+  })();
 
   Array.prototype.forEach.call(document.querySelectorAll(".switch button"), function (button) {
     button.addEventListener("click", function () {
@@ -858,6 +1034,8 @@
   setInterval(function () {
     load();
     if (visitors.range !== "custom") loadVisitors();
+    // a custom period that ends today keeps up; one that ended earlier cannot change
+    if (state.mode === "custom" && state.custom.to === utcDay(Date.now())) loadChartRange(true);
   }, REFRESH_MS);
 })();
 </script>
