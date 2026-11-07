@@ -102,6 +102,21 @@ const MUSIC_BASE = 'https://golfcraftgame.com/music/'
 // a second or two over its catalogue entry is not cut off.
 const GAP_MS = 3000
 
+// The map music plays at half of what the setting asks for (user, 2026-11-07:
+// "quiero que las musicas de mapas les bajes a un 50% al volumen que tienen").
+//
+// Applied here rather than by lowering the default, for two reasons: a player
+// who already saved a level in their options would not have been touched by a
+// new default, and the options slider and the HUD's volume chip keep meaning
+// what they say, a share of the maximum. The whole scale just got quieter.
+// It is the music's own ceiling, so the stream, which has its own setting, is
+// unaffected.
+const MUSIC_GAIN = 0.5
+
+// What the component should be playing at right now: the player's level, mute
+// included, brought down by the gain above.
+const wantedVolume = () => musicVolume() * MUSIC_GAIN
+
 // ---------------------------------------------------------------------------
 // Which map a course belongs to: its collectionId, the same key SDK6's
 // MUSIC_BY_COLLECTION used, carried to the client inside the course definition
@@ -236,7 +251,7 @@ const play = (track: Track) => {
   }
   lastFile = track.file
   nextAt = Date.now() + track.seconds * 1000 + GAP_MS
-  appliedVolume = musicVolume()
+  appliedVolume = wantedVolume()
   musicStatus.track = track.file
   musicStatus.startedAt = Date.now()
   musicStatus.starts++
@@ -258,7 +273,7 @@ const play = (track: Track) => {
 // the music on. A few seconds either way are inaudible.
 const musicSystem = () => {
   // Follow the setting while a track plays.
-  const wanted = musicVolume()
+  const wanted = wantedVolume()
   if (musicEntity !== null && wanted !== appliedVolume) {
     setMusicVolume(wanted)
     appliedVolume = wanted
