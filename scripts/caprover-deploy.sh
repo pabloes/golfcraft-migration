@@ -153,8 +153,37 @@ caprover deploy \
 
 echo
 echo "deployed golfcraft-$APP @ $COMMIT"
+
+# Check what is actually live, and check the CONTENT TYPE, not the status code.
+# On 2026-11-07 production served the React shell for /music/*.mp3, /stats and
+# half the API for five days: every one of them answered 200, because the SPA
+# catch-all answers 200 for anything it does not know. A deploy that only looks
+# at the status code cannot tell a working site from a broken one.
+check() { # url expected-content-type-substring
+  local body type code
+  body="$(curl -s -o /dev/null -w '%{http_code} %{content_type} %{size_download}' --max-time 30 "$1" || echo "000 - 0")"
+  code="${body%% *}"; type="$(printf '%s' "$body" | cut -d' ' -f2)"
+  case "$code $type" in
+    "200 "*"$2"*) printf '  ok    %-56s %s\n' "$1" "$body" ;;
+    *)            printf '  FAIL  %-56s %s  (wanted 200 %s)\n' "$1" "$body" "$2"; CHECKS_FAILED=1 ;;
+  esac
+}
+
+CHECKS_FAILED=0
 case "$APP" in
-  web) echo "verify   curl -sI https://golfcraftgame.com/music/jungle_wonders.mp3 | head -3" ;;
-  ws)  echo "verify   curl -s https://ws.golfcraftgame.com/online" ;;
-  chain) echo "verify   curl -s https://chain.golfcraftgame.com/ping" ;;
+  web)
+    echo "waiting for the app to come up…"
+    curl -s --retry 60 --retry-delay 3 --retry-connrefused --max-time 200 -o /dev/null https://golfcraftgame.com/api/config || true
+    check https://golfcraftgame.com/api/config json
+    check https://golfcraftgame.com/music/egypt_arabic_heat.mp3 audio
+    check https://golfcraftgame.com/stats html
+    check https://golfcraftgame.com/api/stats json
+    ;;
+  ws)
+    curl -s --retry 40 --retry-delay 3 --retry-connrefused --max-time 150 -o /dev/null https://ws.golfcraftgame.com/online || true
+    check https://ws.golfcraftgame.com/online json
+    ;;
+  chain)
+    check https://chain.golfcraftgame.com/ping "" ;;
 esac
+[ "$CHECKS_FAILED" = 1 ] && echo "SOMETHING IS SERVING THE WRONG THING — look before walking away." || echo "live and serving the right content types"
