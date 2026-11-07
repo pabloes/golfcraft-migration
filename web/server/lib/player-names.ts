@@ -3,11 +3,14 @@ import {redactedMessage} from "../../../common/redact";
 
 // Public Decentraland names for a list of wallets, and the cut form of a wallet
 // that is safe to serve. Both are what /stats has been doing since 2026-10-21;
-// this module exists so a second page does not have to reinvent them.
+// this module exists so a second page does not have to reinvent them. /stats
+// and /relaunch-data both use it since 2026-11-07, so they share one name cache.
 //
-// ⚠ `web/server/stats/index.ts` still carries its own copy of both functions.
-// It was being edited by another session when this was written, so it was left
-// alone; point it here when nobody is in that file.
+// ⚠ `maskWallet` is NOT an identity. It keeps 5 hex characters, so distinct
+// wallets collide: in September 2023 alone, 0x95044…566d and 0x9509a…7d6d both
+// render "0x950...6d". Never group, merge or deduplicate rows by the mask — key
+// them on the lowercased address, or on a hash of it like /api/relaunch-data's
+// `id`, and use the mask only for display.
 //
 // The lambdas answer `GET /lambdas/profiles?id=` with 405 now: only the batched
 // POST works (stats §16). A lookup that fails leaves the name empty and is
