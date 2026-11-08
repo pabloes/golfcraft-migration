@@ -52,6 +52,12 @@ enum MESSAGE {
     // The sender's current rank, so the badge over their avatar follows a
     // rank-up without rejoining (scene/src/components/avatar-rank.ts).
     // Appended, like the party messages: never renumber this enum.
-    ACTIVE_TIER
+    ACTIVE_TIER,
+    // Skipping the end of a hole (user, 2026-11-07). A recorded opponent is a
+    // replay that finished long ago, so its hole-out no longer cuts the hole
+    // short; instead the player gets a SKIP HOLE button from the moment the
+    // first ball drops. Appended, like everything above.
+    HOLE_SKIPPABLE, // server -> client: the SKIP HOLE button may show
+    SKIP_HOLE       // client -> server: I am done with this hole, move on
 }
 export default MESSAGE

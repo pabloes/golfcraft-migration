@@ -40,6 +40,7 @@ import {
 import {PartyMember, takeParty} from "./season-party-registry";
 import {isEnergyFree} from "../energy";
 import {disconnectIfOnlySpectators, isSpectator, LiveGameMetadata, spectatorAuth, wantsToSpectate} from "./spectator";
+import {FORCE_END_WAIT_MS, HOLE_SAFETY_MS, SAFETY_WARNING_MS} from "./hole-end";
 
 //Slots kept in the room for people watching, on top of the party's own size.
 const MAX_SPECTATORS = 20;
@@ -114,6 +115,11 @@ class PartyPlayer extends Schema {
     recordPositionFrames = false;
     lastRecordedFrameTime = 0;
     shoots = 0;
+    //End of the hole (rooms/hole-end.ts): `skipped` is this player pressing
+    //SKIP HOLE while still playing (their row keeps no time, so the hole
+    //scores 0 for them), `doneAt` is when they stopped playing.
+    skipped = false;
+    doneAt = 0;
     //field scores per round: [self, ghost0, ghost1, ghost2]
     fieldScores: number[][] = [[], [], [], []];
     rewards = {GC: 0, WD: 0, ST: 0, IR: 0, GD: 0, FT: 0, EN: 0, DM: 0};
@@ -168,6 +174,9 @@ export class SeasonPartyRoom extends Room<SeasonPartyRoomState> {
     private roomCat = 0;
     private SEASON_REWARD_FACTOR = 0.25;
     private intervalGhosts: ReturnType<typeof setInterval>;
+    private holeEndRequested = false;
+    private skipOffered = false;
+    private lastHoleEndCheck = 0;
     private readyTimeout: ReturnType<typeof setTimeout>;
     private ghostIdleStarTimes = [0, 0, 0];
 
@@ -199,6 +208,11 @@ export class SeasonPartyRoom extends Room<SeasonPartyRoomState> {
         this.onMessage(MESSAGE.PING2, (client) => {
             const player = this.getPlayer(client);
             if (player) player.lastPingMs = Date.now() - player.lastPingTimeMs;
+        });
+
+        this.onMessage(MESSAGE.SKIP_HOLE, (client) => {
+            if (isSpectator(client)) return;
+            tryFn(() => this.handleSkipHole(client));
         });
 
         this.onMessage(MESSAGE.SHOOT, (client, message) => {
@@ -441,7 +455,7 @@ export class SeasonPartyRoom extends Room<SeasonPartyRoomState> {
         player.frameEventHandler.dispose();
         player.frameEventHandler = createEventManager();
         player.frameEventHandler.onEvent(EVENT.ANY, async ({type, data}) => {
-            if (this.state.finished || player.holed || player.left) return;
+            if (this.state.finished || player.holed || player.skipped || player.left) return;
             player.golfPlay?.updateHandlers(0);
             if (!this.state.started) return;
             if (type === EVENT.CLIENT_LOG) {
@@ -470,7 +484,8 @@ export class SeasonPartyRoom extends Room<SeasonPartyRoomState> {
         player.golfPlay?.dispose();
         this.state.results[player.resultIndex].time[this.state.currentGame] = time;
 
-        if (!this.state.countdownTime) this.startHoleCountdown();
+        player.doneAt = Date.now();
+        this.maybeStartHoleCountdown();
 
         //only games played at the player's own level become ghosts
         if (!player.eligible) return;
@@ -551,7 +566,7 @@ export class SeasonPartyRoom extends Room<SeasonPartyRoomState> {
 
     private async handleShoot(client: Client, {impulse, timeStep, delayMs}) {
         const player = this.getPlayer(client);
-        if (!player || player.left || player.holed || !player.golfPlay) return;
+        if (!player || player.left || player.holed || player.skipped || !player.golfPlay) return;
         if (!this.state.started || this.state.finished) return;
         const round = this.state.currentGame;
 
@@ -607,6 +622,10 @@ export class SeasonPartyRoom extends Room<SeasonPartyRoomState> {
 
     private update(dt: number) {
         if (this.state.finished) return;
+        if (Date.now() - this.lastHoleEndCheck > 300) {
+            this.lastHoleEndCheck = Date.now();
+            tryFn(() => this.holeEndCheck());
+        }
         if (!this.state.started && Date.now() > this.state.startTime) {
             console.log("season-party STARTED = TRUE", this.state.currentGame);
             this.state.started = true;
@@ -634,6 +653,27 @@ export class SeasonPartyRoom extends Room<SeasonPartyRoomState> {
             player.frameReproduction?.update(dt);
             player.golfPlay.updateAnimations(dt);
         }, (error) => console.log("season-party update error", player.displayName, error)));
+    }
+
+    //SKIP HOLE's offer and the hard cap on a hole. Nothing else ends a hole
+    //now that a replay finishing does not (rooms/hole-end.ts).
+    private holeEndCheck() {
+        if (!this.state.started || this.state.finished) return;
+        if (!this.state.startTime || this.state.startTime === Number.MAX_SAFE_INTEGER) return;
+
+        //SKIP shows from the moment the first ball drops, whoever it belongs to
+        if (!this.skipOffered
+            && (!this.state.ghosts.length
+                || this.state.results.some(r => Number(r.time[this.state.currentGame]) > 0))) {
+            this.skipOffered = true;
+            this.broadcast(MESSAGE.HOLE_SKIPPABLE);
+        }
+
+        const msLeft = this.state.startTime + HOLE_SAFETY_MS - Date.now();
+        if (msLeft <= SAFETY_WARNING_MS && !this.state.countdownTime) {
+            console.log("season-party hole safety cap", this.state.currentGame, msLeft);
+            this.startHoleCountdown(Math.max(1000, msLeft));
+        }
     }
 
     //Season-Room reproduceGhostsFrame, with the ghost rows after the players
@@ -679,25 +719,32 @@ export class SeasonPartyRoom extends Room<SeasonPartyRoomState> {
             } else if (type === RECORDED_FRAME.HOLE) {
                 this.state.results[firstGhostRow + ghostIndex].time[round] = ghostData.time;
                 this.state.results[firstGhostRow + ghostIndex].shots[round] = ghostData.shots;
-                if (!this.state.countdownTime) this.startHoleCountdown();
+                //No countdown from a replay finishing (user, 2026-11-07): it
+                //holed days ago and nothing waits on it. See rooms/hole-end.ts.
                 ghost.finished = true;
             }
             ghost.frameCount++;
         });
     }
 
-    private async startHoleCountdown() {
+    //The window the replays still rolling get to finish on screen, once every
+    //live player is done. `ms` overrides it for the HOLE_SAFETY_MS warning and
+    //for a forced end (0, end now).
+    private async startHoleCountdown(ms?: number) {
+        if (this.state.countdownTime) return;//already ending
         this.state.countdownTime = Date.now();
         const round = this.state.currentGame;
-        const countdownMs = countdownByTierCat[this.roomCat] || 30000;
+        const countdownMs = ms !== undefined ? ms : (countdownByTierCat[this.roomCat] || 30000);
         console.log("season-party startHoleCountdown", round, countdownMs);
-        this.broadcast(MESSAGE.COUNTDOWN, countdownMs);
-        //a player who left counts as done, so the round is not held for them
-        const leftRows = () => this.state.players.filter(p => p.left).map(p => p.resultIndex);
+        if (countdownMs > 0) this.broadcast(MESSAGE.COUNTDOWN, countdownMs);
+        //a player who left counts as done, so the round is not held for them;
+        //so does one who skipped, whose row has no time by design
+        const doneRows = () => this.state.players.filter(p => p.left || p.skipped).map(p => p.resultIndex);
         await Promise.race([
             sleep(countdownMs),
             waitFor(() => this.disposed || this.state.currentGame !== round || this.state.finished
-                || this.state.results.every((row, index) => Number(row.time[round]) > 0 || leftRows().includes(index)))
+                || this.holeEndRequested
+                || this.state.results.every((row, index) => Number(row.time[round]) > 0 || doneRows().includes(index)))
         ]);
         if (this.disposed) return;
 
@@ -824,6 +871,62 @@ export class SeasonPartyRoom extends Room<SeasonPartyRoomState> {
         });
     }
 
+    //The hole ends when every live player is done, never because a replay or
+    //one friend finished first (user, 2026-11-07). See rooms/hole-end.ts.
+    private maybeStartHoleCountdown() {
+        if (this.state.finished || this.state.countdownTime) return;
+        const active = this.state.players.filter(p => this.isActive(p));
+        if (!active.length) return;//an empty room is ended by the safety cap
+        if (active.every(p => p.holed || p.skipped)) this.startHoleCountdown();
+    }
+
+    //A replay that has not reached its HOLE frame yet still has a known result:
+    //it is a recording of a run that finished. Closing it with that real time
+    //and shots is what keeps a forced end from being a free win — cutting it to
+    //0 would mean holing first, ending the hole and taking the maximum on every
+    //hole, on the ladder that hands out the tier wearables.
+    private settlePendingGhosts() {
+        const round = this.state.currentGame;
+        const firstGhostRow = this.state.players.length;
+        this.state.ghosts.forEach((ghost, ghostIndex) => {
+            if (ghost.finished) return;
+            const data = this.ghostsData[round]?.[ghostIndex];
+            if (!data) return;
+            this.state.results[firstGhostRow + ghostIndex].time[round] = data.time;
+            this.state.results[firstGhostRow + ghostIndex].shots[round] = data.shots;
+            ghost.finished = true;
+        });
+    }
+
+    //SKIP HOLE. Still playing: it gives up the hole, and the others play on.
+    //Already done and waiting FORCE_END_WAIT_MS: it ends the hole for everyone,
+    //so one slow friend cannot hold the rest for the full cap.
+    private handleSkipHole(client: Client) {
+        const player = this.getPlayer(client);
+        if (!player || player.left) return;
+        if (!this.state.started || this.state.finished || this.holeEndRequested) return;
+
+        if (!player.holed && !player.skipped) {
+            console.log("season-party SKIP_HOLE", player.displayName, "gave up the hole");
+            player.skipped = true;
+            player.doneAt = Date.now();
+            player.recordPositionFrames = false;
+            this.disposePlayerGolfPlay(player);
+            this.maybeStartHoleCountdown();
+            return;
+        }
+
+        const waited = Date.now() - (player.doneAt || Date.now());
+        if (waited < FORCE_END_WAIT_MS) {
+            console.log("season-party SKIP_HOLE too early", player.displayName, waited);
+            return;
+        }
+        console.log("season-party SKIP_HOLE", player.displayName, "ended the hole for everyone");
+        this.settlePendingGhosts();
+        this.holeEndRequested = true;
+        this.startHoleCountdown(0);
+    }
+
     private async prepareNext() {
         if (this.state.currentGame === 0) {
             //Season-Room charges the energy once the first round is played; a
@@ -851,8 +954,12 @@ export class SeasonPartyRoom extends Room<SeasonPartyRoomState> {
         this.state.started = false;
         this.state.startTime = Number.MAX_SAFE_INTEGER;
         this.ghostIdleStarTimes = [0, 0, 0];
+        this.holeEndRequested = false;
+        this.skipOffered = false;
         this.state.players.forEach(player => {
             player.holed = false;
+            player.skipped = false;
+            player.doneAt = 0;
             player.shoots = 0;
             player.recordedFrames = [];
             player.recordPositionFrames = false;

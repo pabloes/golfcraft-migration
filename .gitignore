@@ -1,7 +1,21 @@
 package-lock.json
+# ...except these two, which are force-tracked because a BUILD NEEDS THEM.
+# A fresh resolve of scene/package.json does not build: @dcl/asset-packs comes
+# out at 2.26.0, which imports "@dcl/sdk/text-codec", and the pinned
+# @dcl/sdk@7.23.3 has no such subpath, so esbuild fails. The lockfile holds it
+# at 2.15.3, which builds. CI therefore runs `npm ci`, not `npm install`
+# (.github/workflows/ci.yml), and so do deploy/*.Dockerfile — those used to
+# rely on the deploy packing the working tree, which is why §16 said to copy
+# the gitignored lockfiles in before deploying from a worktree.
+# The other services' lockfiles (web/, server/, chain-playfab/) are still
+# ignored and still need that copy.
+!/package-lock.json
+!/scene/package-lock.json
 *.js
 node_modules
 bin/
+# Reference docs sdk-commands drops beside the scene on every build.
+scene/dclcontext/
 .DS_Store
 **/.DS_Store
 npm-debug.log*

@@ -231,7 +231,11 @@ async function applyCombinedInfoToHud(info: CombinedInfo) {
     statistic_current_mission: stats.current_mission || 1,
     // The season panel reads these to render your rank and progress.
     'statistic_tier-sub': stats['tier-sub'] || 0,
-    'statistic_tier-sub-max': stats['tier-sub-max'] || 0
+    'statistic_tier-sub-max': stats['tier-sub-max'] || 0,
+    // The lobby's "Days connected" board puts your own row in the tenth slot
+    // when you are below it, which needs your own value (the room bumps this
+    // statistic once a day, GameLobbyRoom).
+    'statistic_connected-days': stats['connected-days'] || 0
   })
   console.log('[bootstrap] current_mission =', stats.current_mission || 1)
   const xp = Number(info.UserReadOnlyData?.xp?.Value || 0)

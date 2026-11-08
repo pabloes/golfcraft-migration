@@ -41,7 +41,7 @@ import {
 import { Color4, Quaternion, Vector3 } from '@dcl/sdk/math'
 
 import { globalStore } from '../services/globalStore/globalStore'
-import { SHOW_PLAY_FLOOR } from '../config/hole-end'
+import { PLAY_FLOOR_Y, SHOW_PLAY_FLOOR } from '../config/hole-end'
 
 // The 3x3 parcel block, in scene-local metres. (The scene's tenth parcel,
 // 48,-46, is a strip at negative z with nothing in it: the wall keeps players
@@ -147,26 +147,25 @@ export const releaseGroundUnderPlayer = () => {
 }
 
 // The floor the player stands on while a hole is on (user, 2026-11-05): a
-// sheet across the whole block, a couple of centimetres ABOVE the course's own
-// surface, so the collider under their feet is always ours and never a piece
-// of the course. That is the point: the explorer pins the player to whatever
-// they stand on and carries them with it, so a course that is taken away can
-// take the player to another parcel. If they never stand on the course, it
-// cannot. It also means they can never fall: there is no hole in it.
+// sheet across the whole block, so the collider under their feet is ours and
+// not a piece of the course. That is the point: the explorer pins the player to
+// whatever they stand on and carries them with it, so a course that is taken
+// away can take the player to another parcel. If they never stand on the
+// course, it cannot. It also means they can never fall: there is no hole in it.
 //
-// The height comes from the course itself (the ball's spawn y minus its
-// radius), because courses sit at different heights. A hole with raised
-// platforms still has them above this sheet, which is what the pad above is
-// for: the dispose moment, wherever the player happens to be standing.
+// Its top sits at PLAY_FLOOR_Y, a fixed 10 cm (user, 2026-11-07), which is
+// where the courses' own floor parts are. A hole whose walkable surface is
+// higher — a raised platform, a course built above zero — puts the player back
+// on the course there, and the pad above is what covers that: it goes under
+// their feet wherever they happen to be standing, at the moment of the dispose.
 const PLAY_FLOOR_THICKNESS = 1
-const PLAY_FLOOR_LIFT = 0.02
 let playFloor: Entity | null = null
 
-export const setPlayFloor = (surfaceY: number) => {
+export const raisePlayFloor = () => {
   clearPlayFloor()
   const entity = engine.addEntity()
   Transform.create(entity, {
-    position: Vector3.create(BLOCK / 2, surfaceY + PLAY_FLOOR_LIFT - PLAY_FLOOR_THICKNESS / 2, BLOCK / 2),
+    position: Vector3.create(BLOCK / 2, PLAY_FLOOR_Y - PLAY_FLOOR_THICKNESS / 2, BLOCK / 2),
     scale: Vector3.create(BLOCK, PLAY_FLOOR_THICKNESS, BLOCK),
     rotation: Quaternion.Identity()
   })
@@ -183,57 +182,13 @@ export const setPlayFloor = (surfaceY: number) => {
     })
   }
   playFloor = entity
-  console.log('[scene-bounds] play floor at y', (surfaceY + PLAY_FLOOR_LIFT).toFixed(2))
+  console.log('[scene-bounds] play floor at y', PLAY_FLOOR_Y.toFixed(2))
 }
 
 export const clearPlayFloor = () => {
   if (!playFloor) return
   engine.removeEntity(playFloor)
   playFloor = null
-}
-
-// Measured, not guessed (user, 2026-11-05: "ponlo un poquito más abajo").
-// A course's walkable height cannot be read from its definition: the parts sit
-// at y 0 and their surface is inside the mesh, the `spawn` part is at y 10
-// because the player is meant to DROP onto the course, and the ball's spawn is
-// wherever the designer left it, often above the ground. So let the player
-// land on the course, watch until their feet stop moving, and put the sheet
-// exactly there. A hole with no landing (holes 2 to 4 of a run, where nobody
-// is teleported any more) settles at once on the sheet already up, which keeps
-// its height.
-const SETTLE_SAMPLE_MS = 100
-const SETTLE_TOLERANCE = 0.01
-const SETTLE_TIMEOUT_MS = 5000
-// Above the surface by a hair: enough that the sphere cast picks this and not
-// the course, little enough that nobody is standing visibly in the air.
-const SETTLE_LIFT = 0.01
-// A settled height outside this is not a course: the player fell through to
-// the catch floor, or is somewhere unexpected. Use the estimate instead.
-const SETTLE_MIN_Y = -1
-const SETTLE_MAX_Y = 25
-
-export const fitPlayFloorToPlayer = (estimatedSurfaceY: number) => {
-  const startedAt = Date.now()
-  let lastY: number | null = null
-  let lastSampleAt = 0
-  const fit = () => {
-    const now = Date.now()
-    if (now - lastSampleAt < SETTLE_SAMPLE_MS) return
-    lastSampleAt = now
-    const t = Transform.getOrNull(engine.PlayerEntity)
-    const y = t ? t.position.y : null
-    const settled = y !== null && lastY !== null && Math.abs(y - lastY) < SETTLE_TOLERANCE
-    const timedOut = now - startedAt > SETTLE_TIMEOUT_MS
-    if (!settled && !timedOut) {
-      lastY = y
-      return
-    }
-    engine.removeSystem(fit)
-    const usable = settled && y !== null && y > SETTLE_MIN_Y && y < SETTLE_MAX_Y
-    setPlayFloor(usable ? (y as number) - PLAY_FLOOR_LIFT + SETTLE_LIFT : estimatedSurfaceY)
-    console.log('[scene-bounds] play floor fitted to', usable ? 'the player at ' + (y as number).toFixed(2) : 'the course estimate')
-  }
-  engine.addSystem(fit)
 }
 
 // The hole clears `playing` before the lobby is back and before a falling

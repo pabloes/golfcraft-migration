@@ -1,13 +1,16 @@
 // Partial SDK7 port of SDK6 scene/src/components/lobby/lobby-training.ts.
 // SDK6's file drove several lobby panels; this port covers the golfclub board
-// (the screen storymode mission 7 sends the player to), the season play panel
-// and the season prizes board. Still missing from the original: the season
-// ranking leaderboard, the days-connected panel and the creator-code button.
+// (the screen storymode mission 7 sends the player to), the season play panel,
+// the season prizes board and the two ranking boards (season ranking and days
+// connected, back since 2026-11-07, plus a rolling 24 hour one SDK6 never
+// had). Still missing from the original: the creator-code button.
 import { Entity } from '@dcl/sdk/ecs'
 import { Quaternion, Vector3 } from '@dcl/sdk/math'
 
 import { globalStore } from '../../services/globalStore/globalStore'
-import { COCOBAY_PROMO, getSessionTicket, refreshUserData } from '../../meta/bootstrap'
+import { COCOBAY_PROMO, getPlayFabId, getSessionTicket, refreshUserData } from '../../meta/bootstrap'
+import { createLeaderboardPanel } from './leaderboard-panel'
+import { fetchLast24hLeaderboard, fetchStatisticLeaderboard } from '../../services/leaderboards'
 import { executeCloudScript } from '../../meta/playfab-rest'
 import { showMessage } from './server-notification'
 import { BoardGolfclub, createGolfclubBoard } from './golfclub-screen/golfclub-screen-ui'
@@ -30,9 +33,33 @@ const PANEL_SEASON = {
   rotation: Quaternion.fromEulerDegrees(0, 0, 0)
 }
 
+// SDK6 building.ts PANELS.SEASON_LEADERBOARD -> world (8, 1.2, 44), angled
+// into the room at the left end of the Season wall.
+const PANEL_SEASON_RANKING = {
+  position: Vector3.create(-16, 1.2, 20),
+  rotation: Quaternion.fromEulerDegrees(0, -30, 0)
+}
+
+// SDK6 building.ts PANELS.DAYS_CONNECTED, verbatim (29-17, 24.5, 45.8-24) ->
+// world (36, 24.5, 45.8), upstairs on floor 3.
+const PANEL_DAYS_CONNECTED = {
+  position: Vector3.create(29 - 17, 24.5, 45.8 - 24),
+  rotation: Quaternion.fromEulerDegrees(0, 0, 0)
+}
+
+// The rolling 24 hour board has no SDK6 position because SDK6 had no such
+// board. It mirrors the season ranking on the other side of the Season panel
+// (that one is at local x -16, the panel at -7), so the two rankings flank it.
+// First pass: easy to move, nothing else depends on it.
+const PANEL_LAST_24H = {
+  position: Vector3.create(-2.5, 1.2, 20),
+  rotation: Quaternion.fromEulerDegrees(0, 30, 0)
+}
+
 let golfclubBoard: ReturnType<typeof createGolfclubBoard> | null = null
 let seasonMenu: any = null
 let seasonPrizes: any = null
+let rankingBoards: { dispose: () => void }[] = []
 
 // SDK6 lobby-training.ts:deserializeGolfclubs — maps PlayFab inventory items
 // into the board's shape, then appends the hardcoded CocoBay promo club.
@@ -119,7 +146,45 @@ export type LobbyTrainingOptions = {
   onFinish?: () => void
 }
 
+// The three ranking boards. SDK6 built two of them here (SEASON_LEADERBOARD
+// and DAYS_CONNECTED); the 24 hour one is new (user, 2026-11-07). They own no
+// room and no state, so they are simply rebuilt with the lobby, like the
+// prizes board.
+const createRankingBoards = (parent: Entity) => {
+  if (rankingBoards.length) return
+  const own = (statistic: string) => () => {
+    const playFabId = getPlayFabId()
+    if (!playFabId) return null
+    const state = globalStore.userData.getState()
+    const value = Number(state[`statistic_${statistic}`] || 0)
+    return { playFabId, name: state.displayName || 'you', value }
+  }
+  const boards: { dispose: () => void }[] = []
+  const build = (title: string, panel: { position: Vector3; rotation: Quaternion }, load: () => Promise<any>, ownRow?: any) => {
+    try {
+      boards.push(createLeaderboardPanel(parent, { ...panel, title, load, own: ownRow }))
+    } catch (err) {
+      console.log('[leaderboard]', title, 'failed to spawn', err)
+    }
+  }
+  // SDK6 lobby-training.ts: StatisticName "tier-sub-max", title "Season ranking".
+  build('Season ranking', PANEL_SEASON_RANKING, () => fetchStatisticLeaderboard('tier-sub-max'), own('tier-sub-max'))
+  // SDK6 lobby-training.ts: StatisticName "connected-days", title "Days connected".
+  build('Days connected', PANEL_DAYS_CONNECTED, () => fetchStatisticLeaderboard('connected-days'), own('connected-days'))
+  // New: the ranked points won in the last 24 hours (web/server/leaderboard).
+  // No own-row rule here, because the scene does not know its own 24 h total.
+  build('Last 24h ranking', PANEL_LAST_24H, fetchLast24hLeaderboard)
+  rankingBoards = boards
+}
+
+const destroyRankingBoards = () => {
+  rankingBoards.forEach((board) => board.dispose())
+  rankingBoards = []
+}
+
 export const createLobbyTraining = (parent: Entity, opts?: LobbyTrainingOptions) => {
+  createRankingBoards(parent)
+
   // The "PRIZES BY RANK" board, to the left of the season panel. Needs no
   // colyseus, but shares the same singleton lifetime so a lobby respawn does not
   // duplicate it.
@@ -203,6 +268,7 @@ export const createLobbyTraining = (parent: Entity, opts?: LobbyTrainingOptions)
 // prizes board with it, both rebuilt by the next createLobbyTraining) but the
 // season panel must survive, since it is driving the run. It hides itself.
 export const destroyLobbyBoards = () => {
+  destroyRankingBoards()
   if (seasonPrizes) {
     seasonPrizes.dispose()
     seasonPrizes = null
@@ -213,6 +279,7 @@ export const destroyLobbyBoards = () => {
 }
 
 export const destroyLobbyTraining = () => {
+  destroyRankingBoards()
   if (seasonMenu) {
     seasonMenu.dispose()
     seasonMenu = null

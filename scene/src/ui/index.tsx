@@ -71,6 +71,7 @@ const ui = () => {
       <RunCompleteScreen />
       <CenterPopup />
       <hud.EndingBanner />
+      <hud.SkipHoleButton />
       <SpectateHud />
       <ServerNotification />
       {mobile ? null : <VersionTag />}

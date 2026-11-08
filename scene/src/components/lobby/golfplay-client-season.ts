@@ -54,9 +54,9 @@ import { mobileShootState } from '../../ui/mobile-shoot-state'
 import { reportPing } from '../../ui/ping-state'
 import { reconnectRoom } from './room-reconnect'
 import { holdGroundUnderPlayer } from '../scene-bounds'
-import { fitPlayFloorToPlayer } from '../scene-bounds'
+import { raisePlayFloor } from '../scene-bounds'
 import { startMapMusic } from '../../services/map-music'
-import { BALL_RADIUS, COURSE_REMOVE_DELAY_MS, FADE_BETWEEN_HOLES } from '../../config/hole-end'
+import { COURSE_REMOVE_DELAY_MS, FADE_BETWEEN_HOLES } from '../../config/hole-end'
 
 const REWARD_NAMES: any = {
   WD: 'wood',
@@ -157,9 +157,9 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
     // The player must stand on a floor of OURS, never on the course: the
     // explorer pins them to the collider under their feet and carries them
     // wherever it goes, so a course taken away at the end of a hole can take
-    // them to another parcel. The sheet goes just above the course's surface,
-    // which is where the ball sits minus its radius.
-    fitPlayFloorToPlayer(ballSpawnDefinition.position[1] - BALL_RADIUS)
+    // them to another parcel. The sheet is at PLAY_FLOOR_Y, where the courses'
+    // own floors are.
+    raisePlayFloor()
 
     // Music for this map, streamed from outside the scene
     // (services/map-music.ts). The map is read from the course's skybox part.
@@ -384,6 +384,23 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
       room.onMessage(MESSAGE.START, cancellableCallback(onMessageStart))
       room.onMessage(MESSAGE.COUNTDOWN, cancellableCallback(onMessageHoleCountdown))
       room.onMessage(MESSAGE.END_COUNTDOWN, cancellableCallback(onMessageHoleEndCountdown))
+      room.onMessage(MESSAGE.HOLE_SKIPPABLE, cancellableCallback(onMessageHoleSkippable))
+    }
+
+    // The first ball of the hole has dropped, so the hole may be skipped from
+    // now on (server/rooms/hole-end.ts). A recorded opponent holing no longer
+    // ends the hole, so this button is what a stuck player, or one who has
+    // holed and does not want to watch the replays finish, presses instead.
+    // The server decides what it means: in a party it only marks the sender
+    // done unless they have been waiting a minute.
+    function onMessageHoleSkippable() {
+      mobileShootState.skip = () => {
+        try {
+          room.send(MESSAGE.SKIP_HOLE)
+        } catch (err) {
+          console.log('[golfplay] skip failed', err)
+        }
+      }
     }
 
     // The hole is over for this player (holed, or the round/room ended): give
@@ -626,6 +643,8 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
 
     async function onMessageHoleEndCountdown() {
       cancelEnding = true
+      // The hole is over: there is nothing left to skip.
+      mobileShootState.skip = null
       // The hole ends: the legs are locked again before the fade to the results.
       holdAvatarForRun()
       // The fade is what has kept anyone from ever seeing the moment the
@@ -776,6 +795,7 @@ const GolfplayClientSeasonFactory = ({ golfplayBaseUrl }: { golfplayBaseUrl: str
       disposed = true
       mobileShootState.quit = null
       mobileShootState.quitConfirm = false
+      mobileShootState.skip = null
       pingDisposed = true
       clearInterval(pingInterval)
       clearGhostTimers()

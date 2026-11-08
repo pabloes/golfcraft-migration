@@ -98,6 +98,38 @@ export const InGameOptionsButton = () => {
   )
 }
 
+// SKIP HOLE, under OPTIONS, from the moment the first ball drops (user,
+// 2026-11-07). A recorded opponent holing no longer cuts the hole short, so
+// this is the way out: still playing, it gives up the hole; already holed, it
+// moves on without watching the replays finish. No confirm dialog, the press
+// acts. In a party it only marks the sender done unless they have been waiting
+// a minute, which the server decides.
+export const SkipHoleButton = () => {
+  const st = mobileShootState
+  if (!st.skip || lobbyMenuState.visible) return null
+  const { canvas, s } = hudScale()
+  const { px, fs } = s
+  return (
+    <UiEntity
+      uiTransform={{
+        positionType: 'absolute',
+        position: { top: canvas.area.top + px(22 + 72 + 8 + 40 + 8), left: hudLeft(canvas, px) },
+        width: px(LEAVE_W),
+        height: px(40),
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderRadius: px(14),
+        borderWidth: border(px, 3),
+        borderColor: P.white
+      }}
+      uiBackground={{ color: P.navy }}
+      onMouseDown={() => st.skip && st.skip()}
+    >
+      <Label value="SKIP HOLE" fontSize={fs(11)} color={C.yellow} textAlign="middle-center" textWrap="nowrap" uiTransform={{ height: px(18) }} />
+    </UiEntity>
+  )
+}
+
 // ---------------------------------------------------------------- AUDIO
 // A music note, drawn with boxes rather than taken from the icon sheet, which
 // has no audio icon: a head, a stem and a flag. No font glyph either, since

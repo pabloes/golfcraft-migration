@@ -4,13 +4,18 @@ import {Prisma, PrismaClient} from "@prisma/client";
 import {SERVER_HTTP_URL} from "../../../common/constants";
 import {runChecks} from "../../../chain-playfab/security/securityChecks";
 import {authenticateSessionTicket} from "../auth/session-ticket";
+import {lookupNames, maskWallet, playerId} from "../lib/player-names";
 import {redactedMessage} from "../../../common/redact";
 
 // Public dashboard at golfcraftgame.com/stats: /stats serves the page,
-// /api/stats its numbers (aggregates only) and /api/stats/visitors the list of
-// who visited in a range. That list is the only thing about single players
-// that leaves this file: their public Decentraland name and the wallet cut to
-// "0x27f...57". Full wallets and guests' identities never do.
+// /api/stats its numbers (aggregates only, with the daily series of the last
+// DAYS days), /api/stats/daily the same series for the chart's custom period
+// (which can reach further back, up to DAILY_MAX_DAYS) and /api/stats/visitors
+// the list of who visited in a range. That list is the only thing about players
+// that leaves this file: their public Decentraland name, the wallet cut to
+// "0x27f...57" and the `id` that identifies them (`playerId`, shared with
+// /api/relaunch-data — the cut wallet is for display and two wallets can share
+// one). Full wallets and guests' identities never do.
 //
 // Visitors, one row per address and UTC day, with the time of the last visit
 // that day (lastSeen, NULL in rows written before it existed) and the explorer
@@ -40,9 +45,17 @@ const PAGE = path.resolve(__dirname, "stats.html");
 const PLAYFAB_ACCOUNTS_KEY = "statsPlayFabAccounts";
 const VISITORS_MAX_DAYS = 31;
 const VISITORS_MAX_ROWS = 300;
-const PROFILES_URL = "https://peer-lb.decentraland.org/lambdas/profiles";
-const PROFILES_TIMEOUT_MS = 5000;
-const PROFILE_CACHE_MS = 60 * 60 * 1000;
+//the longest range the chart's custom period may ask for (/api/stats/daily);
+//2000 days reach past the first game of 2022, so it covers the whole history
+const DAILY_MAX_DAYS = 2000;
+//ranges kept in the daily cache at once; a new one evicts the oldest
+const DAILY_CACHE_MAX = 40;
+//Fresh daily computations are paid for by the days they span, since a long
+//range groups the 220K rows of player_game by day (~2 s) while a month is a
+//few ms, and the cache only spares a range that was asked for before. 6000
+//days a minute is 3 whole histories or 200 months; past that it is 503, so a
+//loop over distinct ranges cannot sit on the database.
+const DAILY_FRESH_DAYS_PER_MINUTE = 6000;
 //the scene's explorer tag ("<agent>/<platform>", scene/src/services/platform.ts)
 const EXPLORER_RAW_MAX = 48;
 type ExplorerBucket = "desktop" | "web" | "mobile" | "vr" | "other";
@@ -67,8 +80,10 @@ const LATER_COLUMNS: [string, string][] = [
 let cached: {at: number, data: Promise<any>} = null;
 //per range (rounded to the minute), for CACHE_MS
 const visitorsCache: {[range: string]: {at: number, data: Promise<any>}} = {};
-//wallet -> public Decentraland name ("" when it has none), for PROFILE_CACHE_MS
-const profileNames: {[address: string]: {at: number, name: string}} = {};
+//the chart's custom ranges, per pair of UTC days, for CACHE_MS
+const dailyCache: {[range: string]: {at: number, data: Promise<any>}} = {};
+//fresh daily computations in the current minute
+let dailyFresh = {minute: 0, used: 0};
 //{count, updatedAt}; also kept in the config table so a restart shows it at once
 let playFabAccounts: {count: number, updatedAt: string} = null;
 let countingAccounts = false;
@@ -137,6 +152,39 @@ export function statsApi(router, prisma: PrismaClient){
         }
     });
 
+    //?from=YYYY-MM-DD&to=YYYY-MM-DD (UTC days, both included): the daily
+    //series of the chart's custom period, which can reach further back than
+    //the last DAYS days /api/stats carries. Same discipline as /api/stats: one
+    //computation per range and minute, and nothing runs when nobody asks.
+    router.get("/api/stats/daily", async (req, res) => {
+        const range = parseDayRange(req.query.from, req.query.to);
+        if(!range) return res.status(400).send({error: "invalid range"});
+        try{
+            const from = utcDay(range.from), to = utcDay(range.to);
+            const key = `${from}-${to}`;
+            Object.keys(dailyCache).forEach(k => Date.now() - dailyCache[k].at > CACHE_MS && delete dailyCache[k]);
+            if(!dailyCache[key]){
+                const minute = Math.floor(Date.now() / 60000);
+                if(dailyFresh.minute !== minute) dailyFresh = {minute, used: 0};
+                dailyFresh.used += Math.round((range.to.getTime() - range.from.getTime()) / DAY) + 1;
+                if(dailyFresh.used > DAILY_FRESH_DAYS_PER_MINUTE) return res.status(503).send({error: "busy"});
+                //an unbounded number of ranges would be an unbounded number of
+                //computations: the oldest goes when the cache is full
+                const keys = Object.keys(dailyCache);
+                if(keys.length >= DAILY_CACHE_MAX) delete dailyCache[keys.sort((a, b) => dailyCache[a].at - dailyCache[b].at)[0]];
+                const data = computeDaily(prisma, range.from, range.to)
+                    .then(days => ({from, to, clamped: range.clamped, daily: sortedDays(days)}));
+                dailyCache[key] = {at: Date.now(), data};
+                data.catch(() => { if(dailyCache[key]?.data === data) delete dailyCache[key]; });
+            }
+            res.set("Cache-Control", "public, max-age=60");
+            return res.send(await dailyCache[key].data);
+        }catch(error){
+            console.log("/api/stats/daily error", error?.message || error);
+            return res.status(500).send({error: "daily series unavailable"});
+        }
+    });
+
     //the game server reports a hole that just began: {apiKey, gameMode,
     //addresses} (one hole per player it starts for; the explorer is the one
     //each logged in with today) or, from an older server, {count}; the key is
@@ -197,18 +245,28 @@ export function statsApi(router, prisma: PrismaClient){
 //visit the same day with a known explorer overwrites it). The inserts fall
 //back column by column while the table is older than the code: without the
 //explorer columns, then without lastSeen (the original INSERT IGNORE).
+//
+//⚠ The address is stored LOWERCASE, whatever the caller passes. Every query
+//that groups or counts these rows casts to BINARY to UNION them with
+//player_game (the collations differ), and BINARY is case-sensitive: one wallet
+//stored in two cases would be two visitors with the same masked form and split
+//counts. Callers do lowercase today (get-login-id, the Studio wallet login),
+//but the invariant belongs here, where every write passes. A PlayFabId (a
+//guest with no wallet, from /api/record-visit's session ticket) is lowercased
+//too, which costs nothing: every reader of it lowercases both sides.
 export function recordVisit(prisma: PrismaClient, address: string, explorer?: unknown, table: VisitTable = "daily_visit"): Promise<void> {
     const t = Prisma.raw(table);
+    const key = String(address || "").toLowerCase();
     const parsed = parseExplorer(explorer);
     const bucket = parsed?.bucket || null;
     const agent = parsed?.raw || null;
     return prisma.$executeRaw`INSERT INTO ${t} (day, address, lastSeen, explorer, explorerAgent)
-            VALUES (UTC_DATE(), ${address}, UTC_TIMESTAMP(), ${bucket}, ${agent})
+            VALUES (UTC_DATE(), ${key}, UTC_TIMESTAMP(), ${bucket}, ${agent})
             ON DUPLICATE KEY UPDATE lastSeen = UTC_TIMESTAMP(),
                 explorer = COALESCE(${bucket}, explorer), explorerAgent = COALESCE(${agent}, explorerAgent)`
         .catch(() => prisma.$executeRaw`INSERT INTO ${t} (day, address, lastSeen)
-                VALUES (UTC_DATE(), ${address}, UTC_TIMESTAMP()) ON DUPLICATE KEY UPDATE lastSeen = UTC_TIMESTAMP()`)
-        .catch(() => prisma.$executeRaw`INSERT IGNORE INTO ${t} (day, address) VALUES (UTC_DATE(), ${address})`)
+                VALUES (UTC_DATE(), ${key}, UTC_TIMESTAMP()) ON DUPLICATE KEY UPDATE lastSeen = UTC_TIMESTAMP()`)
+        .catch(() => prisma.$executeRaw`INSERT IGNORE INTO ${t} (day, address) VALUES (UTC_DATE(), ${key})`)
         .then(() => undefined, error => console.log("recordVisit error", error?.message));
 }
 
@@ -314,11 +372,78 @@ function parseRange(fromParam, toParam): {from: Date, to: Date} {
     return {from: new Date(minute(Math.max(from, end - VISITORS_MAX_DAYS * DAY))), to: new Date(end)};
 }
 
+//"YYYY-MM-DD" of an instant, in UTC
+function utcDay(date: Date){
+    return date.toISOString().slice(0, 10);
+}
+
+//A pair of UTC days from the page's date inputs ("YYYY-MM-DD"; an ISO instant
+//is cut to its day): `to` no later than today, `from` no earlier than
+//DAILY_MAX_DAYS before it (an older one is moved up and `clamped` says so, so
+//the page can tell the reader its period was shortened). Both days included.
+function parseDayRange(fromParam, toParam): {from: Date, to: Date, clamped: boolean} {
+    const day = (value): number => {
+        if(typeof value !== "string" || value.length > 40) return NaN;
+        const text = value.slice(0, 10);
+        if(!/^\d{4}-\d{2}-\d{2}$/.test(text)) return NaN;
+        return Date.parse(`${text}T00:00:00Z`);
+    };
+    const today = Date.parse(`${utcDay(new Date())}T00:00:00Z`);
+    const to = toParam === undefined || toParam === "" ? today : day(toParam);
+    if(isNaN(to)) return null;
+    const end = Math.min(to, today);
+    const from = fromParam === undefined || fromParam === "" ? end - 29 * DAY : day(fromParam);
+    if(isNaN(from) || from > end) return null;
+    const start = Math.max(from, end - (DAILY_MAX_DAYS - 1) * DAY);
+    return {from: new Date(start), to: new Date(end), clamped: start !== from};
+}
+
+type DailyRow = {day: string, wallets: number, guests: number, games: number};
+
+//The chart's series: the wallets and guests that visited and the games
+//completed on each UTC day from `from` to `to` (both included; `to`'s own day
+//counts up to this moment). Only days with something are in the map.
+//player_game is an old table with another collation than daily_visit, and
+//UNION refuses to mix them ("Illegal mix of collations"): compare as bytes.
+async function computeDaily(prisma: PrismaClient, from: Date, to: Date): Promise<{[day: string]: DailyRow}> {
+    const until = new Date(Date.parse(`${utcDay(to)}T00:00:00Z`) + DAY);
+    const [wallets, guests, games]: any[] = await Promise.all([
+        prisma.$queryRaw`SELECT DATE_FORMAT(v.day, '%Y-%m-%d') AS day, COUNT(DISTINCT v.address) AS visitors FROM (
+                SELECT DATE(startTime) AS day, CAST(LOWER(address) AS BINARY) AS address FROM player_game
+                    WHERE startTime >= ${from} AND startTime < ${until} AND address IS NOT NULL
+                UNION ALL
+                SELECT day, CAST(LOWER(address) AS BINARY) FROM daily_visit
+                    WHERE day >= DATE(${from}) AND day <= DATE(${to})
+            ) v GROUP BY v.day ORDER BY v.day`,
+        prisma.$queryRaw`SELECT DATE_FORMAT(day, '%Y-%m-%d') AS day, COUNT(*) AS visitors FROM daily_guest_visit
+                WHERE day >= DATE(${from}) AND day <= DATE(${to}) GROUP BY day ORDER BY day`,
+        prisma.$queryRaw`SELECT DATE_FORMAT(startTime, '%Y-%m-%d') AS day, COUNT(*) AS games FROM player_game
+                WHERE startTime >= ${from} AND startTime < ${until} GROUP BY day ORDER BY day`
+    ]);
+    const days: {[day: string]: DailyRow} = {};
+    const at = (day: string) => days[day] = days[day] || {day, wallets: 0, guests: 0, games: 0};
+    wallets.forEach(({day, visitors}) => at(day).wallets = Number(visitors));
+    guests.forEach(({day, visitors}) => at(day).guests = Number(visitors));
+    games.forEach(({day, games}) => at(day).games = Number(games));
+    return days;
+}
+
+function sortedDays(days: {[day: string]: DailyRow}): DailyRow[] {
+    return Object.values(days).sort((a, b) => (a.day < b.day ? -1 : 1));
+}
+
 async function computeVisitors(prisma: PrismaClient, from: Date, to: Date){
     //a row from before lastSeen existed only says which day: it counts for
     //every range that touches that day, and is shown as the date
     const [rows, guests]: any[] = await Promise.all([
-        //grouped as bytes (collations differ), returned as text: Prisma 3 sends BINARY as base64
+        //grouped as bytes (collations differ), returned as text: Prisma 3 sends BINARY as base64.
+        //⚠ BINARY makes the grouping case-SENSITIVE, unlike every plain
+        //comparison on these ci-collated columns, so EVERY branch has to
+        //LOWER() or one wallet stored in two cases becomes two rows with the
+        //same masked form and split counts. Writes lowercase already
+        //(recordVisit, /api/hole-start); player_game takes the game server's
+        //address verbatim, which is an uppercase PlayFabId for an account with
+        //no wallet.
         //the device is the explorer of the latest visit in the range that
         //reported one (GROUP_CONCAT skips NULLs: games, holes and old rows have
         //none); a hole started counts as a visit too, like a finished game
@@ -328,21 +453,21 @@ async function computeVisitors(prisma: PrismaClient, from: Date, to: Date){
                 SUM(v.game) AS games, SUM(v.hole) AS holes, SUM(v.rp) AS rankedPoints,
                 SUBSTRING_INDEX(GROUP_CONCAT(v.explorer ORDER BY v.seen DESC SEPARATOR '|'), '|', 1) AS explorer,
                 SUBSTRING_INDEX(GROUP_CONCAT(v.explorerAgent ORDER BY v.seen DESC SEPARATOR '|'), '|', 1) AS explorerAgent FROM (
-                SELECT CAST(address AS BINARY) AS address, lastSeen AS seen, 1 AS exact, 0 AS game, 0 AS hole, 0 AS rp, explorer, explorerAgent FROM daily_visit
+                SELECT CAST(LOWER(address) AS BINARY) AS address, lastSeen AS seen, 1 AS exact, 0 AS game, 0 AS hole, 0 AS rp, explorer, explorerAgent FROM daily_visit
                     WHERE lastSeen >= ${from} AND lastSeen <= ${to}
                 UNION ALL
-                SELECT CAST(address AS BINARY), TIMESTAMP(day), 0, 0, 0, 0, explorer, explorerAgent FROM daily_visit
+                SELECT CAST(LOWER(address) AS BINARY), TIMESTAMP(day), 0, 0, 0, 0, explorer, explorerAgent FROM daily_visit
                     WHERE lastSeen IS NULL AND day >= DATE(${from}) AND day <= DATE(${to})
                 UNION ALL
                 SELECT CAST(LOWER(address) AS BINARY), startTime, 1, 1, 0, COALESCE(rankedPoints, 0), NULL, NULL FROM player_game
                     WHERE startTime >= ${from} AND startTime <= ${to} AND address IS NOT NULL
                 UNION ALL
-                SELECT CAST(address AS BINARY), startedAt, 1, 0, 1, 0, NULL, NULL FROM hole_start
+                SELECT CAST(LOWER(address) AS BINARY), startedAt, 1, 0, 1, 0, NULL, NULL FROM hole_start
                     WHERE startedAt >= ${from} AND startedAt <= ${to} AND address <> ''
             ) v GROUP BY v.address
             ORDER BY GREATEST(COALESCE(lastExact, ''), COALESCE(lastDay, '')) DESC
             LIMIT ${VISITORS_MAX_ROWS + 1}`,
-        prisma.$queryRaw`SELECT COUNT(DISTINCT address) AS n FROM daily_guest_visit
+        prisma.$queryRaw`SELECT COUNT(DISTINCT LOWER(address)) AS n FROM daily_guest_visit
                 WHERE (lastSeen >= ${from} AND lastSeen <= ${to})
                     OR (lastSeen IS NULL AND day >= DATE(${from}) AND day <= DATE(${to}))`
     ]);
@@ -358,46 +483,17 @@ async function computeVisitors(prisma: PrismaClient, from: Date, to: Date){
             games: Number(row.games || 0), holes: Number(row.holes || 0), rankedPoints: Number(row.rankedPoints || 0),
             explorer, explorerAgent: explorer && row.explorerAgent ? String(row.explorerAgent) : null};
     });
-    const names = await lookupNames(list.map(v => v.address));
+    const names = await lookupNames(list.map(v => v.address), "stats profiles");
     return {
         from: from.toISOString(),
         to: to.toISOString(),
         guests: Number(guests[0]?.n || 0),
         capped,
-        visitors: list.map(({address, ...visit}) => ({name: names[address] || "", wallet: maskWallet(address), ...visit}))
+        //`id` is the player's key: the mask is a display form and two wallets
+        //can share one, so a caller that groups rows, follows a player across
+        //ranges or lines this list up with /api/relaunch-data uses the id
+        visitors: list.map(({address, ...visit}) => ({id: playerId(address), name: names[address] || "", wallet: maskWallet(address), ...visit}))
     };
-}
-
-//"0x27ffcc...eb57" -> "0x27f...57"
-function maskWallet(address: string){
-    return address.length > 9 ? `${address.slice(0, 5)}...${address.slice(-2)}` : "...";
-}
-
-//public names from Decentraland profiles; a lookup that fails leaves them empty
-//and is tried again on the next request
-async function lookupNames(addresses: string[]): Promise<{[address: string]: string}> {
-    const now = Date.now();
-    const missing = addresses.filter(a => /^0x[0-9a-f]{40}$/.test(a) && !(profileNames[a] && now - profileNames[a].at < PROFILE_CACHE_MS));
-    for(let i = 0; i < missing.length; i += 100){
-        const ids = missing.slice(i, i + 100);
-        try{
-            const profiles: any[] = await Promise.race([
-                fetch(PROFILES_URL, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({ids})})
-                    .then(r => r.ok ? r.json() : Promise.reject(new Error(`profiles ${r.status}`))),
-                new Promise((_, reject) => setTimeout(() => reject(new Error("profiles timeout")), PROFILES_TIMEOUT_MS))
-            ]) as any[];
-            const found: {[address: string]: string} = {};
-            (Array.isArray(profiles) ? profiles : []).forEach(profile => {
-                const avatar = profile?.avatars?.[0];
-                const id = String(avatar?.ethAddress || avatar?.userId || "").toLowerCase();
-                if(id) found[id] = String(avatar?.name || "").slice(0, 40);
-            });
-            ids.forEach(a => profileNames[a] = {at: now, name: found[a] || ""});
-        }catch(error){
-            console.log("stats profiles lookup error", redactedMessage(error));
-        }
-    }
-    return addresses.reduce((acc, a) => (acc[a] = profileNames[a]?.name || "", acc), {});
 }
 
 async function computeStats(prisma: PrismaClient){
@@ -405,43 +501,34 @@ async function computeStats(prisma: PrismaClient){
     const since30 = new Date(Date.now() - 30 * DAY);
     //player_game is an old table with another collation than daily_visit, and
     //UNION refuses to mix them ("Illegal mix of collations"): compare as bytes
-    const [wallets, guests, unique, games, tracking, mapsCreated, seasonMaps, online, dailyGames, explorers, holes]: any[] = await Promise.all([
-        prisma.$queryRaw`SELECT DATE_FORMAT(v.day, '%Y-%m-%d') AS day, COUNT(DISTINCT v.address) AS visitors FROM (
-                SELECT DATE(startTime) AS day, CAST(LOWER(address) AS BINARY) AS address FROM player_game
-                    WHERE startTime >= ${since} AND address IS NOT NULL
-                UNION ALL
-                SELECT day, CAST(address AS BINARY) FROM daily_visit WHERE day >= ${since}
-            ) v GROUP BY v.day ORDER BY v.day`,
-        prisma.$queryRaw`SELECT DATE_FORMAT(day, '%Y-%m-%d') AS day, COUNT(*) AS visitors FROM daily_guest_visit
-                WHERE day >= ${since} GROUP BY day ORDER BY day`,
+    const [daily, unique, games, tracking, mapsCreated, seasonMaps, online, explorers, holes]: any[] = await Promise.all([
+        computeDaily(prisma, since, new Date()),
         prisma.$queryRaw`SELECT COUNT(*) AS n FROM (
                 SELECT CAST(LOWER(address) AS BINARY) AS address FROM player_game WHERE address IS NOT NULL
                 UNION
-                SELECT CAST(address AS BINARY) FROM daily_visit
+                SELECT CAST(LOWER(address) AS BINARY) FROM daily_visit
             ) u`,
-        //with the ranked points of the window and the first run that carried them
+        //with the ranked points of the window, the first run that carried them
+        //and the first game on record
         prisma.$queryRaw`SELECT COUNT(*) AS total, SUM(startTime >= ${since30}) AS last30,
                 SUM(IF(startTime >= ${since30}, COALESCE(rankedPoints, 0), 0)) AS rpLast30,
-                DATE_FORMAT(MIN(CASE WHEN rankedPoints IS NOT NULL THEN startTime END), '%Y-%m-%d') AS rpSince FROM player_game`,
+                DATE_FORMAT(MIN(CASE WHEN rankedPoints IS NOT NULL THEN startTime END), '%Y-%m-%d') AS rpSince,
+                DATE_FORMAT(MIN(startTime), '%Y-%m-%d') AS firstDay FROM player_game`,
         prisma.$queryRaw`SELECT
                 (SELECT DATE_FORMAT(MIN(day), '%Y-%m-%d') FROM daily_visit) AS wallets,
                 (SELECT DATE_FORMAT(MIN(day), '%Y-%m-%d') FROM daily_guest_visit) AS guests`,
         prisma.courses.count(),
         prisma.courses.count({where: {isSeason: 1}}),
         fetchOnline(),
-        prisma.$queryRaw`SELECT DATE_FORMAT(startTime, '%Y-%m-%d') AS day, COUNT(*) AS games FROM player_game
-                WHERE startTime >= ${since} GROUP BY day ORDER BY day`,
         computeExplorers(prisma, since30),
         prisma.$queryRaw`SELECT COUNT(*) AS total, SUM(startedAt >= ${since30}) AS last30,
                 DATE_FORMAT(MIN(startedAt), '%Y-%m-%d') AS since FROM hole_start`
             .catch(error => (console.log("/api/stats holes error", error?.message), []))
     ]);
-    const days: {[day: string]: {day: string, wallets: number, guests: number, games: number}} = {};
-    const at = (day) => days[day] = days[day] || {day, wallets: 0, guests: 0, games: 0};
-    wallets.forEach(({day, visitors}) => at(day).wallets = Number(visitors));
-    guests.forEach(({day, visitors}) => at(day).guests = Number(visitors));
-    dailyGames.forEach(({day, games}) => at(day).games = Number(games));
-    const today = at(new Date().toISOString().slice(0, 10));
+    //today is always in the series, even with nothing in it yet
+    const days: {[day: string]: DailyRow} = daily;
+    const todayKey = utcDay(new Date());
+    const today = days[todayKey] = days[todayKey] || {day: todayKey, wallets: 0, guests: 0, games: 0};
     return {
         updatedAt: new Date().toISOString(),
         online,
@@ -462,6 +549,11 @@ async function computeStats(prisma: PrismaClient){
         mapsCreated,
         seasonMaps,
         visitorsTrackedSince: {wallets: tracking[0]?.wallets || null, guests: tracking[0]?.guests || null},
+        //the first finished game on record: a chart period that starts before
+        //it has no games of its own to show
+        gamesTrackedSince: games[0]?.firstDay || null,
+        //the longest period the chart may ask /api/stats/daily for
+        dailyMaxDays: DAILY_MAX_DAYS,
         //unique visitors per explorer in the last 30 days, biggest first, with
         //the games completed and holes started by its players, and the first
         //day with an explorer: the scene only reports it since the 2026-11-02
@@ -473,7 +565,7 @@ async function computeStats(prisma: PrismaClient){
             games: Math.max(0, Number(games[0]?.last30 || 0) - explorers.buckets.reduce((sum, b) => sum + b.games, 0)),
             holes: explorers.holesUnknown
         },
-        daily: Object.values(days).sort((a, b) => (a.day < b.day ? -1 : 1))
+        daily: sortedDays(days)
     };
 }
 
@@ -487,9 +579,9 @@ type ExplorerRow = {bucket: string, wallets: number, guests: number, total: numb
 async function computeExplorers(prisma: PrismaClient, since30: Date): Promise<{buckets: ExplorerRow[], holesUnknown: number, since: string}> {
     try{
         const [wallets, guests, first, games, holes]: any[] = await Promise.all([
-            prisma.$queryRaw`SELECT explorer, COUNT(DISTINCT address) AS n FROM daily_visit
+            prisma.$queryRaw`SELECT explorer, COUNT(DISTINCT LOWER(address)) AS n FROM daily_visit
                     WHERE day >= ${since30} AND explorer IS NOT NULL GROUP BY explorer`,
-            prisma.$queryRaw`SELECT explorer, COUNT(DISTINCT address) AS n FROM daily_guest_visit
+            prisma.$queryRaw`SELECT explorer, COUNT(DISTINCT LOWER(address)) AS n FROM daily_guest_visit
                     WHERE day >= ${since30} AND explorer IS NOT NULL GROUP BY explorer`,
             prisma.$queryRaw`SELECT DATE_FORMAT(MIN(day), '%Y-%m-%d') AS since FROM (
                     SELECT MIN(day) AS day FROM daily_visit WHERE explorer IS NOT NULL

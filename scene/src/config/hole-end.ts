@@ -31,6 +31,12 @@ export const FADE_BETWEEN_HOLES = false
 // invisible collider.
 export const SHOW_PLAY_FLOOR = true
 
-// The ball's collision radius (golfplay/physics/ball.ts: new CANNON.Sphere(0.1)).
-// The course's surface is the ball's spawn height minus this.
-export const BALL_RADIUS = 0.1
+// The height of the play floor, fixed and just above zero (user, 2026-11-07:
+// "no lo habíamos puesto cerca del suelo? … ponlo a y 0.1").
+//
+// It used to be measured: the player landed on the course, the scene watched
+// until their feet stopped moving and put the sheet exactly there. That read
+// high — the course's own floor parts sit at y 0 across every local definition
+// — so the sheet ended up well above the ground, visible under nobody's feet.
+// A fixed height near zero is where the ground actually is.
+export const PLAY_FLOOR_Y = 0.1
