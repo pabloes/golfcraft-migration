@@ -1,5 +1,18 @@
 name: test-build
 
+# Builds the SDK7 scene: bundles src/index.ts and runs the type checker, which
+# is the repo's own gate before a checkpoint (CLAUDE.md §7 and §8 rule 2).
+#
+# It used to run `npm run build` at the repository root, where no such script
+# has ever existed, so every one of its 81 runs failed on "Missing script" and
+# the check had never passed once.
+#
+# ⚠ `npm ci`, never `npm install`. A fresh resolve of scene/package.json does
+# NOT build: @dcl/asset-packs resolves to 2.26.0, which imports
+# "@dcl/sdk/text-codec", and the pinned @dcl/sdk@7.23.3 has no such subpath, so
+# esbuild fails with "Could not resolve". The lockfile pins it to 2.15.3, which
+# builds — hence the two force-tracked lockfiles in .gitignore.
+
 on:
   push:
   pull_request:
@@ -8,12 +21,20 @@ jobs:
   lint-and-build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Use Node.js 18.x
-        uses: actions/setup-node@v1
+        uses: actions/setup-node@v4
         with:
           node-version: 18.x
-      - name: install dependencies
-        run: npm install
-      - name: npm run build
-        run: npm run build
+      # The root package is the dependency host for common/ and lib/ (§9 gotcha
+      # 1). esbuild resolves those files' bare imports from the ROOT
+      # node_modules — jsep, for lib/expression-storage — so the scene cannot
+      # be bundled without installing here first.
+      - name: install root dependencies
+        run: npm ci --no-audit --no-fund
+      - name: install scene dependencies
+        run: npm ci --no-audit --no-fund
+        working-directory: scene
+      - name: build the scene (bundle + type check)
+        run: npx sdk-commands build
+        working-directory: scene
